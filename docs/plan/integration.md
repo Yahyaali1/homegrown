@@ -18,3 +18,10 @@ Done after the group agents report. Owner: the main session.
 - A: switches for `ghostText`, `useVoice`, `replyButtons`; memory/savings skip `quiet: true` requests — DONE by G.
 - C, D: `translateTo` field and `autoAltText` switch — DONE by G (settings.html).
 - G: `translateTo` name/code mismatch — DONE (translate.js). Remote model option removed by user decision: local model only.
+
+## Known issues
+
+- Test harness: in a reused test profile the extension's service worker occasionally fails to start, so
+  a run fails before any test (seen twice; a rerun passes). Likely the cleared service-worker cache plus
+  the wake-up via the side panel; a retry in `tests/harness.mjs` launch() would hide it.
+- Live YouTube transcripts unverified (see H-gaps.md).
