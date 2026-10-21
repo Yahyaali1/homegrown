@@ -72,7 +72,11 @@ function renderSteps() {
       const body = {
         search: () => step.urls?.length ? [el('span', { className: 'muted small', textContent: `${step.urls.length} open tabs (no web search)` })] : [input(step, 'query', { 'aria-label': 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, 'aria-label': 'Results' }))],
         open: () => [el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'top' }), input(step, 'limit', { type: 'number', min: 1, max: 12, 'aria-label': 'Pages to read' }))],
-        extract: () => [el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => ((step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), refreshFieldPickers()) })],
+        extract: () => [
+          el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => ((step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), refreshFieldPickers()) }),
+          el('span', { className: 'muted small', textContent: 'must mention' }),
+          el('input', { value: (step.require || []).join(', '), placeholder: 'e.g. 4k, usb-c', 'aria-label': 'Each row must mention', oninput: (e) => (step.require = e.target.value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)) }),
+        ],
         filter: () => [el('div', { className: 'row2' }, select(step, 'field', [['', 'off'], ...fieldsOf().map((f) => [f, f])]), select(step, 'op', [['<', '<'], ['>', '>'], ['contains', 'has']])), input(step, 'value', { placeholder: 'value', 'aria-label': 'Filter value' })],
         rank: () => [el('div', { className: 'row2' }, select(step, 'by', fieldsOf().map((f) => [f, f])), select(step, 'order', [['asc', 'lowest first'], ['desc', 'highest first']])), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'keep' }), input(step, 'keep', { type: 'number', min: 1, max: 20, 'aria-label': 'Rows to keep' }))],
         answer: () => [input(step, 'question', { 'aria-label': 'What the answer should say' })],
@@ -139,6 +143,8 @@ chrome.runtime.onMessage.addListener((m) => {
 
 // ---- results ----
 
+// How each row was found, shown beside its source.
+const VIA = { structured: 'From the product data the page publishes', list: 'From a repeated block on the page (product grid or result list)', table: 'From a table on the page', model: 'Read by Gemma from the page text; every value checked against the page' };
 const cols = () => [...new Set(rows.flatMap((r) => Object.keys(r).filter((k) => !k.startsWith('_'))))];
 function renderTable(final = false) {
   const keys = cols();
@@ -148,7 +154,7 @@ function renderTable(final = false) {
   const body = rows.map((r, i) => el('tr', { className: final && i === 0 ? 'best' : 'flash', id: `row-${i + 1}` },
     el('td', { textContent: i + 1 }),
     ...keys.map((k) => el('td', { textContent: fmt(r[k], /price|cost/.test(k) ? r._currency : '') })),
-    el('td', {}, el('a', { href: r._url, target: '_blank', textContent: host(r._url) }))));
+    el('td', {}, el('a', { href: r._url, target: '_blank', textContent: host(r._url) }), r._via ? el('span', { className: 'via', title: VIA[r._via], textContent: ` · ${r._via}` }) : null)));
   $('#table').replaceChildren(el('thead', {}, head), el('tbody', {}, ...body));
 }
 const cmp = (a, b) => (a == null) - (b == null) || (typeof a === 'number' && typeof b === 'number' ? a - b : String(a ?? '').localeCompare(String(b ?? '')));

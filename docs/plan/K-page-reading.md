@@ -33,4 +33,24 @@ must appear in the page text (numbers matched after normalising), otherwise it i
 
 ## Status
 
-In progress (main session).
+Done (main session), checked on fixture pages and the live web:
+
+| Page | Path used | Result |
+|---|---|---|
+| Product grid, no product data, sale + crossed-out prices (`tests/fixtures/pages/grid.html`) | list | 4 products, sale prices, numeric ratings, no model call |
+| Spec table (`pages/specs.html`) | table | 3 laptops ranked by battery |
+| Review prose with a planted injection (`pages/review.html`) | model on relevant chunks | $229 / $399 / $549 correct; injected "$1" ignored; "not recommended" item left out |
+| 3 shops (2 JSON-LD, 1 text only) | structured + model | correct, Charlie Shop's store name from the page's own metadata |
+| Live: "cheapest 27-inch 4K monitor with USB-C" | list (Amazon results grid) | 46 rows from 6 pages → 10 after required-term filter (27, 4k, usb-c) → answer quotes "1980.04 SEK" |
+
+Hardening found by these runs: digit classes ignored in block signatures (item-1, item-2); required terms
+from the query with synonyms (4K = UHD = 3840, USB-C = Type-C); prices passed to the answer with their
+currency; extraction runs at temperature 0; instruction-like sentences removed from page text before the
+model reads it and before grounding (a sampled run had returned the injected "$1").
+
+Engine: one generation at a time on the GPU, now in two lanes — what the user just asked for runs before
+background work (missions, gists, page translation, monitors). Measured: 4 parallel requests all correct,
+no cross-talk; a question asked while 6 long background jobs were queued was answered after 1 of them
+(3.4 s) instead of after all 6 (~22 s).
+
+Left: open shadow roots and cross-origin iframes aren't read; very large pages cap markdown at 60k chars.

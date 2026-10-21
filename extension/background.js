@@ -76,7 +76,7 @@ function onRunPort(port) {
       const turn = buildTurn(req);
       const turns = [...(req.history || []), turn];
       const loaded = await engine('ensureLoaded');
-      const r = await engine('generate', { id, turns, config: req.config || {} });
+      const r = await engine('generate', { id, turns, config: req.config || {}, priority: req.quiet ? 'background' : 'user' });
       const kept = turn.selection ? `${r.userText}\n\n${turn.selection.slice(0, PAGE_TEXT_IN_HISTORY)}` : r.userText;
       for (const m of modules) m.onAnswer?.(req, r, port.sender);
       port.postMessage({ type: 'done', text: r.text, stats: r.stats, model: loaded.name, history: [...(req.history || []), { role: 'user', text: kept }, { role: 'model', text: r.text }] });

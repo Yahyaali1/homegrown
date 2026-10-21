@@ -70,3 +70,5 @@ td a { color: var(--accent); }
 #saved .acts { display: flex; gap: 6px; }
 #saved .acts button { font-size: 12px; padding: 3px 8px; }
 @media (max-width: 760px) { body { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid var(--line); } .goal-row { flex-direction: column; } }
+
+.via { color: var(--muted); font-size: 11px; cursor: help; }

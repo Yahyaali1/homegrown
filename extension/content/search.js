@@ -127,6 +127,7 @@
       let raw = '';
       const r = await EG.generate(
         {
+          quiet: true, // runs on its own on every results page: background lane
           task: { kind: 'text', prompt: `Answer the search "${q}" in 2 to 4 sentences using only the numbered results below, citing them like [1]. If they don't answer it, say so.` },
           selection: blocks.map((b, i) => `[${i + 1}] ${b.slice(0, 500)}`).join('\n\n'),
         },

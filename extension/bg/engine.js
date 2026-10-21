@@ -22,8 +22,9 @@ export async function engine(cmd, args = {}) {
 
 // One-shot text generation for background features (monitors, research, tab naming).
 // Streams nowhere; returns the answer text. selection is cut to fit the context like page text.
-export async function ask(prompt, selection) {
+// config: sampler overrides, e.g. { temperature: 0 } for extraction that must be repeatable.
+export async function ask(prompt, selection, config = {}) {
   const id = crypto.randomUUID();
   const turn = selection === undefined ? { role: 'user', text: prompt } : { role: 'user', text: prompt, selection };
-  return (await engine('generate', { id, turns: [turn], config: {} })).text;
+  return (await engine('generate', { id, turns: [turn], config, priority: 'background' })).text; // background lane: users go first
 }

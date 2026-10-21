@@ -49,12 +49,12 @@
     }
   }
   // One request for many texts: numbered lines in, numbered lines out.
-  async function local(texts, to) {
+  async function local(texts, to, quiet = false) {
     const prompt =
       `Translate each numbered line to ${nameOf(to)}. Reply with exactly the same numbers, one line each, ` +
       'translation only, no notes:';
     const numbered = texts.map((t, i) => `${i + 1}. ${t.replace(/\s+/g, ' ')}`).join('\n');
-    const { text } = await EG.generate({ task: { kind: 'text', prompt }, selection: numbered });
+    const { text } = await EG.generate({ task: { kind: 'text', prompt }, selection: numbered, quiet });
     const out = [];
     for (const line of text.split('\n')) {
       const m = /^\s*(\d+)[.)]\s*(.*)$/.exec(line);
@@ -62,7 +62,8 @@
     }
     return texts.map((_, i) => out[i] ?? '');
   }
-  const translate = async (texts, to = target()) => (await builtin(texts, to)) || local(texts, to);
+  // quiet: background lane (page translation while you scroll), so your own questions go first.
+  const translate = async (texts, to = target(), quiet = false) => (await builtin(texts, to)) || local(texts, to, quiet);
 
   // ---- blocks: the smallest block-level elements that hold text, on any page ----
   const SKIP = 'script,style,noscript,nav,svg,code,pre,textarea,input,select,edge-gallery,[data-eg-translation],[contenteditable=""],[contenteditable=true],[aria-hidden=true]';
@@ -132,7 +133,7 @@
     }
     try {
       if (batch.length) {
-        const out = await translate(batch.map(textOf));
+        const out = await translate(batch.map(textOf), target(), true);
         batch.forEach((b, i) => out[i] && attach(b, out[i]));
       }
     } catch (e) {

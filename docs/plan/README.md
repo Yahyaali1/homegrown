@@ -20,6 +20,8 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | G Memory, platform, voice | [G-memory.md](G-memory.md) | Done, smoke-checked (see Status) |
 | H Remaining gaps (ePub, search fallback, last-visit diff, live audio translation, YouTube) | [H-gaps.md](H-gaps.md) | Done except live YouTube transcripts (unverified headless) |
 | I Missions: open tasks become workflows | [I-agent.md](I-agent.md) | Done, checked on a live web run |
+| J Controls for voice, audio and image input | [J-controls.md](J-controls.md) | Done, checked with fake mic/audio |
+| K Reading any web page (missions) | [K-page-reading.md](K-page-reading.md) | Done, checked on fixtures + live web |
 | Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Done: launcher grouped, shared fixes applied, suite 10/10 |
 
 Update the State column and each plan's "Status" section as work lands.

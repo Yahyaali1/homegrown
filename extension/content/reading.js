@@ -142,7 +142,7 @@
     if (gistObs) return;
     let queue = Promise.resolve();
     const gist = async (p) => {
-      const { text } = await EG.generate(textReq('Write a one-line gist of this paragraph in at most 12 words. Reply with the gist only.', p.innerText));
+      const { text } = await EG.generate({ ...textReq('Write a one-line gist of this paragraph in at most 12 words. Reply with the gist only.', p.innerText), quiet: true }); // background lane
       const line = text.trim().split(/(?<=[.!?])\s/)[0]; // one sentence, even if the model wrote more
       const r = p.getBoundingClientRect();
       // Left margin if there's room, else right, else inline; ponytail: margin notes don't move on resize.

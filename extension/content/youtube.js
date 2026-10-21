@@ -171,6 +171,7 @@
       const part = list.slice(b * BATCH, b * BATCH + BATCH);
       const p = (queue = queue.then(async () => {
         const { text } = await EG.generate({
+          quiet: true, // subtitles translate ahead of playback: background lane
           task: { kind: 'text', prompt: `Translate each numbered subtitle line to ${lang}. Reply with the same numbers and the translations only, one per line.` },
           selection: part.map((c, i) => `${i + 1}. ${c.text}`).join('\n'),
         });

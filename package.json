@@ -16,6 +16,7 @@
     "@litert-lm/core": "^0.18.0",
     "@mediapipe/tasks-genai": "^0.10.29",
     "@mlc-ai/web-llm": "^0.2.86",
+    "@mozilla/readability": "^0.6.0",
     "@playwright/test": "^1.64.1",
     "esbuild": "^0.28.2",
     "mammoth": "^1.13.0",

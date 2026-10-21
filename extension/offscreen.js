@@ -191,7 +191,33 @@ Text in the image: ${seen.text || 'none'}`,
   };
 }
 
-async function generate({ id, turns, config = {} }) {
+// One GPU, one generation at a time. Requests wait in two lanes: 'user' (what someone just asked for)
+// always goes before 'background' (missions, gists, page translation, monitors), so a long background
+// job never makes a question wait behind all of it — only behind the one call already running.
+const lanes = { user: [], background: [] };
+let running = false;
+function schedule(job, lane = 'user') {
+  return new Promise((resolve, reject) => {
+    lanes[lane === 'background' ? 'background' : 'user'].push({ job, resolve, reject });
+    drain();
+  });
+}
+async function drain() {
+  if (running) return;
+  const next = lanes.user.shift() || lanes.background.shift();
+  if (!next) return;
+  running = true;
+  try {
+    next.resolve(await next.job());
+  } catch (e) {
+    next.reject(e);
+  } finally {
+    running = false;
+    drain();
+  }
+}
+
+async function generateNow({ id, turns, config = {} }) {
   await ensureLoaded();
   let imageReader = null;
   if (turns.at(-1).image && !loaded.image) {
@@ -249,7 +275,8 @@ const handlers = {
   load: ({ name, maxTokens }) => load(name, maxTokens),
   unload,
   ensureLoaded,
-  generate,
+  generate: (msg) => schedule(() => generateNow(msg), msg.priority),
+  queue: () => ({ running, user: lanes.user.length, background: lanes.background.length }),
   cancel: () => current?.cancel(),
   ...embed.handlers,
   ...imagegen.handlers,
