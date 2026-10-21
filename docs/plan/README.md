@@ -15,7 +15,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | B Reading & documents | [B-reading.md](B-reading.md) | Done, smoke-checked (see Status) |
 | C Translation | [C-translation.md](C-translation.md) | Done, smoke-checked (see Status) |
 | D Images (generation, region capture, alt text) | [D-images.md](D-images.md) | Done, smoke-checked (see Status) |
-| E Search, research, links | [E-web.md](E-web.md) | Drafted, being verified |
+| E Search, research, links | [E-web.md](E-web.md) | Done, smoke-checked (see Status) |
 | F Tabs, automation, tasks, side panel | [F-tabs.md](F-tabs.md) | Done, smoke-checked (see Status) |
 | G Memory, platform, voice | [G-memory.md](G-memory.md) | Done, smoke-checked (see Status) |
 | Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Not started |

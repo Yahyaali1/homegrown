@@ -13,4 +13,13 @@ Files: `content/search.js`, `content/links.js`, `bg/web.js`.
 
 ## Status
 
-Drafted by an agent; smoke check in progress. Update with results and any shared-file changes needed.
+Done (agent E, smoke-checked on the real model): link X-ray (key points, no navigation, phishing warnings
+on a lookalike link), Check claim ("Supported" with 3 sources, ~31 s), Research (6 pages, cited report
+with working links), Bing answer card, parsers checked against live pages. `EG.web` and `EG.links` exposed.
+
+Integration (main session): toolbar now draws above an open card (z-index); `linkPreview` switch added
+to settings (searchAnswers was already there).
+
+Left: DuckDuckGo returns a bot challenge (HTTP 202) after repeated runs from one IP, so checks used the
+Wikipedia fallback, which only searches Wikipedia — a better fallback search source is still needed.
+The search answer card runs the model on every results page while `searchAnswers` is on (default on).

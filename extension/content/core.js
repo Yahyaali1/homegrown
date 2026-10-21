@@ -19,7 +19,7 @@
   [hidden] { display: none !important; }
   .bar, .card, .imgbtn { position: absolute; background: var(--bg); color: var(--fg); border: 1px solid var(--line);
     box-shadow: 0 4px 16px rgba(0,0,0,.18); }
-  .bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; width: max-content; max-width: min(460px, calc(100vw - 16px)); }
+  .bar { z-index: 2; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; width: max-content; max-width: min(460px, calc(100vw - 16px)); }
   button { border: 0; border-radius: 7px; padding: 4px 9px; background: var(--chip); color: var(--fg); cursor: pointer; white-space: nowrap; }
   button:hover { background: var(--line); }
   button.primary { background: var(--accent); color: var(--bg); }
