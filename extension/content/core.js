@@ -138,7 +138,10 @@
     const extra = actions[kind].filter((a) => !a.when || a.when(ctx)).map((a) => chip(a.label, () => ((bar.hidden = true), a.run({ ...payload(), ctx, rect }))));
     const ask = chip('Ask…', () => askMode(kind, rect, payload));
     const brand = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦', title: 'Edge Gallery (local model)' });
-    bar.replaceChildren(brand, ...chips, ...extra, ask);
+    // Saved tasks stay one click away; feature actions wait behind "More ▸" so the bar stays short.
+    const more = chip('More ▸', () => (bar.replaceChildren(brand, ...extra, back), place(bar, rect)));
+    const back = chip('‹', () => showBar(kind, rect, payload, ctx));
+    bar.replaceChildren(brand, ...chips, ...(extra.length > 1 ? [more] : extra), ask);
     place(bar, rect);
   }
 
@@ -184,14 +187,33 @@
       const q = input.value.trim();
       if (q) run({ task: { kind: 'page' }, question: q, page: pageInfo() }, q, rect);
     };
-    const extra = actions.page.filter((a) => !a.when || a.when()).map((a) =>
-      Object.assign(document.createElement('button'), { textContent: a.label, onclick: () => ((bar.hidden = true), a.run({ page: pageInfo(), rect })) }));
+    const btn = (label, onclick) => Object.assign(document.createElement('button'), { textContent: label, onclick });
+    const act = (a) => btn(a.label, () => ((bar.hidden = true), a.run({ page: pageInfo(), rect })));
+    const shown = actions.page.filter((a) => !a.when || a.when());
+    // Actions that only apply here (a video, a form, a long page) come first; the rest sit in categories.
+    const here = shown.filter((a) => a.when);
+    const byGroup = {};
+    for (const a of shown.filter((a) => !a.when)) (byGroup[groupOf(a.label)] ??= []).push(a);
     const brand = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦' });
-    bar.replaceChildren(brand, ...chips, ...extra, form);
+    const groups = Object.entries(byGroup).map(([g, list]) =>
+      btn(`${g} ▸`, () => (bar.replaceChildren(brand, ...list.map(act), btn('‹', showLauncher)), place(bar, rect))));
+    bar.replaceChildren(brand, ...chips, ...here.map(act), ...groups, form);
     place(bar, rect);
     input.focus();
   }
   fab.onclick = () => (bar.hidden ? showLauncher() : (bar.hidden = true));
+
+  // Launcher categories, by action label; anything unlisted lands in "More".
+  const GROUPS = {
+    Read: ['Mind map', 'Listen as podcast', 'Quiz me', 'Make flashcards', 'Related reading'],
+    Write: ['Write…'],
+    Translate: ['Translate page (bilingual)'],
+    Images: ['Create image', 'Ask about an area'],
+    Web: ['Research…'],
+    Tabs: ['Compare tabs…', 'Tidy tabs', 'Watch this page'],
+    Voice: ['Speak…'],
+  };
+  const groupOf = (label) => Object.keys(GROUPS).find((g) => GROUPS[g].includes(label)) || 'More';
 
   // ---- images ----
   let hoverImg = null;
