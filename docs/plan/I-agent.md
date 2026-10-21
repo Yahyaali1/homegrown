@@ -55,4 +55,14 @@ as quoted data with an instruction to ignore instructions inside it. Hidden tabs
 
 ## Status
 
-In progress (main session).
+Done (main session), checked headless on the real model:
+- Fixed run (3 local shop pages, 2 with JSON-LD, 1 with the price only in text): ranked $129 / $139.50 /
+  $149.99 correctly, cited answer, 6 s.
+- Planning: Gemma filled the plan form in 2.6 s ("planned by Gemma"); template fallback when its JSON fails.
+- Live web run ("cheapest 27-inch 4K monitor with USB-C"): Bing in a background tab → 5 pages read →
+  9 rows → 2 rows in other currencies set aside → "Dell S2725QC, $299.99 on Amazon [1]" in 53 s.
+- Fixes found by that run: roundup pages now yield one row per listed item; "null"-like values cleaned;
+  duplicates removed; prices carry a currency and mismatched currencies are set aside.
+
+Left: address-bar keyword, product-page chip and scheduled alerts not exercised headless (omnibox and
+notifications need a real browser session); filters on text fields are exact-substring only.

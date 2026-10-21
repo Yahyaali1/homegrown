@@ -37,7 +37,7 @@ export function serve(dir, { cutAt } = {}) {
 }
 
 // Chromium 156 ignores --load-extension, so load the unpacked extension over CDP.
-export async function launch({ headless = true, userDataDir = '', offline = false, channel = 'chromium' } = {}) {
+export async function launch({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [] } = {}) {
   // scripts/gpu.sh runs up to 3 checks at once, each with its own copy of the test profile.
   if (process.env.EG_PROFILE && userDataDir.endsWith('.profile-test')) userDataDir = process.env.EG_PROFILE;
   const port = await new Promise((r) => {
@@ -50,7 +50,7 @@ export async function launch({ headless = true, userDataDir = '', offline = fals
     headless,
     offline,
     ignoreDefaultArgs: ['--disable-extensions'],
-    args: ['--enable-unsafe-extension-debugging', `--remote-debugging-port=${port}`, '--enable-unsafe-webgpu'],
+    args: ['--enable-unsafe-extension-debugging', `--remote-debugging-port=${port}`, '--enable-unsafe-webgpu', ...args],
   });
   let sw = ctx.serviceWorkers().find((w) => w.url().endsWith('/background.js'));
   if (!sw) {

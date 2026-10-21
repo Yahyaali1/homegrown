@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Edge Gallery",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A local Gemma model that helps you browse: select text or an image and act on it in place. Runs on your GPU, offline after download.",
   "minimum_chrome_version": "124",
   "background": {
@@ -63,7 +63,8 @@
         "content/tabs.js",
         "content/memory.js",
         "content/voice.js",
-        "content/livecaptions.js"
+        "content/livecaptions.js",
+        "content/agent.js"
       ],
       "all_frames": true,
       "match_about_blank": true,
@@ -90,5 +91,8 @@
       "description": "Live captions & translation for audio in this tab"
     }
   },
-  "options_page": "settings.html"
+  "options_page": "settings.html",
+  "omnibox": {
+    "keyword": "eg"
+  }
 }

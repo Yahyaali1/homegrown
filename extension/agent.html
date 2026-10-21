@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission control</title>
+  <link rel="stylesheet" href="agent.css">
+</head>
+<body>
+  <aside>
+    <h1><span class="spark">✦</span> Missions</h1>
+    <p class="muted">Runs on this device. Read-only: it never buys, posts or logs in.</p>
+    <button id="new" class="secondary wide">New mission</button>
+    <h2>Saved</h2>
+    <ul id="saved"></ul>
+    <p class="muted small">Tip: type <kbd>eg</kbd> <kbd>space</kbd> in the address bar to start a mission from anywhere.</p>
+  </aside>
+
+  <main>
+    <section id="compose">
+      <label for="goal" class="lead">What should I find out?</label>
+      <div class="goal-row">
+        <textarea id="goal" rows="2" placeholder="e.g. Find the cheapest 27-inch 4K monitor with USB-C"></textarea>
+        <button id="plan" class="primary">Plan it</button>
+      </div>
+      <div id="examples" class="chips" aria-label="Example goals"></div>
+      <p id="context" class="muted small" hidden></p>
+    </section>
+
+    <section id="workflow" hidden>
+      <div class="bar">
+        <h2>Workflow <span id="planner" class="badge"></span></h2>
+        <span class="muted small">Edit any step, then run.</span>
+        <span class="grow"></span>
+        <button id="run" class="primary">Run</button>
+        <button id="stop" class="secondary" hidden>Stop</button>
+      </div>
+      <ol id="steps" class="pipeline"></ol>
+      <details id="log-wrap"><summary>Activity</summary><ol id="log"></ol></details>
+    </section>
+
+    <section id="results" hidden>
+      <div class="bar">
+        <h2>Results</h2>
+        <span class="grow"></span>
+        <button id="csv" class="secondary">Export CSV</button>
+        <button id="best" class="secondary">Open best</button>
+      </div>
+      <div id="answer" class="answer"></div>
+      <div class="table-wrap"><table id="table"></table></div>
+    </section>
+
+    <section id="save" hidden>
+      <h2>Keep this mission</h2>
+      <div class="save-row">
+        <input id="name" placeholder="Name" aria-label="Mission name">
+        <select id="every" aria-label="Run automatically">
+          <option value="">Don't repeat</option>
+          <option value="hour">Every hour</option>
+          <option value="day">Every day</option>
+        </select>
+        <span class="muted small">Alert when</span>
+        <select id="alert-field" aria-label="Alert field"><option value="">the best result changes</option></select>
+        <select id="alert-op" aria-label="Alert comparison"><option>&lt;</option><option>&gt;</option><option value="contains">contains</option></select>
+        <input id="alert-value" placeholder="value" aria-label="Alert value" size="8">
+        <button id="save-btn" class="primary">Save mission</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="agent.js"></script>
+</body>
+</html>

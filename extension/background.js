@@ -12,7 +12,8 @@ import * as tabs from './bg/tabs.js';
 import * as monitors from './bg/monitors.js';
 import * as memory from './bg/memory.js';
 import * as livecaptions from './bg/livecaptions.js';
-const modules = [reader, web, capture, tabs, monitors, memory, livecaptions];
+import * as agent from './bg/agent.js';
+const modules = [reader, web, capture, tabs, monitors, memory, livecaptions, agent];
 const handlers = Object.assign({}, ...modules.map((m) => m.handlers || {}));
 
 // ---- tasks ----
