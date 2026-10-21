@@ -1,0 +1,86 @@
+{
+  "manifest_version": 3,
+  "name": "Edge Gallery",
+  "version": "0.4.0",
+  "description": "A local Gemma model that helps you browse: select text or an image and act on it in place. Runs on your GPU, offline after download.",
+  "minimum_chrome_version": "124",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open Edge Gallery",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "permissions": [
+    "alarms",
+    "contextMenus",
+    "notifications",
+    "offscreen",
+    "scripting",
+    "sidePanel",
+    "storage",
+    "tabGroups",
+    "tabs",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/core.js",
+        "content/writing.js",
+        "content/ghost.js",
+        "content/replies.js",
+        "content/jargon.js",
+        "content/forms.js",
+        "content/youtube.js",
+        "content/reading.js",
+        "content/translate.js",
+        "content/images.js",
+        "content/search.js",
+        "content/links.js",
+        "content/tabs.js",
+        "content/memory.js",
+        "content/voice.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "page-task": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Run your first page task (Summarize this page) on the current tab"
+    },
+    "launcher": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "Open Edge Gallery on this page (ask about the page or run a page task)"
+    }
+  },
+  "options_page": "settings.html"
+}

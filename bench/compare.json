@@ -1,0 +1,78 @@
+{
+ "rounds": 5,
+ "prefillRatio": 0.649,
+ "decodeRatio": 0.853,
+ "pass25": false,
+ "rows": [
+  {
+   "n": {
+    "prefillTps": 1346.92,
+    "decodeTps": 53.91,
+    "ttftS": 0.7469
+   },
+   "e": {
+    "prefillTps": 879.2,
+    "decodeTps": 48.5,
+    "ttftS": 1.136
+   },
+   "prefill": 0.6527484928577793,
+   "decode": 0.8996475607493972
+  },
+  {
+   "n": {
+    "prefillTps": 1087.36,
+    "decodeTps": 49.02,
+    "ttftS": 0.9226
+   },
+   "e": {
+    "prefillTps": 821,
+    "decodeTps": 41.8,
+    "ttftS": 1.219
+   },
+   "prefill": 0.7550397292525015,
+   "decode": 0.8527131782945735
+  },
+  {
+   "n": {
+    "prefillTps": 1288.47,
+    "decodeTps": 52.3,
+    "ttftS": 0.7805
+   },
+   "e": {
+    "prefillTps": 706,
+    "decodeTps": 42.8,
+    "ttftS": 1.413
+   },
+   "prefill": 0.5479367001171932,
+   "decode": 0.8183556405353728
+  },
+  {
+   "n": {
+    "prefillTps": 1303.15,
+    "decodeTps": 44.52,
+    "ttftS": 0.7753
+   },
+   "e": {
+    "prefillTps": 790.3,
+    "decodeTps": 39.6,
+    "ttftS": 1.267
+   },
+   "prefill": 0.606453593216437,
+   "decode": 0.889487870619946
+  },
+  {
+   "n": {
+    "prefillTps": 1127.06,
+    "decodeTps": 48.4,
+    "ttftS": 0.8911
+   },
+   "e": {
+    "prefillTps": 731.8,
+    "decodeTps": 39.2,
+    "ttftS": 1.366
+   },
+   "prefill": 0.6492999485386758,
+   "decode": 0.8099173553719009
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "name": "Gemma-4-E2B-it",
+ "engine": "litert-lm-webgpu",
+ "prefillTokens": 981,
+ "outputTokens": 258,
+ "ttftS": 0.72,
+ "prefillTps": 1395.52,
+ "decodeTps": 53.8,
+ "loadS": 7.6,
+ "peakMemMB": 3855
+}

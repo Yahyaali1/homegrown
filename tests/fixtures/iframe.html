@@ -1,0 +1,5 @@
+<!doctype html>
+<title>Page with a cross-origin iframe</title>
+<p>Outer page.</p>
+<iframe id="f" width="600" height="300"></iframe>
+<script>document.getElementById('f').src = new URLSearchParams(location.search).get('inner');</script>

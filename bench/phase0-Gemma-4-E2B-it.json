@@ -1,0 +1,11 @@
+{
+ "name": "Gemma-4-E2B-it",
+ "engine": "extension (offscreen, litert-lm webgpu, OPFS)",
+ "prefillTokens": 981,
+ "outputTokens": 256,
+ "ttftS": 0.978,
+ "prefillTps": 1033.1,
+ "decodeTps": 36.07,
+ "loadS": 5.2,
+ "peakMemMB": 3835
+}

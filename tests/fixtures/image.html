@@ -1,0 +1,11 @@
+<!doctype html>
+<title>Page with a cross-origin image</title>
+<img id="img" alt="red square">
+<canvas id="c" width="64" height="64"></canvas>
+<script>
+  document.getElementById('img').src = new URLSearchParams(location.search).get('src');
+  const ctx = document.getElementById('c').getContext('2d');
+  ctx.fillStyle = 'red'; ctx.fillRect(10, 10, 44, 44);
+  // A blob: URL like the ones canvas-heavy apps hand out; only this page can read it.
+  document.getElementById('c').toBlob((b) => (window.blobUrl = URL.createObjectURL(b)));
+</script>

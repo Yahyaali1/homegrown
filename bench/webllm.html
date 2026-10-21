@@ -1,0 +1,24 @@
+<!doctype html>
+<script type="module">
+  import * as webllm from '/node_modules/@mlc-ai/web-llm/lib/index.js';
+  // Same method as phase0: ~1024 prompt tokens, exactly 256 decode tokens, greedy, warm run.
+  window.bench = async (modelId) => {
+    const t0 = performance.now();
+    const engine = await webllm.CreateMLCEngine(modelId, { initProgressCallback: (p) => console.log(p.text) });
+    const loadS = (performance.now() - t0) / 1000;
+    const sentence = 'The quick brown fox jumps over the lazy dog near the quiet river bank. ';
+    const req = (n) => ({
+      messages: [{ role: 'user', content: sentence.repeat(n) + '\nNow write a very long story about that fox.' }],
+      max_tokens: 256, temperature: 0, ignore_eos: true, stream: true, stream_options: { include_usage: true },
+    });
+    let n = 60, usage;
+    const run = async (r) => { for await (const c of await engine.chat.completions.create(r)) if (c.usage) usage = c.usage; return usage; };
+    while ((await run({ ...req(n), max_tokens: 1 })).prompt_tokens < 1000) n += 4; // calibrate to ~1024
+    await run(req(n)); // warmup
+    const runs = [];
+    for (let i = 0; i < 3; i++) runs.push(await run(req(n)));
+    const avg = (k) => +(runs.reduce((s, u) => s + u.extra[k], 0) / runs.length).toFixed(2);
+    return { name: modelId, engine: 'webllm-webgpu', prefillTokens: runs[0].prompt_tokens, outputTokens: runs[0].completion_tokens,
+      ttftS: avg('time_to_first_token_s'), prefillTps: avg('prefill_tokens_per_s'), decodeTps: avg('decode_tokens_per_s'), loadS: +loadS.toFixed(1) };
+  };
+</script>

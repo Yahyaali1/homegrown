@@ -1,0 +1,30 @@
+<!doctype html>
+<script type="importmap">{ "imports": { "@litertjs/wasm-utils": "/node_modules/@litertjs/wasm-utils/dist/index.js" } }</script>
+<script type="module">
+  import { loadLiteRtLm, Engine } from '/node_modules/@litert-lm/core/dist/index.js';
+  // Same method as phase0: ~1024 prompt tokens, 256 decode tokens, warm run. Speeds come from the
+  // engine's own BenchmarkInfo (same counters as `litert-lm benchmark`).
+  window.bench = async (modelUrl, advancedSettings) => {
+    window.rt ??= loadLiteRtLm('/node_modules/@litert-lm/core/wasm/');
+    await window.rt;
+    const t0 = performance.now();
+    const engine = await Engine.create({ model: modelUrl, benchmarkEnabled: true, mainExecutorSettings: { maxNumTokens: 2048, ...(advancedSettings && { advancedSettings }) } });
+    const loadS = (performance.now() - t0) / 1000;
+    const prompt = 'The quick brown fox jumps over the lazy dog near the quiet river bank. '.repeat(64) + '\nNow write a very long story about that fox.';
+    const run = async () => {
+      const chat = await engine.createConversation();
+      let n = 0;
+      for await (const chunk of chat.sendMessageStreaming(prompt)) if (++n >= 256) break;
+      const b = await chat.getBenchmarkInfo();
+      await chat.delete?.();
+      return b;
+    };
+    await run(); // warmup
+    const runs = [];
+    for (let i = 0; i < 3; i++) runs.push(await run());
+    await engine.delete();
+    const avg = (k) => +(runs.reduce((s, r) => s + r[k], 0) / runs.length).toFixed(2);
+    return { engine: 'litert-lm-webgpu', prefillTokens: runs[0].lastPrefillTokenCount, outputTokens: runs[0].lastDecodeTokenCount,
+      ttftS: avg('timeToFirstTokenInSecond'), prefillTps: avg('lastPrefillTokensPerSecond'), decodeTps: avg('lastDecodeTokensPerSecond'), loadS: +loadS.toFixed(1) };
+  };
+</script>

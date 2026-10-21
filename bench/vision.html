@@ -1,0 +1,15 @@
+<!doctype html>
+<script type="importmap">{ "imports": { "@litertjs/wasm-utils": "/node_modules/@litertjs/wasm-utils/dist/index.js" } }</script>
+<script type="module">
+  import { loadLiteRtLm, Engine } from '/node_modules/@litert-lm/core/dist/index.js';
+  // Spike: does LiteRT-LM web accept an image with a model file that has a vision encoder?
+  window.probe = async (modelUrl, imageUrl) => {
+    window.rt ??= loadLiteRtLm('/node_modules/@litert-lm/core/wasm/');
+    await window.rt;
+    const engine = await Engine.create({ model: modelUrl, mainExecutorSettings: { maxNumTokens: 2048 } });
+    const chat = await engine.createConversation({ sessionConfig: { visionModalityEnabled: true } });
+    const image = await (await fetch(imageUrl)).blob();
+    const r = await chat.sendMessage({ role: 'user', content: [{ type: 'image', data: image }, { type: 'text', text: 'What color is the shape? One word.' }] });
+    return r.content.map((c) => c.text).join('');
+  };
+</script>

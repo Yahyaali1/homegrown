@@ -1,0 +1,50 @@
+{
+ "nativeFile": "gemma-4-E2B-it-web.litertlm",
+ "rows": [
+  {
+   "prompt": "What is the capital of France? Answer in one word.",
+   "extRepeatable": true,
+   "sameAsNative": true,
+   "sharedPrefixChars": 5,
+   "extLen": 5,
+   "ext": "Paris",
+   "native": "Paris"
+  },
+  {
+   "prompt": "List the first five prime numbers, separated by commas.",
+   "extRepeatable": true,
+   "sameAsNative": true,
+   "sharedPrefixChars": 14,
+   "extLen": 14,
+   "ext": "2, 3, 5, 7, 11",
+   "native": "2, 3, 5, 7, 11"
+  },
+  {
+   "prompt": "Explain in two sentences why the sky is blue.",
+   "extRepeatable": true,
+   "sameAsNative": false,
+   "sharedPrefixChars": 108,
+   "extLen": 270,
+   "ext": "The sky appears blue because of a phenomenon called Rayleigh scattering, where sunlight is scattered by the tiny molecules in the Earth's atmosphere. These shorter, blue wavelengths of light are scattered more effectively across the sky than the longer, red wavelengths.",
+   "native": "The sky appears blue because of a phenomenon called Rayleigh scattering, where sunlight is scattered by the Earth's atmosphere. Shorter wavelengths of light, like blue, are scattered more effectively than longer wavelengths, making the blue color dominant in our view."
+  },
+  {
+   "prompt": "Write a haiku about autumn leaves.",
+   "extRepeatable": true,
+   "sameAsNative": true,
+   "sharedPrefixChars": 78,
+   "extLen": 78,
+   "ext": "Crimson, gold, and red,\nDancing on the cooling breeze,\nNature's soft farewell.",
+   "native": "Crimson, gold, and red,\nDancing on the cooling breeze,\nNature's soft farewell."
+  },
+  {
+   "prompt": "Translate to French: The library opens at nine in the morning.",
+   "extRepeatable": true,
+   "sameAsNative": false,
+   "sharedPrefixChars": 142,
+   "extLen": 507,
+   "ext": "Here are a few ways to translate \"The library opens at nine in the morning\" in French, depending on the nuance you prefer:\n\n**Most common and natural:**\n\n* **La bibliothèque ouvre à neuf heures.** (This is the most standard and direct translation.)\n\n**Slightly more formal (using the 24-hour clock format, which is common in official contexts):**\n\n* **La bibliothèque ouvre à 9h00.** (Using the 24-hour format with the \"h\" for hours.)\n\n**Focusing on the start time:**\n\n* **La bibliothèque est ouverte à neuf",
+   "native": "Here are a few ways to translate \"The library opens at nine in the morning\" in French, depending on the nuance you prefer:\n\n**Most common and direct:**\n\n* **La bibliothèque ouvre à neuf heures.** (The library opens at nine o'clock.)\n\n**Slightly more formal (using the 24-hour clock, which is common in official contexts):**\n\n* **La bibliothèque ouvre à 9h00.** (The library opens at 9:00 AM.)\n\n**Emphasizing the start time (less common for this simple statement, but grammatically correct):**\n\n* **La bibliothèque s'ouvre à neuf heures.** (Using the reflexive verb *s'ouvrir* - \"to open up\")\n\n**Which one to use?**\n\n* **\"La bibliothèque ouvre à neuf heures\"** is the most natural and standard way to say it in everyday conversation.\n* **\"La bibliothèque ouvre à 9h00\"** is perfectly correct, especially in written schedules or official announcements."
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "name": "gemma-4-E2B-it-q4f16_1-MLC",
+ "engine": "webllm-webgpu",
+ "prefillTokens": 1041,
+ "outputTokens": 256,
+ "ttftS": 7.02,
+ "prefillTps": 148.55,
+ "decodeTps": 11.69,
+ "loadS": 168.3,
+ "peakMemMB": 4250
+}
