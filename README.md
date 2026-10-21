@@ -74,7 +74,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Translate into… with Replace | For text boxes | ✅ |
 | Image and manga translation | Text read with positions (Florence-2), translations overlaid on the image | ✅ |
 | Live captions and translation | Any tab's audio → Whisper → Gemma → caption bar (Alt+Shift+L) | ◐ with audio from a file; real tab capture needs a click |
-| Chrome built-in Translator | Used when Chrome provides it, else Gemma | ○ |
+| Chrome built-in Translator | Used when Chrome provides it (language pack downloads on the first click), else Gemma | ✅ Chrome 155 |
 
 ### Images
 | Feature | How | Status |

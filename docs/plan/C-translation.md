@@ -20,3 +20,8 @@ Done (agent C, smoke-checked on `tests/fixtures/translate/fr.html`):
 
 Left: Chrome's built-in Translator path not exercised (test Chromium lacks it); overlay boxes slightly
 small; `translateTo` setting needs a field in settings.html (group G / integration). No shared-file changes.
+
+Update (main session): Chrome's built-in Translator verified in Chrome 155 with no Gemma model present. Fix:
+Chrome downloads a language pack only in response to a click, so "Translate page" now creates the
+translator in the click (with download progress in the bar) and uses the page's declared language before
+the detector, which has the same restriction. Before the fix it silently fell back to Gemma.

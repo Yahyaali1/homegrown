@@ -35,7 +35,8 @@
     if (!('Translator' in self) || !/^[a-z]{2,3}$/.test(to)) return null;
     let key = '';
     try {
-      const from = await detect(texts.join('\n'));
+      // The page's declared language first: the detector may itself need a click to download.
+      const from = (window === top && pageLang) || (await detect(texts.join('\n')));
       if (!from) return null;
       if (from === to) return texts;
       key = `${from}>${to}`;
@@ -142,7 +143,25 @@
     pump();
   }
 
+  // Chrome only downloads a language pack in response to a click, so the click that starts page
+  // translation creates the translator now; later batches (on scroll) reuse it.
+  function warmBuiltin(to) {
+    const from = pageLang;
+    if (!('Translator' in self) || !from || from === to || !/^[a-z]{2,3}$/.test(to)) return;
+    const key = `${from}>${to}`;
+    translators[key] ??= Translator.create({
+      sourceLanguage: from,
+      targetLanguage: to,
+      monitor: (m) => m.addEventListener('downloadprogress', (e) => status(`Downloading the ${nameOf(from)} → ${nameOf(to)} pack on this device… ${Math.round(e.loaded * 100)}%`)),
+    }).catch((e) => {
+      delete translators[key];
+      throw e;
+    });
+    translators[key].catch(() => {}); // a failure here just means the local model translates instead
+  }
+
   function startPage() {
+    warmBuiltin(target());
     stopPage();
     EG.mount();
     const blocks = findBlocks();
