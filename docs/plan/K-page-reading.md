@@ -80,5 +80,27 @@ tables as facts about the page's subject, with the model choosing among sub-labe
 matching ("height_m" → "Height (m)"); and every source proposing rows, scored by completeness, instead of
 a fixed order. Fixture pages and the live monitor mission still pass.
 
-Left: content that appears only after a click (scrapethissite's AJAX Oscars page) needs an interaction step;
-open shadow roots and cross-origin iframes aren't read; markdown capped at 60k characters.
+### Held-out set (written after the fixes above, scored before any change for it)
+
+`node bench/extract-eval.mjs heldout` — 9 new pages: a books category page, a microdata phone grid, Mount
+Everest and Python infoboxes (footnoted number, date), a quotes tag page, a search-filtered hockey table,
+Wikipedia's largest cities (two-row headers, CSS in cells), scrapethissite's AJAX Oscars page (data only
+after clicking "2015"), and a local page of shadow-DOM product cards.
+
+| Run | Held-out | Tuned |
+|---|---|---|
+| First held-out run, unchanged reader | **4/9** | 10/10 |
+| After general fixes | **9/9** | 10/10 |
+
+Fixes from the held-out failures: the page's subject fills the first field on infobox questions; numbers
+taken from values with units, footnotes and notes ("8,848.86 m (29,031.7 ft)[note 2] Ranked 1st");
+table cells read as rendered text with footnote markers removed; multi-row headers merged with
+colspans/rowspans; **open shadow roots flattened** in background mission tabs; **in-page controls clicked**
+when named after a goal term (years like "2015") or when they expand content ("Show more") — never links
+to other pages, submit buttons or anything inside a form; the name column found when no header names it.
+
+The 4/9 is the honest generalisation number for the reader as it was; 9/9 is after fixing for these pages,
+so a third, fresh set is the way to measure again.
+
+Left: cross-origin iframes aren't read; closed shadow roots can't be; controls are clicked only when named
+after a goal term or obviously expanding; markdown capped at 60k characters.

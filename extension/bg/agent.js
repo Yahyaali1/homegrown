@@ -95,7 +95,7 @@ async function waitLoaded(tabId, ms) {
 
 // Renders a page in a background tab (so JavaScript-built shops work), reads it, closes it.
 // Tabs sit in one collapsed "✦ Mission" group so they don't clutter the tab strip.
-async function readInTab(url, run) {
+async function readInTab(url, run, terms = []) {
   const tab = await chrome.tabs.create({ url, active: false });
   try {
     run.group = await chrome.tabs.group({ tabIds: tab.id, ...(run.group && { groupId: run.group }) }).catch(() => run.group);
@@ -104,7 +104,8 @@ async function readInTab(url, run) {
     await sleep(1200); // late-rendered prices
     // lib/pageread.js builds the page model (structured data, markdown, tables, item lists, text).
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['vendor/readability.js', 'lib/pageread.js'] });
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => self.__hgReadPage() });
+    // A background tab is ours to change: flatten shadow DOM and click goal-named in-page controls.
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: (terms) => self.__hgReadPage({ shadow: true, terms }), args: [terms] });
     return { ...result, url: result.url || url };
   } finally {
     chrome.tabs.remove(tab.id).catch(() => {});
@@ -134,13 +135,13 @@ async function searchInTab(q, n, run) {
 }
 
 const EMPTY = /^(null|none|n\/?a|unknown|-+|)$/i;
-const NUMERIC = /price|cost|rating|range|score|miles|km|count|size|weight|speed|reviews|year/;
+const NUMERIC = /price|cost|rating|range|score|miles|km|count|size|weight|speed|reviews|elevation|height|population|area|length|depth|wins|losses|points|awards|_m$|_kg$|_ft$/;
 // A value that is a number with at most a short unit ("49", "829.8 m", "$1,099", "1.4E7 km²") becomes a number.
 const NUMBERISH = /^[~≈]?\s*[$€£¥₹]?\s*-?\d[\d.,\s]*(?:e[+-]?\d+)?\s*[a-zA-Z%²³°]{0,4}\.?(?:\s*\(.*\))?\s*$/i;
 const normalize = (row, fields) => {
   for (const f of fields) {
     if (row[f] == null || EMPTY.test(String(row[f]).trim())) row[f] = null;
-    else if (typeof row[f] === 'string' && (NUMERIC.test(f) || NUMBERISH.test(row[f]))) row[f] = num(row[f]) ?? row[f];
+    else if (typeof row[f] === 'string' && (NUMERIC.test(f) || NUMBERISH.test(row[f]))) row[f] = num(row[f]) ?? row[f]; // first number, units and notes dropped
   }
   return row;
 };
@@ -233,14 +234,18 @@ async function extractRows(page, fields, goal, single = false) {
       }
       return { row, score: hits * 2 + (t.infobox ? 1 : 0) };
     }).filter((x) => x.score >= 2).sort((a, b) => b.score - a.score)[0];
-    if (best) return [normalize(best.row, fields)];
+    if (best) {
+      if (best.row[fields[0]] == null) best.row[fields[0]] = page.heading || page.title; // "mountain", "language": the page's subject
+      return [normalize(best.row, fields)];
+    }
     // Labels that don't name the field ("how tall" vs "Architectural" / "Tip" under Height): let the model
     // pick from the subject's facts table only — small, precise context — and ground what it returns.
     const facts = (page.tables || []).find((t) => t.pairs && t.infobox) || (page.tables || []).find((t) => t.pairs);
     if (facts) {
       const subject = page.heading || page.title;
-      const known = Object.fromEntries(fields.filter((f) => NAMEY.test(f)).map((f) => [f, subject]));
-      const rest = fields.filter((f) => !NAMEY.test(f));
+      const isName = (f, i) => NAMEY.test(f) || (i === 0 && !NUMERIC.test(f));
+      const known = Object.fromEntries(fields.filter(isName).map((f) => [f, subject]));
+      const rest = fields.filter((f, i) => !isName(f, i));
       const lines = Object.entries(facts.pairs).map(([k, v]) => `${k}: ${v}`).join('\n');
       const filled = await modelFill(page, rest, goal, { ...known }, `Facts about ${subject}:\n${lines}`);
       if (rest.some((f) => filled[f] != null)) return [normalize({ _source: page.title, _url: page.url, _via: 'table+model', ...known, ...filled }, fields)];
@@ -267,6 +272,8 @@ async function extractRows(page, fields, goal, single = false) {
   for (const t of page.tables || []) {
     if (!t.headers) continue;
     const col = fields.map((f) => headerFor(t.headers, f));
+    // The first field names the thing ("film", "story"): when no header says so, the Title/Name column or the first.
+    if (col[0] < 0) col[0] = Math.max(0, t.headers.findIndex((h) => /^(title|name)\b/i.test(h)));
     if (col.filter((c) => c >= 0).length >= Math.min(2, fields.length)) {
       candidates.push(t.rows.map((r) => normalize({ _source: page.title, _url: page.url, _via: 'table', ...Object.fromEntries(fields.map((f, i) => [f, col[i] >= 0 ? r[col[i]] : null])) }, fields)));
     }
@@ -367,7 +374,10 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
           while (next < todo.length && !run.cancelled) {
             const r = todo[next++];
             say(runId, { step: i, status: 'running', log: [`reading ${new URL(r.url).hostname}`] });
-            const p = await readInTab(r.url, run).catch(() => null);
+            // Terms an in-page control may be named after: the required terms plus years and other numbers in
+            // the goal ("2015"), which requiredTerms leaves out because they rarely appear on every row.
+            const terms = [...new Set([...requiredTerms(goal), ...(goal.match(/\b\d{2,4}\b/g) || []), ...(steps.find((s) => s.type === 'extract')?.require || [])])];
+            const p = await readInTab(r.url, run, terms).catch((e) => (console.warn('mission: could not read', r.url, e.message), null));
             if (p && (p.text.length > 60 || p.structured?.products?.length || p.lists?.length || p.tables?.length)) pages.push(p); // skip empty/blocked pages
             say(runId, { step: i, status: 'running', detail: `${pages.length}/${todo.length} pages read` });
           }
@@ -383,7 +393,8 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
         }
         const need = (step.require || []).filter(Boolean);
         const found = rows.length;
-        if (need.length) rows = rows.filter((r) => need.every((t) => mentions(`${r._text || ''} ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([, v]) => v).join(' ')}`, t)));
+        const matching = need.length ? rows.filter((r) => need.every((t) => mentions(`${r._text || ''} ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([, v]) => v).join(' ')}`, t))) : rows;
+        if (matching.length) rows = matching; // when no row mentions them (a year that labels the whole section), keep all
         rows.forEach((r) => delete r._text);
         say(runId, { step: i, status: 'done', detail: `${rows.length} rows from ${pages.length} pages${need.length && found > rows.length ? ` · ${found - rows.length} didn't mention ${need.join(', ')}` : ''}`, rows });
       } else if (step.type === 'filter') {

@@ -145,18 +145,44 @@
   }
 
   // ---- 3. tables ----
+  // Rendered text (innerText skips <style> inside cells) without footnote markers like [2] or [note 2].
+  const cell = (c) => clean((c.innerText ?? c.textContent).replace(/\[(?:\d+|[a-z]|note \d+|citation needed)\]/gi, '')).slice(0, 200).replace(/\|/g, '/');
   function tableRows(t) {
-    return [...t.querySelectorAll('tr')].slice(0, 60).map((tr) => [...tr.children].map((c) => clean(c.textContent).slice(0, 200).replace(/\|/g, '/')));
+    return [...t.querySelectorAll('tr')].slice(0, 200).map((tr) => [...tr.children].map(cell));
+  }
+  // Header rows (all <th>) at the top, merged per column with colspans expanded: "Population | City proper".
+  function headerOf(t) {
+    const rows = [...t.querySelectorAll('tr')];
+    const top = [];
+    for (const tr of rows) {
+      if (!tr.children.length || [...tr.children].some((c) => c.tagName !== 'TH')) break;
+      top.push(tr);
+      if (top.length === 3) break;
+    }
+    if (!top.length) return null;
+    const cols = [];
+    top.forEach((tr, ri) => {
+      let i = 0;
+      for (const c of tr.children) {
+        while (cols[i]?.[ri] !== undefined) i++; // filled by a rowspan above
+        for (let k = 0; k < (+c.getAttribute('colspan') || 1); k++) {
+          for (let r = ri; r < ri + (+c.getAttribute('rowspan') || 1) && r < top.length; r++) ((cols[i + k] ??= [])[r] = cell(c));
+        }
+        i += +c.getAttribute('colspan') || 1;
+      }
+    });
+    return { headers: cols.map((parts) => [...new Set((parts || []).filter(Boolean))].join(' | ')), skip: top.length };
   }
   function tables() {
     return [...document.querySelectorAll('table, [role=table], [role=grid]')].filter(visible).slice(0, 15).map((t) => {
-      const rows = t.tagName === 'TABLE' ? tableRows(t) : [...t.querySelectorAll('[role=row]')].slice(0, 60).map((r) => [...r.querySelectorAll('[role=cell],[role=gridcell],[role=columnheader]')].map((c) => clean(c.textContent).slice(0, 200)));
-      const head = t.querySelector('thead tr, tr:first-child th') ? rows[0] : null;
+      const rows = t.tagName === 'TABLE' ? tableRows(t) : [...t.querySelectorAll('[role=row]')].slice(0, 200).map((r) => [...r.querySelectorAll('[role=cell],[role=gridcell],[role=columnheader]')].map(cell));
+      const merged = t.tagName === 'TABLE' ? headerOf(t) : null;
+      const head = merged ? merged.headers : t.querySelector('thead tr, tr:first-child th') ? rows[0] : null;
       // Label | value rows (Wikipedia infoboxes, spec sheets) are facts about the page's subject.
       const two = rows.filter((r) => r.length === 2 && r[0] && r[1]);
       const pairs = two.length >= 3 && two.length >= rows.length * 0.4 ? Object.fromEntries(two.map(([k, v]) => [k.toLowerCase(), v])) : null;
       const infobox = !!t.closest?.('.infobox, [class*=infobox i], [class*=spec i], [class*=detail i]');
-      return { caption: clean(t.querySelector('caption')?.textContent), headers: head, rows: head ? rows.slice(1) : rows, pairs, infobox };
+      return { caption: clean(t.querySelector('caption')?.textContent), headers: head, rows: head ? rows.slice(merged ? merged.skip : 1) : rows, pairs, infobox };
     }).filter((t) => t.rows.length);
   }
 
@@ -264,7 +290,43 @@
     scrollTo(0, 0);
   }
 
-  self.__hgReadPage = async ({ scroll = true } = {}) => {
+  // Web components keep their text in shadow roots, out of reach of querySelector and innerText. In a
+  // background mission tab (closed right after) we can swap each open shadow host for a plain copy.
+  function flattenShadow() {
+    for (let pass = 0; pass < 4; pass++) {
+      const hosts = [...document.querySelectorAll('*')].filter((e) => e.shadowRoot);
+      if (!hosts.length) return;
+      for (const h of hosts) {
+        const div = document.createElement('div');
+        div.className = `hg-shadow ${h.localName}`;
+        div.innerHTML = h.shadowRoot.innerHTML + h.innerHTML;
+        h.replaceWith(div);
+      }
+    }
+  }
+
+  // Content behind an in-page control ("2015" year tabs, "Show more"): click controls whose text is one of
+  // the goal's terms, or that expand content — never links to other pages, submits or anything in a form.
+  async function reveal(terms) {
+    const safe = (el) => !el.closest('form') && (el.tagName !== 'A' || /^(#|javascript:)/.test(el.getAttribute('href') || '#')) && !(el.tagName === 'BUTTON' && el.type === 'submit');
+    const controls = [...document.querySelectorAll('a, button, [role=tab], [role=button], summary')].filter((el) => visible(el) && safe(el));
+    const wanted = controls.filter((el) => {
+      const t = clean(el.textContent).toLowerCase();
+      return (terms.length && terms.includes(t)) || /^(show|load|see|view) (more|all)\b|^expand\b|^more\b/.test(t);
+    }).slice(0, 3);
+    for (const el of wanted) {
+      const before = document.body.innerText.length;
+      el.click();
+      for (let i = 0; i < 20 && document.body.innerText.length === before; i++) await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    return wanted.length;
+  }
+
+  self.__hgReadPage = async ({ scroll = true, shadow = false, terms = [] } = {}) => {
+    if (shadow) flattenShadow();
+    const revealed = terms.length ? await reveal(terms.map((t) => String(t).toLowerCase())) : 0;
+    if (shadow && revealed) flattenShadow();
     if (scroll) await autoscroll();
     const main = mainContent();
     return {

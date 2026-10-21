@@ -1,12 +1,13 @@
 {
- "date": "2026-10-21T13:17:21.296Z",
+ "date": "2026-10-21T13:30:46.616Z",
+ "set": "tuned",
  "passed": 10,
  "total": 10,
  "results": [
   {
    "case": "books.toscrape: cheapest book on the page (product grid)",
    "pass": true,
-   "secs": "8",
+   "secs": "12",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -21,7 +22,7 @@
   {
    "case": "books.toscrape: price of one book (product page)",
    "pass": true,
-   "secs": "3",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -36,7 +37,7 @@
   {
    "case": "webscraper.io: cheapest laptop (product grid)",
    "pass": true,
-   "secs": "4",
+   "secs": "7",
    "via": "structured",
    "rows": 5,
    "expected": {
@@ -51,7 +52,7 @@
   {
    "case": "scrapethissite: hockey team with most wins in 1990 (table)",
    "pass": true,
-   "secs": "5",
+   "secs": "7",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -66,7 +67,7 @@
   {
    "case": "scrapethissite: largest country by area (250-item list)",
    "pass": true,
-   "secs": "5",
+   "secs": "6",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -89,14 +90,14 @@
     "value": 828
    },
    "got": {
-    "building": "Burj Khalifa†",
-    "height_m": 829.8
+    "building": "Burj Khalifa",
+    "height_m": 828
    }
   },
   {
    "case": "Wikipedia: height of the Eiffel Tower (infobox)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table+model",
    "rows": 1,
    "expected": {
@@ -108,22 +109,22 @@
    },
    "got": {
     "structure": "Eiffel Tower",
-    "height_m": 300
+    "height_m": 330
    }
   },
   {
    "case": "Hacker News: story with the most points (title and points in separate rows)",
    "pass": true,
-   "secs": "5",
+   "secs": "6",
    "via": "list",
    "rows": 5,
    "expected": {
     "name": "Upcoming critical PHP security release (CVE-2026-109618 / -109619)",
-    "value": 1253
+    "value": 1277
    },
    "got": {
     "story": "Upcoming critical PHP security release (CVE-2026-109618 / -109619)",
-    "points": 1253
+    "points": 1277
    }
   },
   {
@@ -147,7 +148,7 @@
   {
    "case": "quotes.toscrape: who said the first quote on the page (repeated blocks)",
    "pass": true,
-   "secs": "21",
+   "secs": "25",
    "via": "list",
    "rows": 10,
    "expected": {

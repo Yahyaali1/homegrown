@@ -1,0 +1,145 @@
+{
+ "date": "2026-10-21T13:31:29.664Z",
+ "set": "heldout",
+ "passed": 9,
+ "total": 9,
+ "results": [
+  {
+   "case": "books.toscrape: most expensive travel book (category page)",
+   "pass": true,
+   "secs": "9",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "A Year in Provence (Provence #1)",
+    "value": 56.88
+   },
+   "got": {
+    "title": "A Year in Provence (Provence #1)",
+    "price": 56.88
+   }
+  },
+  {
+   "case": "webscraper.io: cheapest touch phone (microdata grid)",
+   "pass": true,
+   "secs": "5",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Nokia 123",
+    "value": 24.99
+   },
+   "got": {
+    "phone": "Nokia 123",
+    "price": 24.99
+   }
+  },
+  {
+   "case": "Wikipedia: elevation of Mount Everest (infobox)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Mount Everest",
+    "value": 8849
+   },
+   "got": {
+    "mountain": "Mount Everest",
+    "elevation_m": 8848.86
+   }
+  },
+  {
+   "case": "quotes.toscrape: author of the first \"love\" quote (tag page)",
+   "pass": true,
+   "secs": "34",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "André Gide"
+   },
+   "got": {
+    "quote": "“It is better to be hated for what you are than to be loved for what you are not.”",
+    "author": "André Gide"
+   }
+  },
+  {
+   "case": "scrapethissite: Boston Bruins best season by wins (filtered table)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "2008",
+    "value": 53
+   },
+   "got": {
+    "year": 2008,
+    "wins": 53
+   }
+  },
+  {
+   "case": "Wikipedia: year Python first appeared (infobox date)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Python",
+    "text": "1991"
+   },
+   "got": {
+    "language": "Python (programming language)",
+    "first_appeared": "20 February 1991; 35 years ago"
+   }
+  },
+  {
+   "case": "Wikipedia: most populous city (large table)",
+   "pass": true,
+   "secs": "6",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": [
+     "Jakarta",
+     "Tokyo",
+     "Dhaka"
+    ]
+   },
+   "got": {
+    "city": "Jakarta",
+    "population": 41913860
+   }
+  },
+  {
+   "case": "scrapethissite: 2015 film with the most Oscars (loads after a click)",
+   "pass": true,
+   "secs": "8",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Mad Max: Fury Road",
+    "value": 6
+   },
+   "got": {
+    "film": "Mad Max: Fury Road",
+    "awards": 6
+   }
+  },
+  {
+   "case": "Local: cheapest headphones in shadow-DOM product cards",
+   "pass": true,
+   "secs": "8",
+   "via": "model",
+   "rows": 4,
+   "expected": {
+    "name": "CalmWave Lite",
+    "value": 149
+   },
+   "got": {
+    "product": "CalmWave Lite",
+    "price": 149
+   }
+  }
+ ]
+}

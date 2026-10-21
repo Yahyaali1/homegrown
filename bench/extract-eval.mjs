@@ -4,14 +4,19 @@
 // Usage: ./scripts/gpu.sh node bench/extract-eval.mjs
 import path from 'node:path';
 import fs from 'node:fs';
-import { launch, ROOT } from '../tests/harness.mjs';
+import { launch, serve, ROOT } from '../tests/harness.mjs';
 
 const html = async (u) => (await fetch(u)).text();
 const strip = (s) => s.replace(/<[^>]+>/g, '').replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
 const minBy = (xs, f) => xs.reduce((a, b) => (f(b) < f(a) ? b : a));
 const maxBy = (xs, f) => xs.reduce((a, b) => (f(b) > f(a) ? b : a));
 
-const CASES = [
+// Usage: … extract-eval.mjs [tuned|heldout|all]. "tuned" is the set the reader was fixed against;
+// "heldout" was written afterwards and is scored before any change made for it.
+const SET = process.argv[2] || 'tuned';
+const site = await serve(path.join(ROOT, 'tests/fixtures'));
+
+const TUNED = [
   {
     name: 'books.toscrape: cheapest book on the page (product grid)',
     url: 'https://books.toscrape.com/',
@@ -109,6 +114,71 @@ const CASES = [
   },
 ];
 
+const HELDOUT = [
+  {
+    name: 'books.toscrape: most expensive travel book (category page)',
+    url: 'https://books.toscrape.com/catalogue/category/books/travel_2/index.html',
+    goal: 'Find the most expensive travel book', fields: ['title', 'price'], rank: ['price', 'desc'],
+    truth: async (u) => maxBy([...(await html(u)).matchAll(/<h3><a href="[^"]+" title="([^"]+)">[\s\S]*?price_color">£([\d.]+)</g)].map((m) => ({ name: m[1], value: +m[2] })), (b) => b.value),
+  },
+  {
+    name: 'webscraper.io: cheapest touch phone (microdata grid)',
+    url: 'https://webscraper.io/test-sites/e-commerce/allinone/phones/touch',
+    goal: 'Find the cheapest phone', fields: ['phone', 'price'], rank: ['price', 'asc'],
+    truth: async (u) => minBy([...(await html(u)).matchAll(/itemprop="price">\$([\d.,]+)<[\s\S]*?class="title" title="([^"]+)"/g)].map((m) => ({ name: m[2], value: +m[1].replace(/,/g, '') })), (x) => x.value),
+  },
+  {
+    name: 'Wikipedia: elevation of Mount Everest (infobox)',
+    url: 'https://en.wikipedia.org/wiki/Mount_Everest',
+    goal: 'What is the elevation of Mount Everest in metres?', fields: ['mountain', 'elevation_m'], rank: null,
+    truth: async () => ({ name: 'Mount Everest', value: 8849 }),
+  },
+  {
+    name: 'quotes.toscrape: author of the first "love" quote (tag page)',
+    url: 'https://quotes.toscrape.com/tag/love/',
+    goal: 'List the quotes on this page with their authors', fields: ['quote', 'author'], rank: null,
+    truth: async (u) => ({ name: strip(/<small class="author"[^>]*>([^<]+)</.exec(await html(u))[1]) }),
+  },
+  {
+    name: 'scrapethissite: Boston Bruins best season by wins (filtered table)',
+    url: 'https://www.scrapethissite.com/pages/forms/?q=boston',
+    goal: 'In which year did the Boston Bruins win the most games?', fields: ['year', 'wins'], rank: ['wins', 'desc'],
+    truth: async (u) => {
+      const rows = [...(await html(u)).matchAll(/<td class="year">\s*(\d+)[\s\S]*?<td class="wins">\s*(\d+)/g)].map((m) => ({ name: m[1], value: +m[2] }));
+      return maxBy(rows, (r) => r.value);
+    },
+  },
+  {
+    name: 'Wikipedia: year Python first appeared (infobox date)',
+    url: 'https://en.wikipedia.org/wiki/Python_(programming_language)',
+    goal: 'When did Python first appear?', fields: ['language', 'first_appeared'], rank: null,
+    truth: async () => ({ name: 'Python', text: '1991' }),
+  },
+  {
+    name: 'Wikipedia: most populous city (large table)',
+    url: 'https://en.wikipedia.org/wiki/List_of_largest_cities',
+    goal: 'Which city has the largest population?', fields: ['city', 'population'], rank: ['population', 'desc'],
+    truth: async () => ({ name: ['Jakarta', 'Tokyo', 'Dhaka'] }), // sources in the article differ on the order
+  },
+  {
+    name: 'scrapethissite: 2015 film with the most Oscars (loads after a click)',
+    url: 'https://www.scrapethissite.com/pages/ajax-javascript/',
+    goal: 'Which 2015 film won the most awards?', fields: ['film', 'awards'], rank: ['awards', 'desc'],
+    truth: async () => {
+      const films = await (await fetch('https://www.scrapethissite.com/pages/ajax-javascript/?ajax=true&year=2015')).json();
+      const f = maxBy(films, (x) => x.awards);
+      return { name: f.title.trim(), value: f.awards };
+    },
+  },
+  {
+    name: 'Local: cheapest headphones in shadow-DOM product cards',
+    url: `${site.url}/pages/shadow.html`,
+    goal: 'Find the cheapest headphones', fields: ['product', 'price'], rank: ['price', 'asc'],
+    truth: async () => ({ name: 'CalmWave Lite', value: 149 }),
+  },
+];
+const CASES = SET === 'heldout' ? HELDOUT : SET === 'all' ? [...TUNED, ...HELDOUT] : TUNED;
+
 const { ctx, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') });
 const page = await ctx.newPage();
 await page.goto(`chrome-extension://${id}/agent.html`);
@@ -122,15 +192,18 @@ for (const c of CASES) {
   const top = r.ok ? r.result.rows[0] : null;
   const vals = top ? Object.entries(top).filter(([k]) => !k.startsWith('_')).map(([, v]) => v) : [];
   const norm = (x) => String(x).toLowerCase().replace(/(\.\.\.|…)$/, '').replace(/\s+/g, ' ').trim();
-  const nameOk = top && vals.some((v) => norm(v) === norm(truth.name) || (norm(v).length > 3 && (norm(v).includes(norm(truth.name)) || norm(truth.name).includes(norm(v)))));
+  const names = [].concat(truth.name);
+  const nameOk = top && names.some((n) => vals.some((v) => norm(v) === norm(n) || (norm(v).length > 3 && (norm(v).includes(norm(n)) || norm(n).includes(norm(v))))));
+  const textOk = !truth.text || vals.some((v) => String(v).includes(truth.text));
   const close = (v, t) => Math.abs(v - t) <= Math.abs(t) * 0.01;
   const valueOk = truth.range ? vals.some((v) => typeof v === 'number' && v >= truth.range[0] && v <= truth.range[1]) : truth.value == null || vals.some((v) => typeof v === 'number' && [].concat(truth.value).some((t) => close(v, t)));
-  const pass = !!(nameOk && valueOk);
+  const pass = !!(nameOk && valueOk && textOk);
   results.push({ case: c.name, pass, secs, via: top?._via, rows: r.ok ? r.result.rows.length : 0, expected: truth, got: top && Object.fromEntries(Object.entries(top).filter(([k]) => !k.startsWith('_'))), error: r.ok ? undefined : r.error });
   console.log(`${pass ? 'PASS' : 'FAIL'} ${c.name} (${secs} s, via ${top?._via || '—'}, ${results.at(-1).rows} rows)`);
   if (!pass) console.log('     expected', JSON.stringify(truth), '\n     got     ', JSON.stringify(results.at(-1).got || r.error));
 }
 const passed = results.filter((r) => r.pass).length;
 console.log(`\n${passed}/${results.length} correct`);
-fs.writeFileSync(path.join(ROOT, 'bench/extract-eval.json'), JSON.stringify({ date: new Date().toISOString(), passed, total: results.length, results }, null, 1));
+fs.writeFileSync(path.join(ROOT, `bench/extract-eval-${SET}.json`), JSON.stringify({ date: new Date().toISOString(), set: SET, passed, total: results.length, results }, null, 1));
+site.server.close();
 await ctx.close();
