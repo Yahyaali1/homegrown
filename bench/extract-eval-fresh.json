@@ -1,13 +1,13 @@
 {
- "date": "2026-10-21T13:44:00.321Z",
+ "date": "2026-10-21T13:50:01.605Z",
  "set": "fresh",
- "passed": 8,
+ "passed": 9,
  "total": 9,
  "results": [
   {
    "case": "quotes.toscrape page 2: first author",
    "pass": true,
-   "secs": "36",
+   "secs": "47",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -21,7 +21,7 @@
   {
    "case": "books.toscrape: cheapest poetry book",
    "pass": true,
-   "secs": "8",
+   "secs": "9",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -36,7 +36,7 @@
   {
    "case": "webscraper.io: most expensive tablet",
    "pass": true,
-   "secs": "21",
+   "secs": "7",
    "via": "structured",
    "rows": 5,
    "expected": {
@@ -80,8 +80,8 @@
   },
   {
    "case": "Wikipedia: number of floors of Burj Khalifa (infobox)",
-   "pass": false,
-   "secs": "5",
+   "pass": true,
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -94,13 +94,13 @@
    },
    "got": {
     "building": "Burj Khalifa",
-    "floors": "309,473 m2 (3,331,100 sq ft)"
+    "floors": 154
    }
   },
   {
    "case": "Wikipedia: year JavaScript first appeared (infobox date)",
    "pass": true,
-   "secs": "4",
+   "secs": "5",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -115,7 +115,7 @@
   {
    "case": "Hacker News Ask: post with the most comments",
    "pass": true,
-   "secs": "5",
+   "secs": "6",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -130,7 +130,7 @@
   {
    "case": "Wikipedia: largest lake by area (table)",
    "pass": true,
-   "secs": "8",
+   "secs": "10",
    "via": "table",
    "rows": 5,
    "expected": {

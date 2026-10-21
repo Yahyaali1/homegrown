@@ -144,7 +144,7 @@ async function searchInTab(q, n, run) {
 }
 
 const EMPTY = /^(null|none|n\/?a|unknown|-+|)$/i;
-const NUMERIC = /price|cost|rating|range|score|miles|km|count|size|weight|speed|reviews|elevation|height|population|area|length|depth|wins|losses|points|awards|_m$|_kg$|_ft$/;
+const NUMERIC = /price|cost|rating|range|score|miles|km|count|size|weight|speed|reviews|elevation|height|population|area|length|depth|wins|losses|points|awards|comments|votes|floors|storeys|stories|rooms|seats|capacity|employees|members|views|downloads|stars|_m$|_kg$|_ft$/;
 // A value that is a number with at most a short unit ("49", "829.8 m", "$1,099", "1.4E7 km²") becomes a number.
 const NUMBERISH = /^[~≈]?\s*[$€£¥₹]?\s*-?\d[\d.,\s]*(?:e[+-]?\d+)?\s*[a-zA-Z%²³°]{0,4}\.?(?:\s*\(.*\))?\s*$/i;
 const normalize = (row, fields) => {
@@ -232,26 +232,36 @@ async function extractRows(page, fields, goal, single = false) {
   if (single) {
     const NAMEY = /name|title|structure|building|product|item|person|place|city|country|model|book/;
     // Label for a field: the one sharing most of its words ("mean_radius_km" → "mean radius", not "mean density").
-    const labelFor = (labels, f) => {
+    // Candidate labels for a field, best first: sharing most of its words ("mean_radius_km" → "mean radius").
+    const labelsFor = (labels, f) => {
       const words = f.split('_').filter((w) => w.length > 2 && !/^(km|kg|ft|mi|cm|mm)$/.test(w)).map((w) => w.replace(/s$/, '')); // "floors" ~ "floor count"
-      let best = null, bestScore = 0;
-      for (const l of labels) {
-        const score = words.filter((w) => l.includes(w)).length + (l.startsWith(words[0] || '') ? 0.5 : 0) - l.split(' ').length * 0.01;
-        if (score > bestScore && words.some((w) => l.includes(w))) (best = l), (bestScore = score);
-      }
-      return words.length && bestScore >= Math.min(words.length, 1) ? best : null;
+      const scored = labels.map((l) => ({ l, s: words.filter((w) => l.includes(w)).length + (l.startsWith(words[0] || '') ? 0.5 : 0) })).filter((x) => x.s >= 1);
+      const top = Math.max(0, ...scored.map((x) => x.s));
+      return scored.filter((x) => x.s === top).map((x) => x.l);
     };
-    const best = (page.tables || []).filter((t) => t.pairs).map((t) => {
+    // Near-synonyms tie lexically ("floor area" vs "floor count" for "floors"): the model picks among the
+    // tied labels only — a tiny, closed choice — and the value still comes from the page's own table.
+    const choose = async (f, tied, pairs) => {
+      if (tied.length < 2) return tied[0] || null;
+      const r = await ask(`Goal: ${goal}\nWhich label gives the value for "${f.replace(/_/g, ' ')}"? Reply with the label exactly as written, nothing else.`, tied.map((l) => `${l}: ${pairs[l]}`).join('\n'), EXTRACT);
+      return tied.find((l) => r.toLowerCase().includes(l)) || tied[0];
+    };
+    const scoredTables = [];
+    for (const t of (page.tables || []).filter((t) => t.pairs)) {
       const labels = Object.keys(t.pairs);
+      const hits = fields.filter((f) => !NAMEY.test(f) && labelsFor(labels, f).length).length;
+      if (hits) scoredTables.push({ t, hits, score: hits * 2 + (t.infobox ? 3 : 0) }); // the article's own infobox beats succession/navigation boxes
+    }
+    const pick = scoredTables.sort((a, b) => b.score - a.score)[0];
+    let best = null;
+    if (pick) {
       const row = { _source: page.title, _url: page.url, _via: 'table' };
-      let hits = 0;
       for (const f of fields) {
-        const k = NAMEY.test(f) ? null : labelFor(labels, f); // the subject is the page itself
-        row[f] = k ? t.pairs[k] : NAMEY.test(f) ? page.heading || page.title : null;
-        if (k) hits++;
+        const k = NAMEY.test(f) ? null : await choose(f, labelsFor(Object.keys(pick.t.pairs), f), pick.t.pairs); // the subject is the page itself
+        row[f] = k ? pick.t.pairs[k] : NAMEY.test(f) ? page.heading || page.title : null;
       }
-      return { row, hits, score: hits * 2 + (t.infobox ? 3 : 0) }; // the article's own infobox beats succession/navigation boxes
-    }).filter((x) => x.hits > 0).sort((a, b) => b.score - a.score)[0];
+      best = { row };
+    }
     if (best) {
       if (best.row[fields[0]] == null) best.row[fields[0]] = page.heading || page.title; // "mountain", "language": the page's subject
       return [normalize(best.row, fields)];

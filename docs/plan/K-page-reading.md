@@ -111,14 +111,15 @@ hockey seasons, Moon / Burj Khalifa / JavaScript infoboxes, Ask HN comments, lak
 |---|---|---|---|
 | Before any fresh-set change | **7/9** | 9/9 | 10/10 |
 | After one general fix (infobox labels scored by all field words, real infobox preferred) | 8/9 | 9/9 | 10/10 |
+| After two more (model picks among labels that tie lexically; count fields typed as numbers) | **9/9** | 9/9 | 10/10 |
 
-So generalisation went from 4/9 (first held-out, untouched) to 7/9 (fresh, untouched). Remaining miss:
-"floors" picks the Burj Khalifa infobox's "Floor area" instead of "Floor count" — left unfixed rather than
-add a rule for one page.
+So generalisation went from 4/9 (first held-out, untouched) to 7/9 (fresh, untouched); all 28 cases pass
+now. The last miss ("floors" → "Floor area" vs "Floor count") was fixed generally: when labels tie on
+wording, Gemma chooses among just those labels and the value still comes from the page's table. The next
+honest measure is a fourth untouched set.
 
 Also added: cross-origin iframes are read (the reader runs in every frame of a mission tab and the
 results are merged) — checked with a product grid inside a cross-origin iframe, ranked correctly.
 
 Left: closed shadow roots can't be read; controls are clicked only when named after a goal term or
-obviously expanding; label choice between near-synonyms ("floor area" vs "floor count") is lexical;
-markdown capped at 60k characters.
+obviously expanding; markdown capped at 60k characters.

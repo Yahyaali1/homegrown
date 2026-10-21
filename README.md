@@ -92,7 +92,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 ### Missions (open tasks → workflows)
 | Feature | How | Status |
 |---|---|---|
-| Reads any page | Product data the page publishes, main content (Readability), tables (multi-row headers), repeated item blocks, shadow-DOM components, cross-origin iframes, content behind in-page tabs/"show more"; the model only on relevant parts, and only values found on the page are kept | ✅ real-page benchmark (`bench/extract-eval.mjs`): tuned 10/10; held-out 4/9 untouched → 9/9; fresh 7/9 untouched → 8/9 |
+| Reads any page | Product data the page publishes, main content (Readability), tables (multi-row headers), repeated item blocks, shadow-DOM components, cross-origin iframes, content behind in-page tabs/"show more"; the model only on relevant parts, and only values found on the page are kept | ✅ real-page benchmark (`bench/extract-eval.mjs`): tuned 10/10; held-out 4/9 untouched → 9/9; fresh 7/9 untouched → 9/9 (28/28 overall) |
 | Goal → editable workflow | "Find the cheapest 27-inch 4K monitor with USB-C" → Search → Read pages → Pull out fields → Filter → Rank → Conclude | ✅ live web run, 53 s |
 | Results | Sortable table, cited answer, CSV export, Open best; prices keep their currency | ✅ |
 | Across my open tabs | Compare the tabs you already have open, no web search | ✅ |

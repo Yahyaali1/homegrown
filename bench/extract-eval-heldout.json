@@ -1,5 +1,5 @@
 {
- "date": "2026-10-21T13:44:00.839Z",
+ "date": "2026-10-21T13:50:09.417Z",
  "set": "heldout",
  "passed": 9,
  "total": 9,
@@ -7,7 +7,7 @@
   {
    "case": "books.toscrape: most expensive travel book (category page)",
    "pass": true,
-   "secs": "9",
+   "secs": "12",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -22,7 +22,7 @@
   {
    "case": "webscraper.io: cheapest touch phone (microdata grid)",
    "pass": true,
-   "secs": "8",
+   "secs": "7",
    "via": "structured",
    "rows": 5,
    "expected": {
@@ -37,7 +37,7 @@
   {
    "case": "Wikipedia: elevation of Mount Everest (infobox)",
    "pass": true,
-   "secs": "7",
+   "secs": "6",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -52,7 +52,7 @@
   {
    "case": "quotes.toscrape: author of the first \"love\" quote (tag page)",
    "pass": true,
-   "secs": "35",
+   "secs": "46",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -66,7 +66,7 @@
   {
    "case": "scrapethissite: Boston Bruins best season by wins (filtered table)",
    "pass": true,
-   "secs": "6",
+   "secs": "4",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -96,7 +96,7 @@
   {
    "case": "Wikipedia: most populous city (large table)",
    "pass": true,
-   "secs": "6",
+   "secs": "8",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -114,7 +114,7 @@
   {
    "case": "scrapethissite: 2015 film with the most Oscars (loads after a click)",
    "pass": true,
-   "secs": "8",
+   "secs": "12",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -129,7 +129,7 @@
   {
    "case": "Local: cheapest headphones in shadow-DOM product cards",
    "pass": true,
-   "secs": "12",
+   "secs": "8",
    "via": "model",
    "rows": 4,
    "expected": {
