@@ -2,7 +2,7 @@
 
 Edge Gallery is a Chrome MV3 extension that runs Gemma on the user's GPU (LiteRT-LM web, WebGPU) and
 helps while browsing: select text or point at an image and act on it in place. Goal: every feature the
-paid AI extensions sell, done on-device, plus creative features only local compute allows. The feature
+paid AI extensions sell, done on-device with local models only (no remote or cloud model, by decision), plus creative features only local compute allows. The feature
 catalogue and priorities live in the Claude doc "Edge Gallery: paid-extension feature map and
 local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 
@@ -50,7 +50,7 @@ side panel (models, tasks, settings-ish) · settings.html (options page) · libr
   `onAnswer(req, r, sender)`. `bg/engine.js` gives `engine(cmd,args)` and `ask(prompt, selection)`.
 - **engine modules:** `export const handlers = {cmd: async (msg) => result}`; `broadcast` is exported by offscreen.js.
 - **Storage keys:** sync: `tasks`, `toolbar`, `fab`, `disabledSites`, `taskVars`, feature toggles
-  (`ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `useVoice`), `remote`. local:
+  (`ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `useVoice`, `replyButtons`, `translateTo`). local:
   `flashcards`, `voiceSamples`, `monitors`, `scheduledResults`, `tabNotes`. IndexedDB (service worker): history,
   highlights, knowledge base.
 

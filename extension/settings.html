@@ -34,19 +34,6 @@
     <legend>Savings</legend>
     <p id="savings" class="muted"></p>
   </fieldset>
-
-  <fieldset>
-    <legend>Remote model (optional)</legend>
-    <p class="notice">When this is on, the text you ask about is sent to the server below instead of staying on this device.</p>
-    <label class="toggle"><input id="remote-on" type="checkbox"><span>Use a remote OpenAI-compatible model instead of the local one</span></label>
-    <div class="stack" style="display:grid;gap:8px">
-      <input id="remote-base" placeholder="Base URL, e.g. https://api.openai.com/v1" aria-label="Base URL">
-      <input id="remote-model" placeholder="Model, e.g. gpt-4o-mini or llama3.2" aria-label="Model">
-      <input id="remote-key" type="password" placeholder="API key (not needed for Ollama)" aria-label="API key" autocomplete="off">
-      <div class="row"><button id="remote-save">Save</button><button id="ollama" class="secondary" type="button">Use local Ollama</button><span id="remote-msg" class="muted"></span></div>
-      <p class="muted">Ollama needs <code>OLLAMA_ORIGINS=chrome-extension://*</code> set before it starts, or it refuses requests from extensions.</p>
-    </div>
-  </fieldset>
 </main>
 <script type="module" src="settings.js"></script>
 </body>

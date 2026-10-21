@@ -4,15 +4,14 @@ import { DEFAULT_TASKS, getTasks } from './actions.js';
 import { MODELS } from './models.js';
 import { ensureEngine, engine } from './bg/engine.js';
 // Feature modules: each exports `handlers` (EG.bg commands), and may export `init()` and
-// `onAnswer(req, result, sender)` (called after every answer) and, for bg/remote.js, `generate`.
+// `onAnswer(req, result, sender)` (called after every answer).
 import * as reader from './bg/reader.js';
 import * as web from './bg/web.js';
 import * as capture from './bg/capture.js';
 import * as tabs from './bg/tabs.js';
 import * as monitors from './bg/monitors.js';
 import * as memory from './bg/memory.js';
-import * as remote from './bg/remote.js';
-const modules = [reader, web, capture, tabs, monitors, memory, remote];
+const modules = [reader, web, capture, tabs, monitors, memory];
 const handlers = Object.assign({}, ...modules.map((m) => m.handlers || {}));
 
 // ---- tasks ----
@@ -55,7 +54,7 @@ const downloads = new Set(); // ports waiting on a first-run model download
 function onRunPort(port) {
   let id = null;
   port.onMessage.addListener(async (req) => {
-    if (req.type === 'cancel') return remote.cancel?.(), engine('cancel').catch(() => {});
+    if (req.type === 'cancel') return engine('cancel').catch(() => {});
     if (req.type === 'download') {
       // First-run setup from the page: download the default model, relaying progress to the card.
       downloads.add(port);
@@ -74,15 +73,11 @@ function onRunPort(port) {
     try {
       const turn = buildTurn(req);
       const turns = [...(req.history || []), turn];
-      // An optional OpenAI-compatible/Ollama endpoint (settings, off by default) replaces the local model.
-      const useRemote = await remote.enabled?.();
-      const loaded = useRemote ? { name: await remote.modelName() } : await engine('ensureLoaded');
-      const r = useRemote
-        ? await remote.generate(id, turns, (t) => port.postMessage({ type: 'token', text: t }))
-        : await engine('generate', { id, turns, config: req.config || {} });
+      const loaded = await engine('ensureLoaded');
+      const r = await engine('generate', { id, turns, config: req.config || {} });
       const kept = turn.selection ? `${r.userText}\n\n${turn.selection.slice(0, PAGE_TEXT_IN_HISTORY)}` : r.userText;
       for (const m of modules) m.onAnswer?.(req, r, port.sender);
-      port.postMessage({ type: 'done', text: r.text, stats: r.stats, model: loaded.name, remote: useRemote, history: [...(req.history || []), { role: 'user', text: kept }, { role: 'model', text: r.text }] });
+      port.postMessage({ type: 'done', text: r.text, stats: r.stats, model: loaded.name, history: [...(req.history || []), { role: 'user', text: kept }, { role: 'model', text: r.text }] });
     } catch (e) {
       const noModel = /No model downloaded/.test(e.message);
       port.postMessage({ type: 'error', message: e.message, ...(noModel && { code: 'no-model', model: MODELS[0] }) });
@@ -91,7 +86,7 @@ function onRunPort(port) {
     }
   });
   port.onDisconnect.addListener(() => {
-    if (id && streams.has(id)) remote.cancel?.(), engine('cancel').catch(() => {}); // card closed mid-answer
+    if (id && streams.has(id)) engine('cancel').catch(() => {}); // card closed mid-answer
   });
 }
 chrome.runtime.onConnect.addListener((port) => port.name === 'run' && onRunPort(port));

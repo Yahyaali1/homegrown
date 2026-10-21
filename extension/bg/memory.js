@@ -1,7 +1,6 @@
 // Memory: answer history, highlights, a small knowledge base of pages you ran tasks on, and the
 // savings meter. Everything stays in this browser (IndexedDB 'eg-memory', chrome.storage.local 'savings').
 import { engine, ask } from './engine.js';
-import { enabled as remoteEnabled } from './remote.js';
 
 const HISTORY_CAP = 2000;
 const SIMILAR = 0.6; // cosine for "same topic"; calibrated on MiniLM: related pages ~0.72, unrelated < 0.1
@@ -76,14 +75,12 @@ export async function onAnswer(req, r, sender) {
   addHistory({ url, title, ask: req.task?.title || req.question, answer: r.text, time: Date.now() });
 
   const input = (req.page?.text || req.selection || '') + (req.question || '') + (r.userText || '');
-  if (!(await remoteEnabled())) {
-    const { savings = { answers: 0, inTokens: 0, outTokens: 0, bytes: 0 } } = await chrome.storage.local.get('savings');
-    savings.answers++;
-    savings.inTokens += r.stats?.prefillTokens || 0;
-    savings.outTokens += r.stats?.outputTokens || 0;
-    savings.bytes += new TextEncoder().encode(input).length;
-    chrome.storage.local.set({ savings });
-  }
+  const { savings = { answers: 0, inTokens: 0, outTokens: 0, bytes: 0 } } = await chrome.storage.local.get('savings');
+  savings.answers++;
+  savings.inTokens += r.stats?.prefillTokens || 0;
+  savings.outTokens += r.stats?.outputTokens || 0;
+  savings.bytes += new TextEncoder().encode(input).length;
+  chrome.storage.local.set({ savings });
   if (!req.history?.length && url.startsWith('http') && (req.page || (req.selection?.length || 0) > 500)) addKb(url, title, r.text.slice(0, 800));
 }
 

@@ -1,5 +1,5 @@
 // Settings: page toggles and per-site switch (chrome.storage.sync, read by content/core.js and features),
-// the savings meter, and the optional remote endpoint (chrome.storage.local 'remote', read by bg/remote.js).
+// the savings meter.
 const $ = (s) => document.querySelector(s);
 
 for (const box of document.querySelectorAll('[data-key]')) {
@@ -44,21 +44,3 @@ chrome.runtime.sendMessage({ target: 'bg', cmd: 'memSavings' }).then((r) => {
   const s = r?.result;
   if (s) $('#savings').textContent = `${s.answers} answers on this device · about $${s.usd.toFixed(2)} of cloud API cost avoided (estimate at $${s.rate.inPerM}/$${s.rate.outPerM} per million input/output tokens) · ${(s.bytes / 1e6).toFixed(2)} MB of text kept off servers`;
 });
-
-chrome.storage.local.get('remote').then(({ remote = {} }) => {
-  $('#remote-on').checked = !!remote.enabled;
-  $('#remote-base').value = remote.base || '';
-  $('#remote-model').value = remote.model || '';
-  $('#remote-key').value = remote.key || '';
-});
-$('#ollama').onclick = () => {
-  $('#remote-base').value = 'http://localhost:11434/v1';
-  $('#remote-model').value ||= 'llama3.2';
-  $('#remote-key').value = '';
-};
-$('#remote-save').onclick = async () => {
-  const remote = { enabled: $('#remote-on').checked, base: $('#remote-base').value.trim(), model: $('#remote-model').value.trim(), key: $('#remote-key').value.trim() };
-  if (remote.enabled && (!remote.base || !remote.model)) return ($('#remote-msg').textContent = 'Add a base URL and a model first.');
-  await chrome.storage.local.set({ remote });
-  $('#remote-msg').textContent = remote.enabled ? `Saved. Answers now come from ${remote.model}.` : 'Saved. Answers stay on this device.';
-};
