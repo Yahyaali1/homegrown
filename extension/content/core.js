@@ -175,7 +175,7 @@
     const chips = tasks.filter((t) => t.kind === 'page').map((t) => {
       const b = document.createElement('button');
       b.textContent = t.title;
-      b.onclick = () => run({ task: t, page: pageInfo() }, t.title, rect);
+      b.onclick = () => run({ task: t, page: pageInfo() }, t.title, topRect());
       return b;
     });
     const form = document.createElement('form');
@@ -185,10 +185,10 @@
     form.onsubmit = (e) => {
       e.preventDefault();
       const q = input.value.trim();
-      if (q) run({ task: { kind: 'page' }, question: q, page: pageInfo() }, q, rect);
+      if (q) run({ task: { kind: 'page' }, question: q, page: pageInfo() }, q, topRect());
     };
     const btn = (label, onclick) => Object.assign(document.createElement('button'), { textContent: label, onclick });
-    const act = (a) => btn(a.label, () => ((bar.hidden = true), a.run({ page: pageInfo(), rect })));
+    const act = (a) => btn(a.label, () => ((bar.hidden = true), a.run({ page: pageInfo(), rect: topRect() })));
     const shown = actions.page.filter((a) => !a.when || a.when());
     // Actions that only apply here (a video, a form, a long page) come first; the rest sit in categories.
     const here = shown.filter((a) => a.when);
@@ -202,6 +202,9 @@
     input.focus();
   }
   fab.onclick = () => (bar.hidden ? showLauncher() : (bar.hidden = true));
+
+  // Cards opened from the launcher sit at the top-right, so they never cover the ✦ button.
+  const topRect = () => ({ top: 60, bottom: 60, left: innerWidth - 420, right: innerWidth });
 
   // Launcher categories, by action label; anything unlisted lands in "More".
   const GROUPS = {
@@ -420,24 +423,32 @@
 
   // ---- requests from the right-click menu, keyboard shortcut and side panel ----
   chrome.runtime.onMessage.addListener((msg) => {
+    // Messages addressed to an extension-page tab (the reader): only that tab's top frame acts.
+    if ('toTab' in msg) {
+      if (window === top && chrome.tabs) chrome.tabs.getCurrent().then((t) => t?.id === msg.toTab && onMenu(msg));
+      return;
+    }
+    onMenu(msg);
+  });
+  function onMenu(msg) {
     if (msg.type === 'launcher') return window === top && showLauncher();
     if (msg.type !== 'menu') return;
     const kind = msg.task?.kind ?? msg.ask;
-    const top = { top: 60, bottom: 60, left: innerWidth - 420, right: innerWidth };
+    const corner = topRect();
     if (kind === 'page') {
-      return msg.task ? run({ task: msg.task, page: pageInfo() }, msg.task.title, top) : askMode('page', top, () => ({ page: pageInfo() }));
+      return msg.task ? run({ task: msg.task, page: pageInfo() }, msg.task.title, corner) : askMode('page', corner, () => ({ page: pageInfo() }));
     }
     if (kind === 'image') {
       const img = [...document.images].find((i) => i.currentSrc === msg.srcUrl || i.src === msg.srcUrl);
       const info = img ? imageInfo(img) : { src: msg.srcUrl, alt: '', caption: '', context: '' };
-      const rect = img?.getBoundingClientRect() ?? top;
+      const rect = img?.getBoundingClientRect() ?? corner;
       return msg.task ? run({ task: msg.task, image: info }, msg.task.title, rect) : askMode('image', rect, () => ({ image: info }));
     }
     const sel = currentSelection() || lastSel;
     if (!sel) return;
     if (msg.task) run({ task: msg.task, selection: sel.text }, msg.task.title, sel.rect);
     else askMode('text', sel.rect, () => ({ selection: sel.text }));
-  });
+  }
 
   // ---- API for feature files ----
 
@@ -506,7 +517,7 @@
     get lastSelection() { return lastSel; },
     onSettings: (cb) => (settingsListeners.push(cb), cb(settings)),
     enabled: () => enabled,
-    topRect: () => ({ top: 60, bottom: 60, left: innerWidth - 420, right: innerWidth }),
+    topRect,
     style: (css) => root.prepend(Object.assign(document.createElement('style'), { textContent: css })),
   };
 })();

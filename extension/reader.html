@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edge Gallery reader</title>
+  <link rel="stylesheet" href="reader.css">
+</head>
+<body>
+  <header>
+    <span class="brand">✦ Edge Gallery reader</span>
+    <label class="pick">Open a file <input id="file" type="file" accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm"></label>
+  </header>
+  <main id="doc" tabindex="-1">
+    <p class="hint">Drop a PDF, Word (.docx), text, Markdown, CSV, JSON or HTML file here, or open one above.
+      Select any text to summarize, explain or translate it, or use ✦ to ask about the whole document.</p>
+  </main>
+  <!-- Same order as manifest content_scripts, so the toolbar, launcher and page tasks work here too. -->
+  <script src="content/core.js"></script>
+  <script src="content/writing.js"></script>
+  <script src="content/ghost.js"></script>
+  <script src="content/replies.js"></script>
+  <script src="content/jargon.js"></script>
+  <script src="content/forms.js"></script>
+  <script src="content/youtube.js"></script>
+  <script src="content/reading.js"></script>
+  <script src="content/translate.js"></script>
+  <script src="content/images.js"></script>
+  <script src="content/search.js"></script>
+  <script src="content/links.js"></script>
+  <script src="content/tabs.js"></script>
+  <script src="content/memory.js"></script>
+  <script src="content/voice.js"></script>
+  <script src="vendor/reading/mammoth.browser.min.js"></script>
+  <script type="module" src="reader.js"></script>
+</body>
+</html>

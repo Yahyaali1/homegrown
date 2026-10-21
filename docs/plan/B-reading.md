@@ -15,4 +15,17 @@ Files: `reader.html/js/css`, `content/youtube.js`, `content/reading.js`, `engine
 
 ## Status
 
-Drafted by an agent; smoke check in progress. Update with results and any shared-file changes needed.
+Done (agent B, smoke-checked): reader (PDF by URL with working toolbar Summarize, DOCX via mammoth),
+mind map tree (+ result action), quiz (5 questions, scoring), flashcards (8 saved), podcast transcript,
+gist margins, long-page Q&A (fact at the end of a 34k-char page answered; passages kept only if ≥0.6× the
+best score), YouTube timestamp seeking and translated subtitles on a fake watch page.
+
+Integration fixes (main session): background.js calls each module's `menus()` after rebuilding menus
+(reader items no longer dropped) and ignores menu ids it doesn't own; shortcuts and menu actions reach the
+reader page via a runtime message addressed to its tab (`toTab`, checked in core.js); launcher cards open
+top-right so they don't cover ✦. Also fixed: the Alt+Shift+A launcher message threw (a local `top`
+shadowed `window.top`). Verified in one run.
+
+Left: live YouTube transcripts (YouTube serves empty caption files without the player token; the
+"Show transcript" fallback didn't load headless), podcast audio, "Chat with video", the reader context
+menu click, and TXT/MD/CSV/JSON/HTML in the reader are untested.

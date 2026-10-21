@@ -107,18 +107,29 @@ async function rebuildMenus() {
     }
     chrome.contextMenus.create({ id: `ask:${kind}`, parentId: `root-${kind}`, title: 'Ask…', contexts });
   }
+  for (const m of modules) m.menus?.(); // modules' own items (removeAll above dropped them)
 }
 
 // Pages where content.js runs get the in-page card; the PDF viewer and browser pages fall back
 // to the side panel. Decided synchronously because sidePanel.open needs the click's user gesture.
-const inPage = (info) => /^https?:|^file:/.test(info.frameUrl || info.pageUrl) && !/\.pdf($|[?#])/i.test(info.pageUrl);
+const READER = chrome.runtime.getURL('reader.html');
+const inPage = (info) =>
+  (info.pageUrl || '').startsWith(READER) || (/^https?:|^file:/.test(info.frameUrl || info.pageUrl) && !/\.pdf($|[?#])/i.test(info.pageUrl));
+
+// The reader is an extension page: tabs.sendMessage doesn't reach it, so it gets a runtime message
+// addressed to its tab (content/core.js checks toTab).
+async function toTab(tabId, msg, opts) {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.url?.startsWith(READER)) return chrome.runtime.sendMessage({ ...msg, toTab: tabId });
+  return chrome.tabs.sendMessage(tabId, msg, opts);
+}
 
 async function handleMenuClick(info, tab) {
   const [type, id] = info.menuItemId.split(':');
   const task = type === 'task' ? (await getTasks()).find((t) => t.id === id) : null;
   if (inPage(info)) {
     const msg = { type: 'menu', task, ask: type === 'ask' ? id : null, srcUrl: info.srcUrl };
-    await chrome.tabs.sendMessage(tab.id, msg, { frameId: info.frameId ?? 0 });
+    await toTab(tab.id, msg, { frameId: info.frameId ?? 0 });
     return;
   }
   // Side panel fallback (selected text in PDFs and pages content scripts can't reach).
@@ -129,16 +140,17 @@ async function handleMenuClick(info, tab) {
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (!/^(task|ask):/.test(info.menuItemId)) return; // other modules' items (e.g. reader:) handle themselves
   if (!inPage(info)) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   handleMenuClick(info, tab).catch((e) => console.warn('menu action failed', e));
 });
 
 // Keyboard shortcuts: open the on-page launcher, or run the first page task.
 chrome.commands.onCommand.addListener(async (command, tab) => {
-  if (command === 'launcher') return chrome.tabs.sendMessage(tab.id, { type: 'launcher' }).catch(() => {});
+  if (command === 'launcher') return toTab(tab.id, { type: 'launcher' }).catch(() => {});
   if (command !== 'page-task') return;
   const task = (await getTasks()).find((t) => t.kind === 'page');
-  if (task) chrome.tabs.sendMessage(tab.id, { type: 'menu', task }).catch(() => {});
+  if (task) toTab(tab.id, { type: 'menu', task }).catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {

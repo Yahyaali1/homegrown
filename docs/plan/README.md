@@ -12,7 +12,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 |---|---|---|
 | Core (toolbar, card, launcher, tasks, models, image reading) | this file | Done, tested (10/10 Playwright + Chrome 155 run) |
 | A Writing | [A-writing.md](A-writing.md) | Done, smoke-checked (see Status) |
-| B Reading & documents | [B-reading.md](B-reading.md) | Drafted, being verified |
+| B Reading & documents | [B-reading.md](B-reading.md) | Done, smoke-checked (see Status) |
 | C Translation | [C-translation.md](C-translation.md) | Done, smoke-checked (see Status) |
 | D Images (generation, region capture, alt text) | [D-images.md](D-images.md) | Done, smoke-checked (see Status) |
 | E Search, research, links | [E-web.md](E-web.md) | Drafted, being verified |
