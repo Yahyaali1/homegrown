@@ -14,7 +14,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | A Writing | [A-writing.md](A-writing.md) | Drafted by an agent, being verified |
 | B Reading & documents | [B-reading.md](B-reading.md) | Drafted, being verified |
 | C Translation | [C-translation.md](C-translation.md) | Drafted, being verified |
-| D Images (generation, region capture, alt text) | [D-images.md](D-images.md) | Drafted, being verified |
+| D Images (generation, region capture, alt text) | [D-images.md](D-images.md) | Done, smoke-checked (see Status) |
 | E Search, research, links | [E-web.md](E-web.md) | Drafted, being verified |
 | F Tabs, automation, tasks, side panel | [F-tabs.md](F-tabs.md) | Drafted, being verified |
 | G Memory, platform, voice | [G-memory.md](G-memory.md) | Drafted, being verified |

@@ -12,4 +12,10 @@ Files: `engine/imagegen.js`, `content/images.js`, `bg/capture.js`. Image *readin
 
 ## Status
 
-Drafted by an agent; smoke check in progress. Record model size and seconds per image on an M4 here.
+Done (agent D, smoke-checked in headless Chromium):
+- Create image: Janus-Pro-1B (`onnx-community/Janus-Pro-1B-ONNX`, pinned), ~2.4 GB download, ~12 s per 384×384 image on an M4.
+- Ask about an area: extracted the sign text. Write alt text: set a correct alt on the page.
+- `bg/capture.js` relays engine progress to the tab (content scripts can't hear engine broadcasts).
+
+Left: `autoAltText` needs a switch in settings.html (group G); Copy/Download, image-file drop and
+"Illustrate this" not verified. No shared-file changes needed.
