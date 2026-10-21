@@ -177,7 +177,60 @@ const HELDOUT = [
     truth: async () => ({ name: 'CalmWave Lite', value: 149 }),
   },
 ];
-const CASES = SET === 'heldout' ? HELDOUT : SET === 'all' ? [...TUNED, ...HELDOUT] : TUNED;
+// Third set, written after the held-out fixes and scored with no changes made for it.
+const FRESH = [
+  {
+    name: 'quotes.toscrape page 2: first author',
+    url: 'https://quotes.toscrape.com/page/2/', goal: 'List the quotes on this page with their authors', fields: ['quote', 'author'], rank: null,
+    truth: async (u) => ({ name: strip(/<small class="author"[^>]*>([^<]+)</.exec(await html(u))[1]) }),
+  },
+  {
+    name: 'books.toscrape: cheapest poetry book',
+    url: 'https://books.toscrape.com/catalogue/category/books/poetry_23/index.html', goal: 'Find the cheapest poetry book', fields: ['title', 'price'], rank: ['price', 'asc'],
+    truth: async (u) => minBy([...(await html(u)).matchAll(/<h3><a href="[^"]+" title="([^"]+)">[\s\S]*?price_color">£([\d.]+)</g)].map((m) => ({ name: m[1], value: +m[2] })), (b) => b.value),
+  },
+  {
+    name: 'webscraper.io: most expensive tablet',
+    url: 'https://webscraper.io/test-sites/e-commerce/allinone/computers/tablets', goal: 'Find the most expensive tablet', fields: ['tablet', 'price'], rank: ['price', 'desc'],
+    truth: async (u) => maxBy([...(await html(u)).matchAll(/itemprop="price">\$([\d.,]+)<[\s\S]*?class="title" title="([^"]+)"/g)].map((m) => ({ name: m[2], value: +m[1].replace(/,/g, '') })), (x) => x.value),
+  },
+  {
+    name: 'scrapethissite: New York team-season with most losses',
+    url: 'https://www.scrapethissite.com/pages/forms/?q=new+york', goal: 'Which New York team season had the most losses?', fields: ['team', 'losses'], rank: ['losses', 'desc'],
+    truth: async (u) => maxBy([...(await html(u)).matchAll(/<td class="name">([\s\S]*?)<\/td>[\s\S]*?<td class="losses">\s*(\d+)/g)].map((m) => ({ name: strip(m[1]), value: +m[2] })), (r) => r.value),
+  },
+  {
+    name: 'Wikipedia: mean radius of the Moon (infobox)',
+    url: 'https://en.wikipedia.org/wiki/Moon', goal: 'What is the mean radius of the Moon in km?', fields: ['body', 'mean_radius_km'], rank: null,
+    truth: async () => ({ name: 'Moon', value: 1737.4 }),
+  },
+  {
+    name: 'Wikipedia: number of floors of Burj Khalifa (infobox)',
+    url: 'https://en.wikipedia.org/wiki/Burj_Khalifa', goal: 'How many floors does the Burj Khalifa have?', fields: ['building', 'floors'], rank: null,
+    truth: async () => ({ name: 'Burj Khalifa', value: [163, 154, 160] }), // above-ground floors; the article lists 163 (+2 below)
+  },
+  {
+    name: 'Wikipedia: year JavaScript first appeared (infobox date)',
+    url: 'https://en.wikipedia.org/wiki/JavaScript', goal: 'When did JavaScript first appear?', fields: ['language', 'first_appeared'], rank: null,
+    truth: async () => ({ name: 'JavaScript', text: '1995' }),
+  },
+  {
+    name: 'Hacker News Ask: post with the most comments',
+    url: 'https://news.ycombinator.com/ask', goal: 'Which Ask HN post has the most comments?', fields: ['post', 'comments'], rank: ['comments', 'desc'],
+    truth: async (u) => {
+      const h = await html(u);
+      const titles = Object.fromEntries([...h.matchAll(/<tr class="athing[^"]*" id="(\d+)">[\s\S]*?<span class="titleline"><a [^>]*>([\s\S]*?)<\/a>/g)].map((m) => [m[1], strip(m[2])]));
+      const rows = [...h.matchAll(/item\?id=(\d+)">(\d+)&nbsp;comments/g)].map((m) => ({ name: titles[m[1]], value: +m[2] }));
+      return maxBy(rows.filter((r) => r.name), (r) => r.value);
+    },
+  },
+  {
+    name: 'Wikipedia: largest lake by area (table)',
+    url: 'https://en.wikipedia.org/wiki/List_of_lakes_by_area', goal: 'Which lake has the largest area?', fields: ['lake', 'area_km2'], rank: ['area_km2', 'desc'],
+    truth: async () => ({ name: 'Caspian Sea', value: [371000, 371795, 386400, 436000] }), // the article quotes several figures
+  },
+];
+const CASES = { heldout: HELDOUT, fresh: FRESH, all: [...TUNED, ...HELDOUT, ...FRESH] }[SET] || TUNED;
 
 const { ctx, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') });
 const page = await ctx.newPage();

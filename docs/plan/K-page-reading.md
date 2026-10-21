@@ -102,5 +102,23 @@ to other pages, submit buttons or anything inside a form; the name column found 
 The 4/9 is the honest generalisation number for the reader as it was; 9/9 is after fixing for these pages,
 so a third, fresh set is the way to measure again.
 
-Left: cross-origin iframes aren't read; closed shadow roots can't be; controls are clicked only when named
-after a goal term or obviously expanding; markdown capped at 60k characters.
+### Fresh third set (written after the held-out fixes, scored untouched)
+
+`node bench/extract-eval.mjs fresh` — 9 more new pages (quotes page 2, poetry books, tablets, New York
+hockey seasons, Moon / Burj Khalifa / JavaScript infoboxes, Ask HN comments, lakes by area).
+
+| Reader version | Fresh | Held-out | Tuned |
+|---|---|---|---|
+| Before any fresh-set change | **7/9** | 9/9 | 10/10 |
+| After one general fix (infobox labels scored by all field words, real infobox preferred) | 8/9 | 9/9 | 10/10 |
+
+So generalisation went from 4/9 (first held-out, untouched) to 7/9 (fresh, untouched). Remaining miss:
+"floors" picks the Burj Khalifa infobox's "Floor area" instead of "Floor count" — left unfixed rather than
+add a rule for one page.
+
+Also added: cross-origin iframes are read (the reader runs in every frame of a mission tab and the
+results are merged) — checked with a product grid inside a cross-origin iframe, ranked correctly.
+
+Left: closed shadow roots can't be read; controls are clicked only when named after a goal term or
+obviously expanding; label choice between near-synonyms ("floor area" vs "floor count") is lexical;
+markdown capped at 60k characters.

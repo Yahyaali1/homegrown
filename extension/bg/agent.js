@@ -103,10 +103,19 @@ async function readInTab(url, run, terms = []) {
     await waitLoaded(tab.id, 20000);
     await sleep(1200); // late-rendered prices
     // lib/pageread.js builds the page model (structured data, markdown, tables, item lists, text).
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['vendor/readability.js', 'lib/pageread.js'] });
-    // A background tab is ours to change: flatten shadow DOM and click goal-named in-page controls.
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: (terms) => self.__hgReadPage({ shadow: true, terms }), args: [terms] });
-    return { ...result, url: result.url || url };
+    // Every frame, cross-origin iframes included (host permissions let us in): embedded shops, widgets,
+    // documents. A background tab is ours to change: flatten shadow DOM, click goal-named controls.
+    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['vendor/readability.js', 'lib/pageread.js'] });
+    const frames = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: (terms) => self.__hgReadPage({ shadow: true, terms, scroll: window === top }), args: [terms] });
+    const [main, ...inner] = [...frames].sort((a, b) => a.frameId - b.frameId).map((f) => f.result).filter(Boolean);
+    for (const f of inner.filter((f) => f.text.length > 40)) {
+      main.lists.push(...f.lists);
+      main.tables.push(...f.tables);
+      main.structured.products.push(...f.structured.products);
+      main.markdown += `\n\n${f.markdown}`;
+      main.text += ` ${f.text}`;
+    }
+    return { ...main, url: main.url || url };
   } finally {
     chrome.tabs.remove(tab.id).catch(() => {});
   }
@@ -222,18 +231,27 @@ async function extractRows(page, fields, goal, single = false) {
   // 0. A question about the page's own subject ("how tall is the Eiffel Tower?"): label | value tables.
   if (single) {
     const NAMEY = /name|title|structure|building|product|item|person|place|city|country|model|book/;
+    // Label for a field: the one sharing most of its words ("mean_radius_km" → "mean radius", not "mean density").
+    const labelFor = (labels, f) => {
+      const words = f.split('_').filter((w) => w.length > 2 && !/^(km|kg|ft|mi|cm|mm)$/.test(w)).map((w) => w.replace(/s$/, '')); // "floors" ~ "floor count"
+      let best = null, bestScore = 0;
+      for (const l of labels) {
+        const score = words.filter((w) => l.includes(w)).length + (l.startsWith(words[0] || '') ? 0.5 : 0) - l.split(' ').length * 0.01;
+        if (score > bestScore && words.some((w) => l.includes(w))) (best = l), (bestScore = score);
+      }
+      return words.length && bestScore >= Math.min(words.length, 1) ? best : null;
+    };
     const best = (page.tables || []).filter((t) => t.pairs).map((t) => {
       const labels = Object.keys(t.pairs);
       const row = { _source: page.title, _url: page.url, _via: 'table' };
       let hits = 0;
       for (const f of fields) {
-        const w = f.split('_')[0];
-        const k = NAMEY.test(f) ? null : labels.find((l) => l.startsWith(w) || l.includes(w)); // the subject is the page itself
+        const k = NAMEY.test(f) ? null : labelFor(labels, f); // the subject is the page itself
         row[f] = k ? t.pairs[k] : NAMEY.test(f) ? page.heading || page.title : null;
         if (k) hits++;
       }
-      return { row, score: hits * 2 + (t.infobox ? 1 : 0) };
-    }).filter((x) => x.score >= 2).sort((a, b) => b.score - a.score)[0];
+      return { row, hits, score: hits * 2 + (t.infobox ? 3 : 0) }; // the article's own infobox beats succession/navigation boxes
+    }).filter((x) => x.hits > 0).sort((a, b) => b.score - a.score)[0];
     if (best) {
       if (best.row[fields[0]] == null) best.row[fields[0]] = page.heading || page.title; // "mountain", "language": the page's subject
       return [normalize(best.row, fields)];

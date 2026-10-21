@@ -1,0 +1,151 @@
+{
+ "date": "2026-10-21T13:44:00.321Z",
+ "set": "fresh",
+ "passed": 8,
+ "total": 9,
+ "results": [
+  {
+   "case": "quotes.toscrape page 2: first author",
+   "pass": true,
+   "secs": "36",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "Marilyn Monroe"
+   },
+   "got": {
+    "quote": "“This life is what you make it. No matter what, you're going to mess up sometimes, it's a universal truth. But the good part is you get to decide how you're going to mess it up. Girls will be your friends - they'll act like it anyway. But just remember, some come, some go. The ones that stay with you through everything - they're your true best friends. Don't let go of them. Also remember, sisters make the best friends in the world. As for lovers, well, they'll come and go too. And baby, I hate t",
+    "author": "Marilyn Monroe"
+   }
+  },
+  {
+   "case": "books.toscrape: cheapest poetry book",
+   "pass": true,
+   "secs": "8",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Poems That Make Grown Women Cry",
+    "value": 14.19
+   },
+   "got": {
+    "title": "Poems That Make Grown Women Cry",
+    "price": 14.19
+   }
+  },
+  {
+   "case": "webscraper.io: most expensive tablet",
+   "pass": true,
+   "secs": "21",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Apple iPad Air",
+    "value": 603.99
+   },
+   "got": {
+    "tablet": "Apple iPad Air",
+    "price": 603.99
+   }
+  },
+  {
+   "case": "scrapethissite: New York team-season with most losses",
+   "pass": true,
+   "secs": "6",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "New York Islanders",
+    "value": 51
+   },
+   "got": {
+    "team": "New York Islanders",
+    "losses": 51
+   }
+  },
+  {
+   "case": "Wikipedia: mean radius of the Moon (infobox)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Moon",
+    "value": 1737.4
+   },
+   "got": {
+    "body": "Moon",
+    "mean_radius_km": 1737.4
+   }
+  },
+  {
+   "case": "Wikipedia: number of floors of Burj Khalifa (infobox)",
+   "pass": false,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Burj Khalifa",
+    "value": [
+     163,
+     154,
+     160
+    ]
+   },
+   "got": {
+    "building": "Burj Khalifa",
+    "floors": "309,473 m2 (3,331,100 sq ft)"
+   }
+  },
+  {
+   "case": "Wikipedia: year JavaScript first appeared (infobox date)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "JavaScript",
+    "text": "1995"
+   },
+   "got": {
+    "language": "JavaScript",
+    "first_appeared": "4 December 1995; 30 years ago"
+   }
+  },
+  {
+   "case": "Hacker News Ask: post with the most comments",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Ask HN: How to deal with shipping AI-written code you don't understand?",
+    "value": 722
+   },
+   "got": {
+    "post": "Ask HN: How to deal with shipping AI-written code you don't understand?",
+    "comments": 722
+   }
+  },
+  {
+   "case": "Wikipedia: largest lake by area (table)",
+   "pass": true,
+   "secs": "8",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Caspian Sea",
+    "value": [
+     371000,
+     371795,
+     386400,
+     436000
+    ]
+   },
+   "got": {
+    "lake": "Caspian Sea",
+    "area_km2": 389000
+   }
+  }
+ ]
+}
