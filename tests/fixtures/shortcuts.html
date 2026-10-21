@@ -1,0 +1,9 @@
+<!doctype html>
+<title>Page with keyboard shortcuts</title>
+<p>Honeybees use the waggle dance to share where food is.</p>
+<button id="b" onclick="window.clicks = (window.clicks || 0) + 1">Shortcut target</button>
+<script>
+  // Like YouTube/Gmail: single keys trigger clicks, on both the bubble and the capture phase.
+  document.addEventListener('keydown', (e) => { if ('kfjg'.includes(e.key)) document.getElementById('b').click(); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'j') window.captureSeen = (window.captureSeen || 0) + 1; }, true);
+</script>

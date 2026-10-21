@@ -122,6 +122,7 @@
     showBar('text', sel.rect, () => ({ selection: sel.text }), sel);
   }
   document.addEventListener('mouseup', (e) => !inUi(e) && setTimeout(onSelect, 10));
+  addEventListener('eg-escape', () => hideAll()); // Escape typed inside our own boxes (content/keyguard.js)
   document.addEventListener('keyup', (e) => {
     if (e.key === 'Escape') return hideAll();
     if (e.shiftKey && !inUi(e)) onSelect();

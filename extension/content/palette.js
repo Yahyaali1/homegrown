@@ -109,7 +109,7 @@
   const close = () => (open?.remove(), (open = null));
 
   addEventListener('keydown', (e) => {
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyK' && EG.enabled()) (e.preventDefault(), show());
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyK' && EG.enabled()) (e.preventDefault(), e.stopImmediatePropagation(), show()); // the page shouldn't also see a 'k'
   }, true);
   EG.actions.page.unshift({ label: 'Search everything (Alt+K)', when: () => true, run: show });
   EG.palette = show;

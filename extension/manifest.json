@@ -48,6 +48,17 @@
         "<all_urls>"
       ],
       "js": [
+        "content/keyguard.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
         "content/core.js",
         "content/writing.js",
         "content/ghost.js",
