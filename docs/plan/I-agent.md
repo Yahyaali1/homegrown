@@ -72,5 +72,10 @@ Also done:
 - Missions over open tabs: reads the window's open web tabs instead of searching (3 shop tabs → correct
   ranking and cited answer).
 
-Left: address-bar keyword, product-page chip and scheduled alerts not exercised headless (omnibox and
-notifications need a real browser session); filters on text fields are exact-substring only.
+- Product chip: "✦ Find it cheaper" appeared on a JSON-LD product page; clicking opened Mission control with
+  "Find the lowest price for Blue Widget Pro".
+- Scheduled alert: saved mission (alert: price < 135), alarm fired, mission ran in the background, notification
+  for Bravo Mart $129 in 8 s, `lastBest` updated.
+
+Left: the `eg` address-bar keyword can't be typed headless; it calls the same `agentOpen` path the palette,
+launcher and chip use. Filters on text fields are exact-substring only.
