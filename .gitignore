@@ -6,3 +6,4 @@ ref/
 test-results/
 extension/vendor/
 .gpu.lock/
+.gpu.lock*/

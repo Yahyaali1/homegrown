@@ -61,8 +61,8 @@ side panel (models, tasks, settings-ish) · settings.html (options page) · libr
 - Each feature lives in its own files; shared files (core.js, background.js, offscreen.js, manifest.json)
   change only in the integration step.
 - Vendor libraries: `npm run vendor` runs `scripts/vendor.d/*.sh`; each script owns its own vendor subfolder.
-- Checks: small Playwright smoke scripts, run via `./scripts/gpu.sh node <script>` (one GPU, one shared
-  `.profile-test` profile that already holds the models). The user doesn't want many new test cases;
+- Checks: small Playwright smoke scripts, run via `./scripts/gpu.sh node <script>`: up to 3 run at once,
+  each in its own copy of the test profile (`.profile-test`, `-2`, `-3`, all holding the models). The user doesn't want many new test cases;
   `tests/extension.spec.mjs` is the regression suite (`npx playwright test`).
 - Chromium 156 ignores `--load-extension`; `tests/harness.mjs` loads over CDP and clears a reused
   profile's service-worker cache so the current code runs.

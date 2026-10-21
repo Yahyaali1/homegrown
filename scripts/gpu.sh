@@ -1,7 +1,17 @@
 #!/bin/sh
-# Runs a command while holding the GPU/profile lock, so parallel smoke checks take turns on the one GPU
-# and the shared .profile-test (which holds the downloaded models).
+# Runs a command in one of 3 test slots. Each slot has its own copy of the test profile (models already
+# downloaded), because Chrome lets only one browser open a profile. The slot's profile path is passed in
+# EG_PROFILE, which tests/harness.mjs uses in place of .profile-test.
 cd "$(dirname "$0")/.."
-until mkdir .gpu.lock 2>/dev/null; do sleep 3; done
-trap 'rmdir .gpu.lock' EXIT INT TERM
-"$@"
+while :; do
+  for n in 1 2 3; do
+    if mkdir ".gpu.lock.$n" 2>/dev/null; then
+      trap 'rmdir ".gpu.lock.'$n'"' EXIT INT TERM
+      [ "$n" = 1 ] && EG_PROFILE="$PWD/.profile-test" || EG_PROFILE="$PWD/.profile-test-$n"
+      export EG_PROFILE
+      "$@"
+      exit $?
+    fi
+  done
+  sleep 2
+done

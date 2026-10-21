@@ -38,6 +38,8 @@ export function serve(dir, { cutAt } = {}) {
 
 // Chromium 156 ignores --load-extension, so load the unpacked extension over CDP.
 export async function launch({ headless = true, userDataDir = '', offline = false, channel = 'chromium' } = {}) {
+  // scripts/gpu.sh runs up to 3 checks at once, each with its own copy of the test profile.
+  if (process.env.EG_PROFILE && userDataDir.endsWith('.profile-test')) userDataDir = process.env.EG_PROFILE;
   const port = await new Promise((r) => {
     const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => r(p)); });
   });
