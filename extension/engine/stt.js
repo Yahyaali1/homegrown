@@ -31,7 +31,7 @@ function loadAsr() {
 
 // ---- live captions: tab audio → 5 s chunks → Whisper → runtime message (bg/livecaptions.js translates) ----
 const CHUNK_S = 5;
-let live = null; // { ctx, stream, el, tabId }
+let live = null; // { ctx, stream, el, tabId, paused }
 
 async function liveStart({ streamId, tabId, audioUrl, task = 'transcribe' }) {
   liveStop();
@@ -58,13 +58,14 @@ async function liveStart({ streamId, tabId, audioUrl, task = 'transcribe' }) {
   tap.onaudioprocess = (e) => {
     buf.push(new Float32Array(e.inputBuffer.getChannelData(0)));
     n += 4096;
+    if (live?.paused) return (buf = []), (n = 0); // paused: audio still plays, nothing is captioned
     if (busy || n < ctx.sampleRate * CHUNK_S) return; // while Whisper works, keep collecting
     const pcm = new Float32Array(n);
     let o = 0;
     for (const b of buf) pcm.set(b, o), (o += b.length);
     buf = [];
     n = 0;
-    if (!pcm.some((v) => Math.abs(v) > 0.01)) return; // silence
+    if (!pcm.some((v) => Math.abs(v) > 0.01)) return chrome.runtime.sendMessage({ source: 'engine', type: 'livecaption', tabId, status: 'silent' }).catch(() => {});
     busy = true;
     loadAsr()
       .then((asr) => asr(resample(pcm, ctx.sampleRate, 16000), { task, chunk_length_s: 30 }))
@@ -90,11 +91,13 @@ function liveStop() {
 
 export const handlers = {
   // audio: number[] of mono samples, or base64 of a Float32Array's bytes.
-  async transcribe({ audio, sampleRate = 16000 }) {
+  // language: optional code ('en', 'fr', …); Whisper detects it when omitted.
+  async transcribe({ audio, sampleRate = 16000, language }) {
     const samples = typeof audio === 'string' ? new Float32Array(Uint8Array.from(atob(audio), (c) => c.charCodeAt(0)).buffer) : Float32Array.from(audio);
-    const r = await (await loadAsr())(resample(samples, sampleRate, 16000), { chunk_length_s: 30 });
+    const r = await (await loadAsr())(resample(samples, sampleRate, 16000), { chunk_length_s: 30, ...(language && { language, task: 'transcribe' }) });
     return { text: (r.text || '').trim() };
   },
   liveStart,
   liveStop,
+  livePause: ({ paused }) => (live ? ((live.paused = !!paused), true) : false),
 };

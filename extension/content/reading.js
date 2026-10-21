@@ -76,25 +76,10 @@
       const mine = voices.filter((v) => v.lang.startsWith(navigator.language.split('-')[0]));
       const pool = mine.length ? mine : voices;
       const voice = { Alex: pool[0], Sam: pool.find((v) => v !== pool[0]) || pool[0] };
-      let i = 0;
-      const speak = () => {
-        ps.forEach((p, j) => p.classList.toggle('now', j === i));
-        if (i >= lines.length) return;
-        const u = new SpeechSynthesisUtterance(lines[i].text);
-        u.voice = voice[lines[i].who];
-        u.pitch = lines[i].who === 'Sam' ? 1.15 : 0.95; // tells the hosts apart even with one installed voice
-        u.onend = () => (i++, speak());
-        speechSynthesis.speak(u);
-      };
-      const stop = () => ((i = lines.length), speechSynthesis.cancel(), ps.forEach((p) => p.classList.remove('now')));
-      c.actions.replaceChildren(
-        el('button', { textContent: 'Play', onclick: () => (stop(), (i = 0), speak()) }),
-        el('button', { textContent: 'Pause', onclick: () => speechSynthesis.pause() }),
-        el('button', { textContent: 'Resume', onclick: () => speechSynthesis.resume() }),
-        el('button', { textContent: 'Stop', onclick: stop }),
-      );
-      c.el.querySelector('.close').addEventListener('click', stop, { once: true });
-      speak();
+      // Shared speech player (content/voice.js): play/pause, skip line, speed, current line highlighted.
+      const segs = lines.map((l, j) => ({ text: l.text, voice: voice[l.who], pitch: l.who === 'Sam' ? 1.15 : 0.95, el: ps[j] })); // pitch tells the hosts apart even with one voice
+      const player = EG.speechPlayer(c.actions, segs);
+      c.el.querySelector('.close').addEventListener('click', player.stop, { once: true });
     } catch (e) {
       fail(c, e);
     }

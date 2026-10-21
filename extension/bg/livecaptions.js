@@ -8,8 +8,8 @@ import { engine, ask } from './engine.js';
 const isEnglish = (lang) => /^(en\b|en-|english)/i.test(lang || '');
 
 async function target() {
-  const { translateTo } = await chrome.storage.sync.get('translateTo');
-  return translateTo || navigator.language;
+  const { captionLang, translateTo } = await chrome.storage.sync.get(['captionLang', 'translateTo']);
+  return captionLang || translateTo || navigator.language;
 }
 
 async function start(tabId) {
@@ -23,11 +23,13 @@ async function start(tabId) {
 
 // Keeps captions in order: one translation at a time per tab.
 const queues = new Map();
-function relay({ tabId, text, error }) {
+function relay({ tabId, text, error, status }) {
+  if (status) return chrome.tabs.sendMessage(tabId, { type: 'livecaption', status }).catch(() => {});
   const prev = queues.get(tabId) || Promise.resolve();
   const next = prev.then(async () => {
     if (error) return chrome.tabs.sendMessage(tabId, { type: 'livecaption', error });
     const lang = await target();
+    chrome.tabs.sendMessage(tabId, { type: 'livecaption', status: 'translating' }).catch(() => {});
     const line = isEnglish(lang)
       ? text
       : await ask(`Translate this spoken caption into ${lang}. If it is already in ${lang}, repeat it unchanged. Reply with the caption only.`, text);
@@ -39,6 +41,7 @@ function relay({ tabId, text, error }) {
 export const handlers = {
   liveStart: (_msg, sender) => start(sender.tab.id),
   liveStop: () => engine('liveStop'),
+  livePause: ({ paused }) => engine('livePause', { paused }),
   // Test path: run the same pipeline on an audio file played inside the engine.
   liveStartFile: ({ audioUrl, tabId, task }) => engine('liveStart', { audioUrl, tabId, task: task || 'transcribe' }),
 };

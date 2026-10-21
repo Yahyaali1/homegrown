@@ -194,5 +194,5 @@ export const handlers = {
     return { ...savings, usd: (savings.inTokens * RATE.inPerM + savings.outTokens * RATE.outPerM) / 1e6, rate: RATE };
   },
   // Voice: the engine owns the speech model; content scripts reach it through here.
-  transcribe: (msg) => engine('transcribe', { audio: msg.audio, sampleRate: msg.sampleRate }),
+  transcribe: (msg) => engine('transcribe', { audio: msg.audio, sampleRate: msg.sampleRate, language: msg.language }),
 };

@@ -20,4 +20,26 @@ Files: `content/voice.js`, `content/reading.js` (podcast), `content/livecaptions
 
 ## Status
 
-In progress (agent J).
+Done (agent J), checked headless on the real models with Chrome's fake microphone fed a spoken WAV
+(1 s silence, question, 6 s silence) — `scratchpad/agentJ/smoke.mjs` + `hold.mjs`:
+
+- **Voice:** auto-stop on silence after 4.7 s (energy VAD, adaptive noise floor, 0.8–4 s hang time setting;
+  no speech for 10 s → "didn't hear anything" + Try again); Cancel discards and removes the red
+  "● Mic on" pill; transcript ("What is the waggle dance used for?") shown editable with playback,
+  language picker, Re-record, "Ask straight away next time"; the edited question was asked and answered.
+  Hold Alt+Space: kept recording through 7 s of held silence, released → transcript. Pause/Resume,
+  60 s cap, mic-blocked guidance, Esc/✕ cancel (card close detected).
+- **Speech player** (`EG.speechPlayer`, shared): Read aloud and podcast — play/pause, previous/next sentence,
+  stop, speed 0.75–2×, voice picker, position; current sentence highlighted (CSS Custom Highlight API),
+  podcast line highlighted. Checked: speaking → paused → resumed at 1.5×, skip moved the podcast line.
+- **Live captions:** Pause/Resume (engine skips chunks, tab keeps playing), Stop, caption language
+  (`captionLang`), text size A−/A+, status (listening / no speech / translating / paused), full
+  transcript with Copy and Download (.txt). Checked file-fed: caption, Paused status, downloaded transcript.
+- **Ask about an area:** drag → resize handles (8) and move, size label, Ask (Enter) / Retake / Cancel (Esc).
+  Checked: retake cleared the box, resize to 407×187, extracted "LIBRARYOPEN 9 AM - 5 PM".
+- **Create image:** Cancel while drawing (soft: result dropped, Janus can't be interrupted), Edit prompt,
+  Try again on error.
+
+Shared-file edits outside the J list (minimal): `bg/memory.js` passes `language` to transcribe;
+`bg/livecaptions.js` adds `livePause`, `captionLang`, status relay. Not verified: Silero VAD (energy VAD
+chosen: dependency-free, reliable here), real tab capture (needs a click on the extension).
