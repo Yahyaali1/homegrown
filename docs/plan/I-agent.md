@@ -77,5 +77,9 @@ Also done:
 - Scheduled alert: saved mission (alert: price < 135), alarm fired, mission ran in the background, notification
   for Bravo Mart $129 in 8 s, `lastBest` updated.
 
+- One-click price-drop alert: product pages also get "🔔 Alert me if it drops", which saves a daily mission
+  watching that page with alert price < today's price. Checked: mission saved with the right alert, daily
+  alarm created, listed in Mission control.
+
 Left: the `eg` address-bar keyword can't be typed headless; it calls the same `agentOpen` path the palette,
 launcher and chip use. Filters on text fields are exact-substring only.

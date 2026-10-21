@@ -41,7 +41,7 @@ Everything runs on your device (Gemma 4 on WebGPU, plus small helper models). No
   workflow — search, read pages in background tabs, pull out fields, filter, rank, conclude with
   citations. Save it, run it hourly/daily, get alerted when the best result changes or drops below a
   value. Start from the palette, the launcher, `eg` + space in the address bar, a "Find it cheaper" chip
-  on product pages, or across your open tabs. Read-only: it never buys, posts or logs in.
+  on product pages (next to "Alert me if it drops", a one-click daily price watch), or across your open tabs. Read-only: it never buys, posts or logs in.
 
 The side panel is for models, tasks and settings; everything else happens on the page.
 

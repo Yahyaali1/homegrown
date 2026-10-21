@@ -16,8 +16,8 @@
   });
   EG.actions.text.push({ label: 'Find the best price', run: ({ selection }) => open(`Find the lowest price for ${selection.slice(0, 120)}`, true) });
 
-  // Product pages publish their name and price as JSON-LD; offer to look elsewhere for less.
-  function productName() {
+  // Product pages publish their name and price as JSON-LD; offer to look elsewhere for less, or to watch this one.
+  function product() {
     for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
       try {
         const stack = [JSON.parse(s.textContent)];
@@ -25,7 +25,10 @@
           const o = stack.pop();
           if (!o || typeof o !== 'object') continue;
           if (Array.isArray(o)) stack.push(...o);
-          else if ([].concat(o['@type'] || []).includes('Product') && o.name) return o.name;
+          else if ([].concat(o['@type'] || []).includes('Product') && o.name) {
+            const offer = [].concat(o.offers || [])[0];
+            return { name: o.name, price: Number(offer?.price ?? offer?.lowPrice), currency: offer?.priceCurrency || '' };
+          }
           else stack.push(o['@graph'], o.mainEntity, o.itemListElement);
         }
       } catch {}
@@ -34,13 +37,32 @@
   }
 
   setTimeout(() => {
-    const name = productName();
-    if (!name || !EG.enabled() || EG.settings.priceChip === false) return;
+    const p = product();
+    if (!p || !EG.enabled() || EG.settings.priceChip === false) return;
+    const { name, price, currency } = p;
     EG.mount();
-    EG.style('.price-chip{position:fixed;right:68px;bottom:24px;border-radius:999px;padding:7px 12px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.18);cursor:pointer}.price-chip span{margin-left:8px;color:var(--muted);font-weight:400}');
-    const chip = Object.assign(document.createElement('button'), { className: 'price-chip', title: `Search other stores for ${name}` });
-    chip.append('✦ Find it cheaper', Object.assign(document.createElement('span'), { textContent: '✕', title: 'Dismiss', onclick: (e) => (e.stopPropagation(), chip.remove()) }));
-    chip.onclick = () => (open(`Find the lowest price for ${name}`, true), chip.remove());
-    EG.root.append(chip);
+    EG.style('.price-chips{position:fixed;right:68px;bottom:24px;display:flex;gap:6px}.price-chips button{border-radius:999px;padding:7px 12px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.18);cursor:pointer}.price-chips .x{color:var(--muted);font-weight:400;padding:7px 10px}');
+    const bar = Object.assign(document.createElement('div'), { className: 'price-chips' });
+    const find = Object.assign(document.createElement('button'), { textContent: '✦ Find it cheaper', title: `Search other stores for ${name}`, onclick: () => (open(`Find the lowest price for ${name}`, true), bar.remove()) });
+    // Watch this page daily; notify when the price goes below today's.
+    const watch = Object.assign(document.createElement('button'), {
+      textContent: '🔔 Alert me if it drops',
+      hidden: !Number.isFinite(price),
+      onclick: async () => {
+        await EG.bg('missionSave', { mission: {
+          id: `drop-${[...location.href].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0) >>> 0}`, // one per page
+          name: `${name.slice(0, 40)} below ${price} ${currency}`.trim(),
+          goal: `Watch the price of ${name}`,
+          every: 'day',
+          alert: { field: 'price', op: '<', value: String(price) },
+          steps: [{ type: 'search', urls: [location.href] }, { type: 'open', limit: 1 }, { type: 'extract', fields: ['product', 'price'] }, { type: 'answer', question: 'What is the price now?' }],
+        } });
+        watch.textContent = '🔔 Watching daily ✓';
+        watch.disabled = true;
+      },
+    });
+    const x = Object.assign(document.createElement('button'), { className: 'x', textContent: '✕', title: 'Dismiss', onclick: () => bar.remove() });
+    bar.append(find, watch, x);
+    EG.root.append(bar);
   }, 2500);
 })();
