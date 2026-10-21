@@ -1,4 +1,53 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Edge Gallery settings</title>
-<p>Settings (stub).</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edge Gallery settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<main>
+  <h1>Edge Gallery settings</h1>
+  <p class="muted">Models are chosen in the side panel's Models tab. <a href="library.html">Open your library</a></p>
+
+  <fieldset>
+    <legend>On pages</legend>
+    <label class="toggle"><input type="checkbox" data-key="toolbar" data-default="true"><span>Toolbar when I select text or point at an image</span></label>
+    <label class="toggle"><input type="checkbox" data-key="fab" data-default="true"><span>✦ button on pages</span></label>
+    <label class="toggle"><input type="checkbox" data-key="ghostText" data-default="false"><span>Ghost text: grey suggestions as I type, accepted with Tab</span></label>
+    <label class="toggle"><input type="checkbox" data-key="gistMargins" data-default="false"><span>Gist margins: one-line summaries beside sections of long articles</span></label>
+    <label class="toggle"><input type="checkbox" data-key="autoAltText" data-default="false"><span>Describe images that have no alt text, for screen readers</span></label>
+    <label class="toggle"><input type="checkbox" data-key="searchAnswers" data-default="true"><span>Answer beside search results</span></label>
+    <label class="toggle"><input type="checkbox" data-key="useVoice" data-default="true"><span>Voice: "Speak…" in the launcher and "Read aloud" on answers</span></label>
+    <label class="toggle"><input type="checkbox" data-key="replyButtons" data-default="true"><span>Reply button in email and chat boxes</span></label>
+    <label class="row" style="margin-top:8px">Translate into <input id="translateTo" style="max-width:220px" aria-label="Translate into language"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Turned off on these sites</legend>
+    <ul id="sites" class="items"></ul>
+    <form id="site-form" class="row" style="margin-top:8px"><input id="site" placeholder="example.com" aria-label="Site to turn off"><button>Add</button></form>
+  </fieldset>
+
+  <fieldset>
+    <legend>Savings</legend>
+    <p id="savings" class="muted"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Remote model (optional)</legend>
+    <p class="notice">When this is on, the text you ask about is sent to the server below instead of staying on this device.</p>
+    <label class="toggle"><input id="remote-on" type="checkbox"><span>Use a remote OpenAI-compatible model instead of the local one</span></label>
+    <div class="stack" style="display:grid;gap:8px">
+      <input id="remote-base" placeholder="Base URL, e.g. https://api.openai.com/v1" aria-label="Base URL">
+      <input id="remote-model" placeholder="Model, e.g. gpt-4o-mini or llama3.2" aria-label="Model">
+      <input id="remote-key" type="password" placeholder="API key (not needed for Ollama)" aria-label="API key" autocomplete="off">
+      <div class="row"><button id="remote-save">Save</button><button id="ollama" class="secondary" type="button">Use local Ollama</button><span id="remote-msg" class="muted"></span></div>
+      <p class="muted">Ollama needs <code>OLLAMA_ORIGINS=chrome-extension://*</code> set before it starts, or it refuses requests from extensions.</p>
+    </div>
+  </fieldset>
+</main>
+<script type="module" src="settings.js"></script>
+</body>
+</html>

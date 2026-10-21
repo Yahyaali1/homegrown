@@ -15,4 +15,6 @@ Done after the group agents report. Owner: the main session.
 
 - C: add a `translateTo` field (target language) to settings.html.
 - D: add an `autoAltText` switch to settings.html.
-- A: switches for `ghostText`, `useVoice`, `replyButtons`; memory/savings skip `quiet: true` requests (sent to G).
+- A: switches for `ghostText`, `useVoice`, `replyButtons`; memory/savings skip `quiet: true` requests — DONE by G.
+- C, D: `translateTo` field and `autoAltText` switch — DONE by G (settings.html).
+- G: remote Stop/close abort — DONE (background.js calls `remote.cancel()`); `translateTo` name/code mismatch — DONE (translate.js).

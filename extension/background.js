@@ -55,7 +55,7 @@ const downloads = new Set(); // ports waiting on a first-run model download
 function onRunPort(port) {
   let id = null;
   port.onMessage.addListener(async (req) => {
-    if (req.type === 'cancel') return engine('cancel').catch(() => {});
+    if (req.type === 'cancel') return remote.cancel?.(), engine('cancel').catch(() => {});
     if (req.type === 'download') {
       // First-run setup from the page: download the default model, relaying progress to the card.
       downloads.add(port);
@@ -91,7 +91,7 @@ function onRunPort(port) {
     }
   });
   port.onDisconnect.addListener(() => {
-    if (id && streams.has(id)) engine('cancel').catch(() => {}); // card closed mid-answer
+    if (id && streams.has(id)) remote.cancel?.(), engine('cancel').catch(() => {}); // card closed mid-answer
   });
 }
 chrome.runtime.onConnect.addListener((port) => port.name === 'run' && onRunPort(port));

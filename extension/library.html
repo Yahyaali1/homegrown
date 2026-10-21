@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edge Gallery library</title>
+  <link rel="stylesheet" href="library.css">
+</head>
+<body>
+<main>
+  <h1>Your library</h1>
+  <p id="savings" class="muted"></p>
+  <nav role="tablist">
+    <button role="tab" data-tab="history" aria-selected="true">History</button>
+    <button role="tab" data-tab="highlights">Highlights</button>
+    <button role="tab" data-tab="ask">Ask your library</button>
+    <button role="tab" data-tab="cards">Flashcards</button>
+  </nav>
+
+  <section id="history" role="tabpanel">
+    <div class="row"><input id="history-q" type="search" placeholder="Search your questions and answers" aria-label="Search history"><button id="history-clear" class="secondary">Clear history</button></div>
+    <ul id="history-list" class="items" style="margin-top:12px"></ul>
+  </section>
+
+  <section id="highlights" role="tabpanel" hidden>
+    <div id="highlight-groups"></div>
+  </section>
+
+  <section id="ask" role="tabpanel" hidden>
+    <p class="muted">Answers come only from pages you ran tasks on and highlights you saved, all on this device.</p>
+    <form id="ask-form" class="row"><input id="ask-q" placeholder="What did I read about…" aria-label="Question"><button>Ask</button></form>
+    <div id="ask-answer" class="answer" style="margin-top:12px" hidden></div>
+    <ol id="ask-sources"></ol>
+  </section>
+
+  <section id="cards" role="tabpanel" hidden>
+    <p id="cards-count" class="muted"></p>
+    <div id="card" class="card" hidden>
+      <div id="card-q" class="q"></div>
+      <div id="card-a" style="margin-top:10px" hidden></div>
+      <p id="card-src" class="muted"></p>
+      <div class="row" id="card-show"><button id="show">Show answer</button></div>
+      <div class="row" id="card-grade" hidden>
+        <button data-grade="again" class="secondary">Again</button>
+        <button data-grade="good">Good</button>
+        <button data-grade="easy" class="secondary">Easy</button>
+      </div>
+    </div>
+  </section>
+  <p class="muted" style="margin-top:32px"><a href="settings.html">Settings</a></p>
+</main>
+<script type="module" src="library.js"></script>
+</body>
+</html>

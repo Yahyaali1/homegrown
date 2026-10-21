@@ -17,7 +17,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | D Images (generation, region capture, alt text) | [D-images.md](D-images.md) | Done, smoke-checked (see Status) |
 | E Search, research, links | [E-web.md](E-web.md) | Drafted, being verified |
 | F Tabs, automation, tasks, side panel | [F-tabs.md](F-tabs.md) | Done, smoke-checked (see Status) |
-| G Memory, platform, voice | [G-memory.md](G-memory.md) | Drafted, being verified |
+| G Memory, platform, voice | [G-memory.md](G-memory.md) | Done, smoke-checked (see Status) |
 | Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Not started |
 
 Update the State column and each plan's "Status" section as work lands.

@@ -6,7 +6,14 @@
   if (!EG) return;
 
   const lang = (code) => (code || '').split('-')[0].toLowerCase();
-  const target = () => lang(EG.settings.translateTo || navigator.language) || 'en';
+  // settings.translateTo may be a code ("fr", "pt-BR") or a name ("French", as the settings page stores it).
+  const CODES = 'en fr de es it pt nl ru zh ja ko ar hi tr pl sv uk vi id th he el cs da fi no ro hu bn ur fa ms'.split(' ');
+  const toCode = (v) => {
+    if (/^[a-z]{2,3}(-[a-z0-9]+)?$/i.test(v)) return lang(v);
+    const names = new Intl.DisplayNames(['en'], { type: 'language' });
+    return CODES.find((c) => names.of(c).toLowerCase() === v.trim().toLowerCase()) || '';
+  };
+  const target = () => toCode(EG.settings.translateTo || navigator.language) || lang(navigator.language) || 'en';
   const nameOf = (code) => {
     try {
       return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
