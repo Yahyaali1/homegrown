@@ -210,7 +210,7 @@
   const GROUPS = {
     Read: ['Mind map', 'Listen as podcast', 'Quiz me', 'Make flashcards', 'Related reading'],
     Write: ['Write…'],
-    Translate: ['Translate page (bilingual)'],
+    Translate: ['Translate page (bilingual)', 'Live captions'],
     Images: ['Create image', 'Ask about an area'],
     Web: ['Research…'],
     Tabs: ['Compare tabs…', 'Tidy tabs', 'Watch this page'],

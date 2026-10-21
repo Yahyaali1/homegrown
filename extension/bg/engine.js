@@ -6,8 +6,8 @@ export function ensureEngine() {
     if (await chrome.offscreen.hasDocument()) return;
     await chrome.offscreen.createDocument({
       url: 'offscreen.html',
-      reasons: ['WORKERS'],
-      justification: 'Run the on-device LLM on WebGPU',
+      reasons: ['WORKERS', 'USER_MEDIA'],
+      justification: 'Run the on-device LLM on WebGPU and caption tab audio',
     });
   })().finally(() => (ensuring = null));
   return ensuring;

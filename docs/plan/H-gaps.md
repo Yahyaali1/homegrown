@@ -17,4 +17,11 @@ team plans are out by decision: local models only.)
   (IndexedDB, 300 pages × 50k chars, URL without hash); chip appears after ≥3 lines or ≥5% changed, no model
   call until clicked; card lists added/removed lines and Gemma summarizes them. Smoke: no chip when unchanged,
   chip after an edit, correct summary, no chip after viewing.
-- ePub, search fallback, YouTube transcripts (H1) and live audio translation (H3): in progress.
+- Live audio captions & translation — DONE (agent H3): Alt+Shift+L, right-click item, or launcher
+  Translate ▸ Live captions (the launcher only shows a hint: Chrome requires a click on the extension or
+  its shortcut to capture a tab). Offscreen captures tab audio (still audible), 5 s chunks with silence
+  skipped → Whisper (direct translate for English) → Gemma for other languages → draggable caption bar
+  with Stop. Offscreen reasons now include USER_MEDIA. Verified with audio fed from a file (French
+  captions ~20 s after start incl. Whisper load); real tab capture needs a real click, not testable headless.
+  Quality caveat: Gemma mistranslated "Honeybees" once.
+- ePub, search fallback, YouTube transcripts (H1): in progress.

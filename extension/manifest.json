@@ -26,6 +26,7 @@
     "scripting",
     "sidePanel",
     "storage",
+    "tabCapture",
     "tabGroups",
     "tabs",
     "unlimitedStorage"
@@ -61,7 +62,8 @@
         "content/links.js",
         "content/tabs.js",
         "content/memory.js",
-        "content/voice.js"
+        "content/voice.js",
+        "content/livecaptions.js"
       ],
       "all_frames": true,
       "match_about_blank": true,
@@ -80,6 +82,12 @@
         "default": "Alt+Shift+A"
       },
       "description": "Open Edge Gallery on this page (ask about the page or run a page task)"
+    },
+    "live-captions": {
+      "suggested_key": {
+        "default": "Alt+Shift+L"
+      },
+      "description": "Live captions & translation for audio in this tab"
     }
   },
   "options_page": "settings.html"
