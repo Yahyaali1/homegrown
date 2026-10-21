@@ -18,6 +18,18 @@ hybrid push-to-talk with a 200 ms click-vs-hold threshold; rolling pre-roll buff
 Files: `content/voice.js`, `content/reading.js` (podcast), `content/livecaptions.js`, `content/images.js`,
 `engine/stt.js` if needed.
 
+## Compared with voice assistants
+
+| Practice (ChatGPT voice, Gemini Live, dictation tools) | Homegrown |
+|---|---|
+| Visible listening state and level | ✅ mic-on indicator, level meter, timer |
+| Automatic end of turn on silence | ✅ energy VAD with pre-roll and adjustable hang time (no Silero: no new dependency, reliable in tests) |
+| Push-to-talk alternative | ✅ hold Alt+Space or the mic button |
+| Barge-in: talking stops the assistant's speech | ✅ starting a voice question cancels read-aloud/podcast (verified) |
+| Interrupt anytime | ✅ Esc stops speech anywhere, Cancel discards a recording (verified) |
+| Review before sending | ✅ editable transcript (most assistants send immediately; we keep it optional) |
+| Continuous conversation (auto re-listen after the answer) | ○ not built — the 2B model answers per question |
+
 ## Status
 
 Done (agent J), checked headless on the real models with Chrome's fake microphone fed a spoken WAV

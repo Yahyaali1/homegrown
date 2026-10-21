@@ -48,6 +48,7 @@
 
   async function listen({ page, rect, hold = false }) {
     if (active) return active.finish();
+    speechSynthesis.cancel(); // barge-in: starting to talk stops any read-aloud or podcast, like voice assistants do
     const S = EG.settings;
     const card = EG.openCard('Listening…', rect || EG.topRect());
     const root = el('div', { className: 'rec' });
@@ -299,5 +300,9 @@
   });
 
   EG.speechPlayer = speechPlayer;
+  // Esc stops speech anywhere: on the page, or typed inside our own boxes (content/keyguard.js).
+  const hush = () => speechSynthesis.speaking && speechSynthesis.cancel();
+  addEventListener('eg-escape', hush);
+  addEventListener('keyup', (e) => e.key === 'Escape' && hush(), true);
   EG.listen = listen;
 })();

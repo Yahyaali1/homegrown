@@ -23,9 +23,9 @@
 
   // "$1,299.99", "1.299,99 €", "EUR 49" → { price: 1299.99, currency: 'USD' }
   const SYMBOL = { $: 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '₹': 'INR', '₩': 'KRW', zł: 'PLN', kr: 'SEK', 'A$': 'AUD', 'C$': 'CAD', 'CA$': 'CAD', 'US$': 'USD' };
-  const MONEY = /(US\$|CA\$|A\$|C\$|[$€£¥₹₩]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD|CHF|SEK|PLN|PKR|AED)\b)\s?(\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,\s]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s?(€|zł|kr|\b(?:USD|EUR|GBP|INR|CHF|SEK|PLN|PKR|AED)\b)/;
+  const MONEY = /(US\$|CA\$|A\$|C\$|[$€£¥₹₩]|\b(?:USD|EUR|GBP|JPY|INR|CAD|AUD|CHF|SEK|PLN|PKR|AED)\b)\s?(\d+(?:[.,\s]\d{3})*(?:[.,]\d{1,2})?)|(\d+(?:[.,\s]\d{3})*(?:[.,]\d{1,2})?)\s?(€|zł|kr|\b(?:USD|EUR|GBP|INR|CHF|SEK|PLN|PKR|AED)\b)/;
   const toNumber = (s) => {
-    s = String(s).replace(/\s/g, '');
+    s = (/-?\d[\d.,\s]*/.exec(String(s)) || [''])[0].replace(/\s/g, ''); // "$295.99" → "295.99\"
     if (/,\d{1,2}$/.test(s) && !/\.\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
     else s = s.replace(/,/g, '');
     const n = parseFloat(s);
@@ -80,12 +80,15 @@
     }
     // Microdata products (itemprop) — common on older shops.
     for (const el of document.querySelectorAll('[itemscope][itemtype*="schema.org/Product"]')) {
+      // content attribute first, then visible text (a name link's href is its URL, not its name).
       const prop = (n) => {
         const p = el.querySelector(`[itemprop="${n}"]`);
-        return p ? clean(p.getAttribute('content') || p.getAttribute('href') || p.textContent) : '';
+        return p ? clean(p.getAttribute('content') || p.textContent) : '';
       };
+      const link = el.querySelector('[itemprop=url], a[itemprop=name], a[href]');
       const price = prop('price') || prop('lowPrice');
-      if (prop('name')) products.push({ title: prop('name'), price: price ? toNumber(price) : null, currency: prop('priceCurrency'), availability: prop('availability').split('/').pop(), rating: prop('ratingValue') ? toNumber(prop('ratingValue')) : null, url: abs(prop('url') || location.href), via: 'structured' });
+      const name = el.querySelector('[itemprop=name]')?.getAttribute('title') || prop('name');
+      if (name) products.push({ title: name, price: price ? toNumber(price) : null, currency: prop('priceCurrency') || money(price)?.currency || '', availability: prop('availability').split('/').pop(), rating: prop('ratingValue') ? toNumber(prop('ratingValue')) : null, url: abs(link?.getAttribute('href') || location.href), via: 'structured' });
     }
     const meta = {};
     for (const m of document.querySelectorAll('meta[property], meta[name]')) {
@@ -149,8 +152,29 @@
     return [...document.querySelectorAll('table, [role=table], [role=grid]')].filter(visible).slice(0, 15).map((t) => {
       const rows = t.tagName === 'TABLE' ? tableRows(t) : [...t.querySelectorAll('[role=row]')].slice(0, 60).map((r) => [...r.querySelectorAll('[role=cell],[role=gridcell],[role=columnheader]')].map((c) => clean(c.textContent).slice(0, 200)));
       const head = t.querySelector('thead tr, tr:first-child th') ? rows[0] : null;
-      return { caption: clean(t.querySelector('caption')?.textContent), headers: head, rows: head ? rows.slice(1) : rows };
+      // Label | value rows (Wikipedia infoboxes, spec sheets) are facts about the page's subject.
+      const two = rows.filter((r) => r.length === 2 && r[0] && r[1]);
+      const pairs = two.length >= 3 && two.length >= rows.length * 0.4 ? Object.fromEntries(two.map(([k, v]) => [k.toLowerCase(), v])) : null;
+      const infobox = !!t.closest?.('.infobox, [class*=infobox i], [class*=spec i], [class*=detail i]');
+      return { caption: clean(t.querySelector('caption')?.textContent), headers: head, rows: head ? rows.slice(1) : rows, pairs, infobox };
     }).filter((t) => t.rows.length);
+  }
+
+  // Labelled parts of a block, by class name / itemprop / data-label: <span class="country-area">,
+  // <small class="author">, <td data-label="Price"> → { 'country-area': '…', area: '…', author: '…' }.
+  function parts(m) {
+    const out = {};
+    for (const el of m.querySelectorAll('[class], [itemprop], [data-label]')) {
+      const v = clean(el.getAttribute('content') || el.textContent);
+      if (!v || v.length > 200) continue;
+      const keys = [...el.classList, el.getAttribute('itemprop'), el.getAttribute('data-label')].filter(Boolean).map((k) => k.toLowerCase());
+      for (const k of keys) {
+        out[k] ??= v;
+        for (const w of k.split(/[-_ ]+/)) if (w.length > 2) out[w] ??= v;
+      }
+      if (Object.keys(out).length > 40) break;
+    }
+    return out;
   }
 
   // ---- 4. repeated items (product grids, result lists) ----
@@ -167,13 +191,26 @@
         bySig.get(k).push(c);
       }
       for (const members of bySig.values()) {
-        const items = members.filter((m) => visible(m) && m.querySelector('a[href]') && clean(m.textContent).length > 15 && clean(m.textContent).length < 3000);
+        // A block needs a link or some inner structure (a country card has labelled spans but no link).
+        const items = members.filter((m) => visible(m) && (m.querySelector('a[href]') || m.querySelectorAll('*').length >= 2) && clean(m.textContent).length > 15 && clean(m.textContent).length < 3000);
         if (items.length < 3) continue;
+        // Rows of a table with header cells are read by tables(), where the headers name the columns.
+        if (items[0].tagName === 'TR' && items[0].closest('table')?.querySelector('th')) continue;
         const priced = items.filter((m) => money(m.textContent)).length;
         const imaged = items.filter((m) => m.querySelector('img')).length;
         groups.push({ parent, items, score: items.length * (1 + (2 * priced) / items.length + imaged / items.length) });
       }
     }
+    // Grids split into rows (Bootstrap .row > .col ×3) show up as many small groups of the same card under
+    // same-shaped parents: merge them into one list, in page order.
+    const merged = new Map();
+    for (const g of groups) {
+      const key = `${signature(g.items[0])}|${signature(g.parent)}|${g.parent.parentElement ? signature(g.parent.parentElement) : ''}`;
+      const m = merged.get(key);
+      if (m && m.parent.parentElement === g.parent.parentElement) (m.items.push(...g.items), (m.score += g.score));
+      else if (!m) merged.set(key, { ...g, items: [...g.items] });
+    }
+    groups.splice(0, groups.length, ...merged.values());
     groups.sort((a, b) => b.score - a.score);
     const chosen = [];
     for (const g of groups) {
@@ -183,19 +220,32 @@
     }
     return chosen.map((g) => ({
       size: g.items.length,
-      items: g.items.slice(0, 60).map((m) => {
+      items: g.items.slice(0, 300).map((m, idx, all) => {
+        // Records split over rows (Hacker News: title row, then a points row): the siblings between this
+        // block and the next one belong to it.
+        const extra = [];
+        for (let n = m.nextElementSibling; n && n !== all[idx + 1] && extra.length < 3; n = n.nextElementSibling) if (!g.items.includes(n)) extra.push(n);
+        const whole = [m, ...extra];
         const links = [...m.querySelectorAll('a[href]')].filter((a) => clean(a.textContent).length > 3);
         const heading = m.querySelector('h1,h2,h3,h4,h5,[class*=title i],[class*=name i]');
         const priceEl = m.querySelector('[itemprop=price],[class*=price i],[data-price]');
         const p = money(priceEl?.getAttribute('content') ? `${priceEl.getAttribute('content')} ${m.querySelector('[itemprop=priceCurrency]')?.getAttribute('content') || ''}` : priceEl?.textContent) || money(m.textContent);
+        // Sites cut long names on screen ("Starving Hearts (Triangular ..."); the link's title attribute keeps the full one.
+        const longestLink = links.sort((a, b) => b.textContent.length - a.textContent.length)[0];
+        // A "title" cell holding only a rank ("1.") isn't the title; the longest link text is.
+        const headText = clean(heading?.textContent);
+        let title = clean((headText.replace(/[\d.#\s]/g, '').length >= 3 ? headText : '') || longestLink?.textContent || m.textContent);
+        const full = m.querySelector('a[title]')?.getAttribute('title');
+        if (full && (/(\.\.\.|…)$/.test(title) || full.startsWith(title.replace(/(\.\.\.|…)$/, '').trim()))) title = clean(full);
         return {
-          title: clean(heading?.textContent || links.sort((a, b) => b.textContent.length - a.textContent.length)[0]?.textContent || m.textContent).slice(0, 200),
-          url: abs((heading?.closest('a') || heading?.querySelector('a') || links[0] || m.querySelector('a[href]'))?.getAttribute('href') || ''),
+          title: title.slice(0, 200),
+          url: abs((heading?.closest('a') || heading?.querySelector('a') || longestLink || m.querySelector('a[href]'))?.getAttribute('href') || ''),
           price: p?.price ?? null,
           currency: p?.currency || '',
           rating: rating(m.querySelector('[aria-label*=star i],[aria-label*="out of" i]')?.getAttribute('aria-label') || m.textContent),
           image: abs(m.querySelector('img')?.currentSrc || m.querySelector('img')?.src || ''),
-          text: clean(m.textContent).slice(0, 400),
+          text: clean(whole.map((x) => x.textContent).join(' ')).slice(0, 500),
+          parts: Object.assign({}, ...whole.map(parts).reverse()),
           via: 'list',
         };
       }),
@@ -221,6 +271,7 @@
       url: location.href,
       title: document.title,
       site: document.querySelector('meta[property="og:site_name"]')?.content || location.hostname.replace(/^www\./, ''),
+      heading: clean(document.querySelector('h1')?.textContent),
       structured: structured(),
       markdown: main.markdown.slice(0, 60000),
       mainVia: main.via,

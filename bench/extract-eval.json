@@ -1,0 +1,163 @@
+{
+ "date": "2026-10-21T13:17:21.296Z",
+ "passed": 10,
+ "total": 10,
+ "results": [
+  {
+   "case": "books.toscrape: cheapest book on the page (product grid)",
+   "pass": true,
+   "secs": "8",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Starving Hearts (Triangular Trade Trilogy, #1)",
+    "value": 13.99
+   },
+   "got": {
+    "title": "Starving Hearts (Triangular Trade Trilogy, #1)",
+    "price": 13.99
+   }
+  },
+  {
+   "case": "books.toscrape: price of one book (product page)",
+   "pass": true,
+   "secs": "3",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "A Light in the Attic",
+    "value": 51.77
+   },
+   "got": {
+    "title": "A Light in the Attic",
+    "price": 51.77
+   }
+  },
+  {
+   "case": "webscraper.io: cheapest laptop (product grid)",
+   "pass": true,
+   "secs": "4",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Asus VivoBook X441NA-GA190",
+    "value": 295.99
+   },
+   "got": {
+    "product": "Asus VivoBook X441NA-GA190",
+    "price": 295.99
+   }
+  },
+  {
+   "case": "scrapethissite: hockey team with most wins in 1990 (table)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Chicago Blackhawks",
+    "value": 49
+   },
+   "got": {
+    "team": "Chicago Blackhawks",
+    "wins": 49
+   }
+  },
+  {
+   "case": "scrapethissite: largest country by area (250-item list)",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Russia",
+    "value": 17100000
+   },
+   "got": {
+    "country": "Russia",
+    "area": 17100000
+   }
+  },
+  {
+   "case": "Wikipedia: tallest building and its height (table)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Burj Khalifa",
+    "value": 828
+   },
+   "got": {
+    "building": "Burj Khalifa†",
+    "height_m": 829.8
+   }
+  },
+  {
+   "case": "Wikipedia: height of the Eiffel Tower (infobox)",
+   "pass": true,
+   "secs": "5",
+   "via": "table+model",
+   "rows": 1,
+   "expected": {
+    "name": "Eiffel Tower",
+    "value": [
+     300,
+     330
+    ]
+   },
+   "got": {
+    "structure": "Eiffel Tower",
+    "height_m": 300
+   }
+  },
+  {
+   "case": "Hacker News: story with the most points (title and points in separate rows)",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Upcoming critical PHP security release (CVE-2026-109618 / -109619)",
+    "value": 1253
+   },
+   "got": {
+    "story": "Upcoming critical PHP security release (CVE-2026-109618 / -109619)",
+    "points": 1253
+   }
+  },
+  {
+   "case": "Wikipedia: population of Iceland (infobox, footnoted number)",
+   "pass": true,
+   "secs": "6",
+   "via": "table+model",
+   "rows": 1,
+   "expected": {
+    "name": "Iceland",
+    "range": [
+     370000,
+     420000
+    ]
+   },
+   "got": {
+    "country": "Iceland",
+    "population": 394324
+   }
+  },
+  {
+   "case": "quotes.toscrape: who said the first quote on the page (repeated blocks)",
+   "pass": true,
+   "secs": "21",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "Albert Einstein",
+    "field": "author"
+   },
+   "got": {
+    "quote": "“The world as we have created it is a process of our thinking. It cannot be changed without changing our thinking.”",
+    "author": "Albert Einstein"
+   }
+  }
+ ]
+}

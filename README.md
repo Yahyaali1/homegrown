@@ -92,6 +92,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 ### Missions (open tasks → workflows)
 | Feature | How | Status |
 |---|---|---|
+| Reads any page | Product data the page publishes, main content (Readability), tables, repeated item blocks; the model only on relevant parts, and only values found on the page are kept | ✅ 10/10 on a real-page benchmark (`bench/extract-eval.mjs`) |
 | Goal → editable workflow | "Find the cheapest 27-inch 4K monitor with USB-C" → Search → Read pages → Pull out fields → Filter → Rank → Conclude | ✅ live web run, 53 s |
 | Results | Sortable table, cited answer, CSV export, Open best; prices keep their currency | ✅ |
 | Across my open tabs | Compare the tabs you already have open, no web search | ✅ |
@@ -113,7 +114,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 |---|---|---|
 | History, highlights, Ask your library | Library page; highlights re-marked on revisit | ✅ |
 | Flashcard review | Spaced repetition from cards made in Read ▸ | ✅ |
-| Voice | "Speak…" (Whisper) to ask about the page; Read aloud on every answer | ✅ (microphone checked with Chrome's fake audio input) |
+| Voice | "Speak…" (Whisper): auto-stop on silence, hold Alt+Space to talk, cancel, re-record, edit the transcript before sending; Read aloud with pause, speed, voice and sentence highlighting; talking or Esc stops speech | ✅ (checked with Chrome's fake microphone) |
 | Tasks | Your own tasks with `{variables}`, reorder, export/import; they appear in the toolbar, palette and menus | ✅ |
 | Savings meter | Answers run, tokens, estimated cloud cost avoided, data kept off servers | ✅ |
 | Per-site off switch, feature toggles | Settings, or "Turn off on this site" in the launcher | ✅ |
