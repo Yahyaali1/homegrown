@@ -159,7 +159,7 @@ async function run(turns, text, image, config, onText) {
 async function ensureLoaded() {
   if (loaded) return loaded;
   const first = (await status()).models.find((m) => m.downloaded);
-  if (!first) throw new Error('No model downloaded yet. Open Edge Gallery → Models and download one.');
+  if (!first) throw new Error('No model downloaded yet. Open Homegrown → Models and download one.');
   return load(first.name);
 }
 

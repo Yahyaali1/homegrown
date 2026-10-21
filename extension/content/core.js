@@ -49,10 +49,10 @@
   .cursor::after { content: '▍'; animation: blink 1s steps(2) infinite; color: var(--accent); }
   @keyframes blink { 50% { opacity: 0; } }
 </style>
-<div class="bar" role="toolbar" aria-label="Edge Gallery" hidden></div>
-<button class="fab" title="Edge Gallery: ask about this page (Alt+Shift+A)" aria-label="Open Edge Gallery" hidden>✦</button>
-<button class="imgbtn" title="Ask Edge Gallery about this image" aria-label="Ask Edge Gallery about this image" hidden>✦</button>
-<section class="card" role="dialog" aria-label="Edge Gallery answer" hidden>
+<div class="bar" role="toolbar" aria-label="Homegrown" hidden></div>
+<button class="fab" title="Homegrown: ask about this page (Alt+Shift+A)" aria-label="Open Homegrown" hidden>✦</button>
+<button class="imgbtn" title="Ask Homegrown about this image" aria-label="Ask Homegrown about this image" hidden>✦</button>
+<section class="card" role="dialog" aria-label="Homegrown answer" hidden>
   <header><span class="title"></span><button class="save" hidden>Save as task</button><button class="copy">Copy</button><button class="stop">Stop</button><button class="close" aria-label="Close">✕</button></header>
   <div class="body" aria-live="polite"></div>
   <div class="meta"></div>
@@ -138,7 +138,7 @@
     const chips = tasks.filter((t) => t.kind === kind).map((t) => chip(t.title, () => run({ task: { ...t, prompt: fillVars(t.prompt) }, ...payload() }, t.title, rect)));
     const extra = actions[kind].filter((a) => !a.when || a.when(ctx)).map((a) => chip(a.label, () => ((bar.hidden = true), a.run({ ...payload(), ctx, rect }))));
     const ask = chip('Ask…', () => askMode(kind, rect, payload));
-    const brand = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦', title: 'Edge Gallery (local model)' });
+    const brand = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦', title: 'Homegrown (local model)' });
     // Saved tasks stay one click away; feature actions wait behind "More ▸" so the bar stays short.
     const more = chip('More ▸', () => (bar.replaceChildren(brand, ...extra, back), place(bar, rect)));
     const back = chip('‹', () => showBar(kind, rect, payload, ctx));

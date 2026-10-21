@@ -103,7 +103,7 @@ async function rebuildMenus() {
   await chrome.contextMenus.removeAll();
   const roots = { text: ['selection'], page: ['page'], image: ['image'] };
   for (const [kind, contexts] of Object.entries(roots)) {
-    chrome.contextMenus.create({ id: `root-${kind}`, title: 'Edge Gallery', contexts });
+    chrome.contextMenus.create({ id: `root-${kind}`, title: 'Homegrown', contexts });
     for (const t of tasks.filter((x) => x.kind === kind)) {
       chrome.contextMenus.create({ id: `task:${t.id}`, parentId: `root-${kind}`, title: t.title, contexts });
     }

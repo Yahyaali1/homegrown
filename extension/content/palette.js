@@ -63,7 +63,7 @@
     const sel = EG.currentSelection();
     const { list } = await items(sel);
     const back = Object.assign(document.createElement('div'), { className: 'pal-back' });
-    back.innerHTML = '<div class="pal" role="dialog" aria-label="Edge Gallery command palette"><input aria-label="Search actions or type a question" placeholder="Search actions, or type a question or a goal…"><div class="ctx"></div><ul role="listbox"></ul></div>';
+    back.innerHTML = '<div class="pal" role="dialog" aria-label="Homegrown command palette"><input aria-label="Search actions or type a question" placeholder="Search actions, or type a question or a goal…"><div class="ctx"></div><ul role="listbox"></ul></div>';
     const input = back.querySelector('input');
     const ul = back.querySelector('ul');
     back.querySelector('.ctx').textContent = sel ? `Selection: “${sel.text.slice(0, 90)}${sel.text.length > 90 ? '…' : ''}”` : `Page: ${document.title}`;

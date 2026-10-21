@@ -1,6 +1,6 @@
-# Edge Gallery — implementation plan (handoff)
+# Homegrown — implementation plan (handoff)
 
-Edge Gallery is a Chrome MV3 extension that runs Gemma on the user's GPU (LiteRT-LM web, WebGPU) and
+Homegrown is a Chrome MV3 extension that runs Gemma on the user's GPU (LiteRT-LM web, WebGPU) and
 helps while browsing: select text or point at an image and act on it in place. Goal: every feature the
 paid AI extensions sell, done on-device with local models only (no remote or cloud model, by decision), plus creative features only local compute allows. The feature
 catalogue and priorities live in the Claude doc "Edge Gallery: paid-extension feature map and

@@ -1,10 +1,12 @@
-# Edge Gallery for Chrome
+# Homegrown
+
+**Your own AI, grown on your own machine.** A Chrome extension for browsing with local models.
 
 A Chrome extension that runs AI models on your own computer and helps while you browse. Select text,
 point at an image, or describe a goal, and a local Gemma model answers right on the page. Nothing is sent
 to a server, there is no account or API key, and it keeps working offline once the models are downloaded.
 
-It started as a browser version of Google's [AI Edge Gallery](https://github.com/google-ai-edge/gallery)
+Homegrown started as a browser version of Google's [AI Edge Gallery](https://github.com/google-ai-edge/gallery)
 (on-device models, model management, live speed stats) and grew into a full browsing assistant: the
 features paid AI extensions charge for, plus things only local compute makes affordable.
 
@@ -30,7 +32,7 @@ Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chro
 | **✦ launcher** (bottom-right, Alt+Shift+A) | Page tasks, **Mission…**, page-specific actions, then Write ▸ Read ▸ Translate ▸ Images ▸ Web ▸ Tabs ▸ |
 | **Command palette** (Alt+K) | One search box for every task, action and saved mission; type a question or a goal |
 | **Address bar** | `eg` + space + a goal starts a mission |
-| **Right-click** | Your tasks for selections, pages and images; "Open in Edge Gallery reader" on PDFs |
+| **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDFs |
 | **Shortcuts** | Alt+Shift+A launcher · Alt+Shift+S summarize page · Alt+Shift+L live captions · Alt+K palette |
 | **Side panel / Settings / Library** | Models, tasks, toggles; history, highlights, flashcards, Ask your library |
 

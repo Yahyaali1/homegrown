@@ -1,4 +1,4 @@
-// Keeps typing in Edge Gallery's own boxes (Ask…, launcher, follow-ups, palette) from reaching the page's
+// Keeps typing in Homegrown's own boxes (Ask…, launcher, follow-ups, palette) from reaching the page's
 // keyboard shortcuts — YouTube's k/f, Gmail's j/k, GitHub's g — which made pages react while you typed.
 // Runs at document_start so this window capture listener comes before any the page adds.
 (() => {

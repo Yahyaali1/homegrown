@@ -103,7 +103,7 @@
       c.body.replaceChildren(el('p', { className: 'cursor', textContent: 'Saving a snapshot of the page…' }));
       try {
         await EG.bg('watchPage', { url: location.href, title: page.title || location.hostname, interval });
-        c.body.replaceChildren(el('p', { textContent: `Watching ${interval}. When it changes you'll get a notification with a one-line summary of what changed. Manage watched pages in Edge Gallery → Tasks.` }));
+        c.body.replaceChildren(el('p', { textContent: `Watching ${interval}. When it changes you'll get a notification with a one-line summary of what changed. Manage watched pages in Homegrown → Tasks.` }));
       } catch (e) {
         c.body.replaceChildren();
         fail(c, e);

@@ -144,7 +144,7 @@
       const { flashcards: saved = [] } = await chrome.storage.local.get('flashcards');
       await chrome.storage.local.set({ flashcards: [...saved, ...cards] });
       c.body.replaceChildren(el('ol', {}, cards.map((k) => el('li', {}, [el('b', { textContent: k.q }), el('br'), k.a]))));
-      c.meta.textContent = `Saved ${cards.length} cards. Review them in the Edge Gallery library.`;
+      c.meta.textContent = `Saved ${cards.length} cards. Review them in the Homegrown library.`;
     } catch (e) {
       fail(c, e);
     }

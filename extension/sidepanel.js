@@ -397,7 +397,7 @@ $('#task-import').onchange = async (e) => {
 };
 $('#task-copy').onclick = async () => {
   await navigator.clipboard.writeText(JSON.stringify(await getTasks()));
-  alertLine('Copied. Paste it into another Edge Gallery to share.');
+  alertLine('Copied. Paste it into another Homegrown to share.');
 };
 $('#task-paste-go').onclick = async () => {
   try {

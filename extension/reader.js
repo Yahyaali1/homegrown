@@ -90,7 +90,7 @@ async function toNodes(name, type, buf) {
 }
 
 async function show(name, type, getBuf) {
-  document.title = `${name} · Edge Gallery reader`;
+  document.title = `${name} · Homegrown reader`;
   main.replaceChildren(el('p', { className: 'hint', textContent: `Opening ${name}…` }));
   try {
     const nodes = await toNodes(name, type, await getBuf());

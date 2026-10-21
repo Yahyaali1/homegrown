@@ -7,8 +7,8 @@ export const handlers = {
 };
 
 const ITEMS = [
-  { id: 'reader:link', title: 'Open PDF in Edge Gallery reader', contexts: ['link'], targetUrlPatterns: ['*://*/*.pdf', '*://*/*.pdf?*', '*://*/*.pdf#*'] },
-  { id: 'reader:page', title: 'Open in Edge Gallery reader', contexts: ['page'], documentUrlPatterns: ['*://*/*.pdf', '*://*/*.pdf?*', '*://*/*.pdf#*'] },
+  { id: 'reader:link', title: 'Open PDF in Homegrown reader', contexts: ['link'], targetUrlPatterns: ['*://*/*.pdf', '*://*/*.pdf?*', '*://*/*.pdf#*'] },
+  { id: 'reader:page', title: 'Open in Homegrown reader', contexts: ['page'], documentUrlPatterns: ['*://*/*.pdf', '*://*/*.pdf?*', '*://*/*.pdf#*'] },
 ];
 const addItems = () => ITEMS.forEach((i) => chrome.contextMenus.create(i, () => chrome.runtime.lastError)); // duplicates are fine to ignore
 

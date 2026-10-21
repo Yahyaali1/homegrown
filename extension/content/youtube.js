@@ -39,7 +39,7 @@
     if (cache?.v === v) return cache.cues;
     const html = await (await fetch(`/watch?v=${v}`, { credentials: 'include' })).text();
     const tracks = jsonAfter(html, '"captionTracks":') || [];
-    if (!tracks.length) throw new Error("This video has no captions, so Edge Gallery can't read it.");
+    if (!tracks.length) throw new Error("This video has no captions, so Homegrown can't read it.");
     const pref = navigator.language.split('-')[0];
     const track = tracks.find((t) => t.languageCode === pref) || tracks.find((t) => t.languageCode === 'en') || tracks[0];
     let list = await json3(`${track.baseUrl}&fmt=json3`);

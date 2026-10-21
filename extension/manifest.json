@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Edge Gallery",
-  "version": "0.5.0",
-  "description": "A local Gemma model that helps you browse: select text or an image and act on it in place. Runs on your GPU, offline after download.",
+  "name": "Homegrown",
+  "version": "0.6.0",
+  "description": "Your own AI, grown on your machine: act on any text or image in place and run web missions. Local GPU, works offline.",
   "minimum_chrome_version": "124",
   "background": {
     "service_worker": "background.js",
@@ -12,7 +12,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Open Edge Gallery",
+    "default_title": "Open Homegrown",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png"
@@ -94,7 +94,7 @@
       "suggested_key": {
         "default": "Alt+Shift+A"
       },
-      "description": "Open Edge Gallery on this page (ask about the page or run a page task)"
+      "description": "Open Homegrown on this page (ask about the page or run a page task)"
     },
     "live-captions": {
       "suggested_key": {
