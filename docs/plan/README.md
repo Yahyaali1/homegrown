@@ -60,6 +60,8 @@ side panel (models, tasks, settings-ish) · settings.html (options page) · libr
 
 - Ponytail style: least code that works, stdlib/native first, comments only where non-obvious;
   `ponytail:` comment on deliberate shortcuts with their ceiling.
+- New content scripts go in two lists: `manifest.json` content_scripts and the `<script>` tags in `reader.html`
+  (the reader is an extension page, so it loads them itself). Live captions is left out of the reader on purpose.
 - Each feature lives in its own files; shared files (core.js, background.js, offscreen.js, manifest.json)
   change only in the integration step.
 - Vendor libraries: `npm run vendor` runs `scripts/vendor.d/*.sh`; each script owns its own vendor subfolder.

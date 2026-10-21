@@ -35,6 +35,13 @@ Everything runs on your device (Gemma 4 on WebGPU, plus small helper models). No
 - **Memory:** history, highlights re-marked on revisit, "you read about this before", flashcard review,
   Ask your library — all in the Library page. Savings meter in Settings.
 - **Background:** page monitors and scheduled tasks with notifications.
+- **Command palette:** Alt+K anywhere — every task, action and saved mission in one search box; type a
+  question to ask about the page, or a goal to start a mission.
+- **Missions:** describe a goal ("find the cheapest 27-inch 4K monitor with USB-C") and get an editable
+  workflow — search, read pages in background tabs, pull out fields, filter, rank, conclude with
+  citations. Save it, run it hourly/daily, get alerted when the best result changes or drops below a
+  value. Start from the palette, the launcher, `eg` + space in the address bar, a "Find it cheaper" chip
+  on product pages, or across your open tabs. Read-only: it never buys, posts or logs in.
 
 The side panel is for models, tasks and settings; everything else happens on the page.
 

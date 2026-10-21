@@ -40,6 +40,9 @@ async function plan() {
   $('#plan').textContent = 'Planning…';
   try {
     workflow = await bg('agentPlan', { goal, context: params.get('context') || '' });
+    // Started from "my open tabs": read those pages instead of searching.
+    const urls = (params.get('urls') || '').split('\n').filter(Boolean);
+    if (urls.length) Object.assign(workflow.steps[0], { urls, query: `${urls.length} open tabs` }), Object.assign(workflow.steps[1], { limit: urls.length });
     $('#planner').textContent = workflow.planner === 'gemma' ? 'planned by Gemma' : 'from a template';
     renderSteps();
     $('#workflow').hidden = false;
@@ -67,7 +70,7 @@ function renderSteps() {
   $('#steps').replaceChildren(
     ...workflow.steps.map((step) => {
       const body = {
-        search: () => [input(step, 'query', { 'aria-label': 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, 'aria-label': 'Results' }))],
+        search: () => step.urls?.length ? [el('span', { className: 'muted small', textContent: `${step.urls.length} open tabs (no web search)` })] : [input(step, 'query', { 'aria-label': 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, 'aria-label': 'Results' }))],
         open: () => [el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'top' }), input(step, 'limit', { type: 'number', min: 1, max: 12, 'aria-label': 'Pages to read' }))],
         extract: () => [el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => ((step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), refreshFieldPickers()) })],
         filter: () => [el('div', { className: 'row2' }, select(step, 'field', [['', 'off'], ...fieldsOf().map((f) => [f, f])]), select(step, 'op', [['<', '<'], ['>', '>'], ['contains', 'has']])), input(step, 'value', { placeholder: 'value', 'aria-label': 'Filter value' })],

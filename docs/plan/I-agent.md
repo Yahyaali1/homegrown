@@ -64,5 +64,13 @@ Done (main session), checked headless on the real model:
 - Fixes found by that run: roundup pages now yield one row per listed item; "null"-like values cleaned;
   duplicates removed; prices carry a currency and mismatched currencies are set aside.
 
+Also done:
+- Command palette (`content/palette.js`): Alt+K on any page, or "Search everything" in the launcher. Fuzzy
+  search over saved tasks, every feature action and saved missions; with a selection, its actions come
+  first; typed text offers "Ask about this page", "Mission: …" and "Across my open tabs: …". Checked: fuzzy
+  match, free question answered, selection ordering.
+- Missions over open tabs: reads the window's open web tabs instead of searching (3 shop tabs → correct
+  ranking and cited answer).
+
 Left: address-bar keyword, product-page chip and scheduled alerts not exercised headless (omnibox and
 notifications need a real browser session); filters on text fields are exact-substring only.

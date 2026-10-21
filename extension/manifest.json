@@ -64,7 +64,8 @@
         "content/memory.js",
         "content/voice.js",
         "content/livecaptions.js",
-        "content/agent.js"
+        "content/agent.js",
+        "content/palette.js"
       ],
       "all_frames": true,
       "match_about_blank": true,

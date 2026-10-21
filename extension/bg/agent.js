@@ -319,8 +319,13 @@ export const handlers = {
     if (r) r.cancelled = true;
     return true;
   },
-  agentOpen: ({ goal = '', run = false, context = '' }) =>
-    chrome.tabs.create({ url: chrome.runtime.getURL(`agent.html?goal=${encodeURIComponent(goal)}&run=${run ? 1 : 0}&context=${encodeURIComponent(context)}`) }).then(() => true),
+  // tabs: true → the mission reads the current window's open web tabs instead of searching.
+  agentOpen: async ({ goal = '', run = false, context = '', tabs = false }, sender) => {
+    const urls = tabs ? (await chrome.tabs.query({ windowId: sender?.tab?.windowId ?? chrome.windows.WINDOW_ID_CURRENT })).map((t) => t.url).filter((u) => /^https?:/.test(u)) : [];
+    const q = new URLSearchParams({ goal, run: run ? 1 : 0, context, urls: urls.join('\n') });
+    await chrome.tabs.create({ url: chrome.runtime.getURL(`agent.html?${q}`) });
+    return true;
+  },
   missionsList: getMissions,
   missionSave: async ({ mission }) => {
     const list = (await getMissions()).filter((m) => m.id !== mission.id);
@@ -343,5 +348,5 @@ export function init() {
   });
   // Address bar: type "eg", a space, then the goal.
   chrome.omnibox.setDefaultSuggestion({ description: 'Run a mission on this device: %s' });
-  chrome.omnibox.onInputEntered.addListener((goal) => handlers.agentOpen({ goal, run: true }));
+  chrome.omnibox.onInputEntered.addListener((goal) => handlers.agentOpen({ goal, run: true }, null));
 }
