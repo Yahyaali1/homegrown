@@ -1,89 +1,210 @@
 # Edge Gallery for Chrome
 
-A Chrome MV3 extension that brings [google-ai-edge/gallery](https://github.com/google-ai-edge/gallery)
-to the browser. Gemma runs on your own GPU (WebGPU), models are managed in the browser, every answer
-shows live performance stats, and you can right-click selected text to act on it. Nothing leaves
-the machine, and it works offline once a model is downloaded.
+A Chrome extension that runs AI models on your own computer and helps while you browse. Select text,
+point at an image, or describe a goal, and a local Gemma model answers right on the page. Nothing is sent
+to a server, there is no account or API key, and it keeps working offline once the models are downloaded.
+
+It started as a browser version of Google's [AI Edge Gallery](https://github.com/google-ai-edge/gallery)
+(on-device models, model management, live speed stats) and grew into a full browsing assistant: the
+features paid AI extensions charge for, plus things only local compute makes affordable.
 
 ## Install
 
 ```sh
 npm install
-npm run vendor          # bundles @litert-lm/core into extension/vendor
+npm run vendor     # bundles the model runtimes and libraries into extension/vendor
 ```
 
-Then open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick `extension/`.
-Click the toolbar icon to open the side panel, go to **Models** and download Gemma 4 E2B (2 GB).
+Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose `extension/`.
+The first request offers to download Gemma 4 E2B (2 GB) right in the page; or open the side panel →
+**Models**. Helper models download the first time a feature needs them.
 
-## Using it while you browse
+Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chrome 155 and Chromium 156.
 
-Everything runs on your device (Gemma 4 on WebGPU, plus small helper models). Nothing is sent to a server.
+## Where things are
 
-- **Select text** anywhere (pages, text boxes, iframes, the document reader): your tasks (Summarize,
-  Explain, Translate, Rewrite, your own) plus **More ▸**: Proofread, Rewrite as ▸ (8 modes), Translate
-  into…, Illustrate this, Check claim, Highlight. Answers to a selection in a text box can **Replace** it.
-- **Point at an image:** Describe, Extract text, Translate image (overlay), Write alt text, Ask.
-- **✦ launcher** (bottom-right, or Alt+Shift+A): page tasks, then Write ▸ (templates), Read ▸ (mind map,
-  podcast, quiz, flashcards, related reading), Images ▸ (create image, ask about an area), Web ▸
-  (research), Tabs ▸ (compare, tidy, watch this page), plus page-specific actions (YouTube, forms,
-  long pages, gist margins, bilingual translation, speak).
-- **While typing:** ghost-text completions (opt-in, Tab accepts), ✦ Reply drafts on mail and chat sites in
-  your voice, Alt-hover for plain-language definitions.
-- **Links:** hold a link to preview it with key points and phishing warnings.
-- **Search pages:** an answer beside Google/Bing/DuckDuckGo results.
-- **Documents:** right-click a PDF → Open in Edge Gallery reader (PDF, DOCX, TXT, MD, CSV, JSON, HTML).
-- **Memory:** history, highlights re-marked on revisit, "you read about this before", flashcard review,
-  Ask your library — all in the Library page. Savings meter in Settings.
-- **Background:** page monitors and scheduled tasks with notifications.
-- **Command palette:** Alt+K anywhere — every task, action and saved mission in one search box; type a
-  question to ask about the page, or a goal to start a mission.
-- **Missions:** describe a goal ("find the cheapest 27-inch 4K monitor with USB-C") and get an editable
-  workflow — search, read pages in background tabs, pull out fields, filter, rank, conclude with
-  citations. Save it, run it hourly/daily, get alerted when the best result changes or drops below a
-  value. Start from the palette, the launcher, `eg` + space in the address bar, a "Find it cheaper" chip
-  on product pages (next to "Alert me if it drops", a one-click daily price watch), or across your open tabs. Read-only: it never buys, posts or logs in.
-
-The side panel is for models, tasks and settings; everything else happens on the page.
-
-## What's in it
-
-| Part | Files |
+| Where | What you get |
 |---|---|
-| Core: toolbar, launcher, card, `window.EG` API | `content/core.js` |
-| Features (one file each) | `content/{writing,ghost,replies,jargon,forms,youtube,reading,translate,images,search,links,tabs,memory,voice}.js` |
-| Background router + feature handlers | `background.js`, `bg/*.js` |
-| Engine: Gemma (LiteRT-LM), Florence-2, MiniLM embeddings, Whisper, Janus-Pro image generation | `offscreen.js`, `vision.js`, `engine/*.js` |
-| Pages | `sidepanel.*`, `settings.*`, `library.*`, `reader.*` |
+| **Select text** | Your tasks (Summarize, Explain, Translate, Rewrite, your own), then **More ▸** and **Ask…** |
+| **Point at an image** (80 px+) | ✦ button: Describe, Extract text, Translate image, Write alt text, Ask |
+| **✦ launcher** (bottom-right, Alt+Shift+A) | Page tasks, **Mission…**, page-specific actions, then Write ▸ Read ▸ Translate ▸ Images ▸ Web ▸ Tabs ▸ |
+| **Command palette** (Alt+K) | One search box for every task, action and saved mission; type a question or a goal |
+| **Address bar** | `eg` + space + a goal starts a mission |
+| **Right-click** | Your tasks for selections, pages and images; "Open in Edge Gallery reader" on PDFs |
+| **Shortcuts** | Alt+Shift+A launcher · Alt+Shift+S summarize page · Alt+Shift+L live captions · Alt+K palette |
+| **Side panel / Settings / Library** | Models, tasks, toggles; history, highlights, flashcards, Ask your library |
 
-Implementation plans and status for each feature group: `docs/plan/`.
+You only need the extension's own pages to pick a model or change settings; everything else happens on
+the page you're reading.
+
+## Features
+
+Status: ✅ checked end to end on the real model · ◐ checked in part (see note) · ○ built, not yet checked.
+
+### Reading
+| Feature | How | Status |
+|---|---|---|
+| Summarize / explain / ask about a selection or page | Toolbar, launcher, palette; answer streams into a card with follow-ups | ✅ |
+| Long-page Q&A | Pages over ~9k characters are chunked and searched (MiniLM embeddings) so the answer covers the whole page | ✅ |
+| Document reader | PDF, ePub, DOCX, TXT, MD, CSV, JSON, HTML — every toolbar and page feature works inside it | ✅ PDF, ePub, DOCX · ○ others |
+| YouTube | Summary with clickable timestamps, chat with the video, translated subtitles | ◐ on a test page; live YouTube captions unverified |
+| Mind map, podcast, quiz, flashcards | Launcher → Read ▸; podcast is two voices via the browser's speech synthesis | ✅ |
+| Gist margins | One-line summary beside each section as you scroll (opt-in) | ✅ |
+| Link preview (X-ray) | Hold a link: key points, reading time, phishing warnings (lookalike domains, text/href mismatch) | ✅ |
+| "Have I read this before?" | A chip links to related pages you read earlier | ✅ |
+| What changed since your last visit | A chip on revisits; Gemma summarizes the added and removed lines | ✅ |
+
+### Writing
+| Feature | How | Status |
+|---|---|---|
+| Replace / Insert into text boxes | Under any answer that came from a text box | ✅ |
+| Proofread, templates (10) | Toolbar More ▸ and launcher Write ▸ | ✅ |
+| Rewrite as ▸ (8 modes) | Standard, Fluent, Formal, Casual, Shorter, Longer, Simple, Creative | ◐ same path as Proofread |
+| Your voice | Inserted answers become local style samples for later drafts | ✅ |
+| Ghost text | Grey completions while you type, Tab accepts (opt-in) | ✅ |
+| Reply drafts | ✦ Reply on Gmail, Outlook, LinkedIn, X, Slack, WhatsApp, Discord and other compose boxes | ✅ |
+| Jargon lens | Hold Alt over a term for a plain-language definition | ✅ |
+| Form helper | Explains fields and fills suggested values only after you click Fill; never passwords or payment fields | ✅ |
+
+### Translation
+| Feature | How | Status |
+|---|---|---|
+| Bilingual page | Translation under each paragraph as you scroll; original / both / translation | ✅ |
+| Hover translate | Hold Ctrl over a paragraph | ✅ |
+| Translate into… with Replace | For text boxes | ✅ |
+| Image and manga translation | Text read with positions (Florence-2), translations overlaid on the image | ✅ |
+| Live captions and translation | Any tab's audio → Whisper → Gemma → caption bar (Alt+Shift+L) | ◐ with audio from a file; real tab capture needs a click |
+| Chrome built-in Translator | Used when Chrome provides it, else Gemma | ○ |
+
+### Images
+| Feature | How | Status |
+|---|---|---|
+| Describe, extract text, ask about an image | Florence-2 reads the pixels on-device, Gemma answers | ✅ |
+| Ask about an area | Drag a box over the page | ✅ |
+| Create image | Janus-Pro-1B on-device (~2.4 GB, ~12 s per image), with Download and Copy | ✅ generation · ○ Download/Copy |
+| Illustrate this | Gemma writes the prompt from your selection, Janus draws it | ✅ |
+| Drop an image file | On the launcher or card to ask about it | ✅ |
+| Alt text for the web | Writes alt text for images that have none (opt-in) | ✅ |
+
+### Missions (open tasks → workflows)
+| Feature | How | Status |
+|---|---|---|
+| Goal → editable workflow | "Find the cheapest 27-inch 4K monitor with USB-C" → Search → Read pages → Pull out fields → Filter → Rank → Conclude | ✅ live web run, 53 s |
+| Results | Sortable table, cited answer, CSV export, Open best; prices keep their currency | ✅ |
+| Across my open tabs | Compare the tabs you already have open, no web search | ✅ |
+| Find it cheaper / Alert me if it drops | Chips on product pages (from the page's product data) | ✅ |
+| Saved and scheduled missions | Hourly or daily, with a notification when the best result changes or crosses a value | ✅ |
+| Address-bar keyword `eg` | Starts a mission from anywhere | ○ can't be typed in headless tests |
+
+### Web, tabs and automation
+| Feature | How | Status |
+|---|---|---|
+| Deep research | Reads the top 6 results and writes a cited report | ✅ |
+| Check a claim, related reading | Text action / page action with sources | ✅ |
+| Answer beside search results | On Google, Bing and DuckDuckGo result pages | ✅ |
+| Compare tabs, Tidy tabs | Comparison table; named tab groups with "where was I" notes | ✅ |
+| Page monitors, scheduled tasks | Change summaries and results as notifications | ✅ |
+
+### Memory and tools
+| Feature | How | Status |
+|---|---|---|
+| History, highlights, Ask your library | Library page; highlights re-marked on revisit | ✅ |
+| Flashcard review | Spaced repetition from cards made in Read ▸ | ✅ |
+| Voice | "Speak…" (Whisper) to ask about the page; Read aloud on every answer | ◐ speech model and Read aloud checked; live microphone not yet |
+| Tasks | Your own tasks with `{variables}`, reorder, export/import; they appear in the toolbar, palette and menus | ✅ |
+| Savings meter | Answers run, tokens, estimated cloud cost avoided, data kept off servers | ✅ |
+| Per-site off switch, feature toggles | Settings, or "Turn off on this site" in the launcher | ✅ |
+
+## Models (all on-device)
+
+| Model | Used for | Size |
+|---|---|---|
+| [Gemma 4 E2B / E4B](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm) (web builds, LiteRT-LM) | Every answer, planning, extraction | 2.0 / 3.0 GB |
+| [Florence-2 base](https://huggingface.co/onnx-community/Florence-2-base-ft) (transformers.js) | Image description, OCR, OCR with positions | ~300 MB |
+| [all-MiniLM-L6-v2](https://huggingface.co/Xenova/all-MiniLM-L6-v2) | Long-page search, library, "read this before" | ~23 MB |
+| Whisper base (transformers.js) | Voice questions, live captions | ~150 MB |
+| [Janus-Pro-1B](https://huggingface.co/onnx-community/Janus-Pro-1B-ONNX) | Image generation | ~2.4 GB |
+
+All models are pinned to a revision and stored in the browser (OPFS / Cache Storage). By decision there is
+no remote or cloud model option.
+
+**Measured on an Apple M4** (Gemma 4 E2B, 1024 prompt tokens, 256 output tokens): prefill ~1,360 tok/s,
+decode ~53 tok/s, first token ~0.7 s. Native LiteRT-LM (the engine the Gallery Android app uses) on the
+same machine and model: 1,850 / 68.6 tok/s, 0.57 s. MediaPipe web: 1,196 / 52.5; WebLLM: 149 / 11.7.
+
+## Inspiration
+
+We studied paid and free tools and kept the ideas that work well on a small local model.
+
+| Tool | Paid / free | What we took |
+|---|---|---|
+| [Google AI Edge Gallery](https://github.com/google-ai-edge/gallery) | Free, open source | The starting point: model allowlist, resumable downloads, Prompt Lab templates, live speed stats |
+| [Monica](https://monica.im), [Sider](https://sider.ai), [MaxAI](https://www.maxai.me) | Paid | Selection toolbar quick actions, page/PDF/YouTube summaries, writing tools, bilingual translation |
+| [Merlin](https://www.getmerlin.in) | Paid | Reply drafts on email and social sites, templates |
+| [HARPA AI](https://harpa.ai) | Paid | Saved commands, page monitors with alerts, scheduled commands |
+| [Immersive Translate](https://immersivetranslate.com) | Paid | Bilingual pages, hover and input-box translation, image/manga translation, subtitles |
+| Grammarly, QuillBot, Wordtune | Paid | Proofreading, paraphrase modes, write-back into the text box |
+| Glasp, Liner, Wiseone | Free / paid | Highlights with notes, related reading, fact checking |
+| [Gemini in Chrome](https://blog.google/products-and-platforms/products/chrome/new-ai-features-for-chrome/) | Paid tiers | Asking across tabs, tab groups |
+| [Firefox on-device AI](https://blog.mozilla.org/en/firefox/firefox-ai/ai-browser-features/) | Free | Link previews with key points, smart tab grouping, on-device alt text |
+| [Perplexity Comet](https://techcrunch.com/2025/07/09/perplexity-launches-comet-an-ai-powered-web-browser/), ChatGPT Atlas, Opera Neon | Paid | Goal-driven agents; Neon's parallel task cards |
+| [Nanobrowser](https://gitee.com/mirrors/nanobrowser) | Free, open source | Planner → navigator → validator split for Missions |
+| [Axiom.ai, Bardeen](https://theaiagentindex.com/compare/axiom-ai-vs-bardeen) | Paid | Scrape → table → reuse, with steps you can see and edit |
+| [Page Assist](https://addons.mozilla.org/addon/page-assist/), [Lumos](https://github.com/andrewnguonly/Lumos), [Brave Leo BYOM](https://brave.com/blog/byom-nightly/) | Free | Local-model chat with the page; retrieval over long pages |
+
+Where we go further because compute is local and free: answers on every page with no quotas, private
+pages (banking, health, intranets) are fine to read, gist margins and link previews that run constantly,
+ghost text on every pause, missions that read many pages, and everything offline.
+
+The full feature catalogue, priorities and the 12 creative ideas are in the planning doc
+[Edge Gallery: paid-extension feature map and local-first plan](https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
+
+## Privacy and safety
+
+- Nothing you read, type or ask leaves the device; only model downloads and the pages you choose to open
+  (missions, research, link previews) use the network.
+- Missions and research use **read-only tools**: they open and read pages in a collapsed background tab
+  group and close them. They never click buy buttons, submit forms or log in.
+- Page text is passed to the model as data, with an instruction to ignore instructions inside it
+  (prompt-injection mitigation). The form helper never fills password or payment fields.
+
+## How it's built
+
+```
+content/core.js  ── window.EG API ──  content/<feature>.js   (classic scripts in every frame)
+      │ port 'run'                         │ EG.bg(cmd)
+      ▼                                    ▼
+background.js (service worker) ────── bg/<feature>.js        (handlers, init, onAnswer, menus)
+      │ engine(cmd)
+      ▼
+offscreen.html (keeps models loaded) ── engine/<feature>.js  (Gemma via LiteRT-LM; Florence-2, MiniLM,
+                                                              Whisper, Janus via transformers.js)
+Pages: agent.html (Mission control), reader.html, library.html, settings.html, sidepanel.html
+```
+
+Each feature lives in its own files and plugs into small registries (`EG.actions`, `EG.resultActions`,
+`handlers`). Implementation plans, contracts and per-feature status for handing work to another
+developer or agent: [`docs/plan/`](docs/plan/README.md).
 
 ## Known limits
 
-- **Images go through a small image reader.** Gemma 4's web build has no vision encoder, and LiteRT-LM
-  web rejects the full build ("Streaming kTfLiteEmbedder models is not supported yet"). So image tasks
-  run Florence-2 base (230M, not gated, ~300 MB downloaded on first use, then cached for offline) on
-  WebGPU to describe the image and read its text, and Gemma answers from that plus the alt text and
-  caption. Florence's OCR can merge lines ("LIBRARYOPEN 9 AM"). A model that sees pixels gets the image directly.
-- **The first answer in a new profile is slow** (about 18 s to the first word in Chrome 155) while the
-  GPU warms up; later answers start in about 0.2 s.
-- **Selections are cut by a character estimate** (3 chars/token), because LiteRT-LM web has no
-  tokenizer API. If the engine still rejects the prompt, the selection is halved and retried.
-- **Changing the model or context length reloads the model** (about 2 s from OPFS).
-- Google Docs draws text on a canvas, so Chrome shows no selection menu there. Images behind a
-  login and revoked `blob:` links can't be read; the panel says so. (Live `blob:` and cross-origin
-  images work, thanks to `host_permissions`.)
+- **Gemma can't see pixels in the browser:** its web build has no vision encoder, so images go through
+  Florence-2 first. Florence's OCR can merge lines ("LIBRARYOPEN 9 AM").
+- **Live YouTube captions** depend on YouTube serving the player's caption file; unverified in headless tests.
+- **Search** falls back from DuckDuckGo to Bing to Wikipedia when engines block or return junk.
+- **First answer in a new profile** takes ~18 s while the GPU warms up; later ones start in ~0.2 s.
+- **Selections are cut by a character estimate** (LiteRT-LM web has no tokenizer API).
+- Google Docs draws text on a canvas, so there's no selection to act on there.
 
-## Tests and benchmarks
+## Development
 
 ```sh
 npx playwright test                 # regression suite on the real model and WebGPU (~2 min)
 ./scripts/gpu.sh node <script>      # smoke scripts: up to 3 in parallel, one test profile each
-node bench/phase0.mjs               # extension benchmark (1024 prefill / 256 decode)
-node bench/compare.mjs 5            # interleaved vs native LiteRT-LM on this machine
-node bench/determinism.mjs          # temperature-0 output vs native LiteRT-LM
-node bench/webllm.mjs               # WebLLM comparison
+node bench/compare.mjs 5            # extension vs native LiteRT-LM, interleaved
+node bench/determinism.mjs          # temperature-0 output vs native
 ```
 
-Chromium 156 ignores `--load-extension`, so the harness loads the extension over CDP
-(`Extensions.loadUnpacked`). Playwright can't click native context menus, so the tests call the
-same handler Chrome calls, with text really selected in the page or iframe.
+Chromium 156 ignores `--load-extension`, so `tests/harness.mjs` loads the extension over CDP. Playwright
+can't click Chrome's native menus or type in the address bar; those paths are exercised through the same
+handlers they call.
