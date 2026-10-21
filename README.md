@@ -17,33 +17,38 @@ Click the toolbar icon to open the side panel, go to **Models** and download Gem
 
 ## Using it while you browse
 
-- **Select text** on any page (also inside text boxes and iframes): a small toolbar appears with your
-  tasks (Summarize, Explain, Translate, Rewrite, and any you add) plus **Ask…** for a free question.
-- **Point at an image** (80 px or larger): a ✦ button appears with your image tasks (Describe,
-  Extract text, Ask…). The image itself is read on your device.
-- **Whole page**: right-click the page → Edge Gallery, press **Alt+Shift+S**, or use the
-  "Summarize this page" / "Key takeaways" buttons at the top of the side panel's Chat tab.
-- The answer streams into a card next to what you selected. Ask follow-ups in the card, copy the
-  answer, drag the card by its header, and close it with ✕ or Esc (closing stops the generation).
-- **Tasks tab** in the side panel: add your own task (name, what it runs on, instruction), delete
-  any task, reset to defaults, or turn the toolbar off. Prompt Lab's "Save as task" adds one too.
-  Tasks show up in the toolbar and the right-click menu right away.
-- In the PDF viewer and browser pages, where extensions can't add UI, right-click → Edge Gallery
-  opens the answer in the side panel instead.
+Everything runs on your device (Gemma 4 on WebGPU, plus small helper models). Nothing is sent to a server.
+
+- **Select text** anywhere (pages, text boxes, iframes, the document reader): your tasks (Summarize,
+  Explain, Translate, Rewrite, your own) plus **More ▸**: Proofread, Rewrite as ▸ (8 modes), Translate
+  into…, Illustrate this, Check claim, Highlight. Answers to a selection in a text box can **Replace** it.
+- **Point at an image:** Describe, Extract text, Translate image (overlay), Write alt text, Ask.
+- **✦ launcher** (bottom-right, or Alt+Shift+A): page tasks, then Write ▸ (templates), Read ▸ (mind map,
+  podcast, quiz, flashcards, related reading), Images ▸ (create image, ask about an area), Web ▸
+  (research), Tabs ▸ (compare, tidy, watch this page), plus page-specific actions (YouTube, forms,
+  long pages, gist margins, bilingual translation, speak).
+- **While typing:** ghost-text completions (opt-in, Tab accepts), ✦ Reply drafts on mail and chat sites in
+  your voice, Alt-hover for plain-language definitions.
+- **Links:** hold a link to preview it with key points and phishing warnings.
+- **Search pages:** an answer beside Google/Bing/DuckDuckGo results.
+- **Documents:** right-click a PDF → Open in Edge Gallery reader (PDF, DOCX, TXT, MD, CSV, JSON, HTML).
+- **Memory:** history, highlights re-marked on revisit, "you read about this before", flashcard review,
+  Ask your library — all in the Library page. Savings meter in Settings.
+- **Background:** page monitors and scheduled tasks with notifications.
+
+The side panel is for models, tasks and settings; everything else happens on the page.
 
 ## What's in it
 
-| Part | File |
+| Part | Files |
 |---|---|
-| In-page toolbar, image button, answer card (shadow DOM) | `content.js` |
-| Task list, ports for in-page requests, right-click menu, shortcut | `background.js`, `actions.js` |
-| Chat, Ask Image, Prompt Lab, Tasks, Models, stats bar | `sidepanel.*` |
-| Model allowlist (web builds of the Gallery's `model_allowlists/1_0_20.json`) | `models.js` |
-| Resumable downloads into OPFS; LiteRT-LM inference on WebGPU | `offscreen.js` |
-| Image reader (Florence-2 via transformers.js) | `vision.js` |
+| Core: toolbar, launcher, card, `window.EG` API | `content/core.js` |
+| Features (one file each) | `content/{writing,ghost,replies,jargon,forms,youtube,reading,translate,images,search,links,tabs,memory,voice}.js` |
+| Background router + feature handlers | `background.js`, `bg/*.js` |
+| Engine: Gemma (LiteRT-LM), Florence-2, MiniLM embeddings, Whisper, Janus-Pro image generation | `offscreen.js`, `vision.js`, `engine/*.js` |
+| Pages | `sidepanel.*`, `settings.*`, `library.*`, `reader.*` |
 
-The engine runs in an offscreen document, so the model stays loaded while the panel is closed, and
-the first downloaded model loads by itself the first time a page asks for something.
+Implementation plans and status for each feature group: `docs/plan/`.
 
 ## Known limits
 
@@ -64,7 +69,8 @@ the first downloaded model loads by itself the first time a page asks for someth
 ## Tests and benchmarks
 
 ```sh
-npx playwright test                 # end-to-end on the real model and WebGPU (~2 min)
+npx playwright test                 # regression suite on the real model and WebGPU (~2 min)
+./scripts/gpu.sh node <script>      # smoke scripts: up to 3 in parallel, one test profile each
 node bench/phase0.mjs               # extension benchmark (1024 prefill / 256 decode)
 node bench/compare.mjs 5            # interleaved vs native LiteRT-LM on this machine
 node bench/determinism.mjs          # temperature-0 output vs native LiteRT-LM
