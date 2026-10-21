@@ -5,6 +5,8 @@
 cd "$(dirname "$0")/.."
 while :; do
   for n in 1 2 3; do
+    # Slot 1 shares .profile-test with runs started under the old single lock (.gpu.lock); wait for those.
+    [ "$n" = 1 ] && [ -d .gpu.lock ] && continue
     if mkdir ".gpu.lock.$n" 2>/dev/null; then
       trap 'rmdir ".gpu.lock.'$n'"' EXIT INT TERM
       [ "$n" = 1 ] && EG_PROFILE="$PWD/.profile-test" || EG_PROFILE="$PWD/.profile-test-$n"
