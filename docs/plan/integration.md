@@ -14,3 +14,4 @@ Done after the group agents report. Owner: the main session.
 
 - C: add a `translateTo` field (target language) to settings.html.
 - D: add an `autoAltText` switch to settings.html.
+- A: switches for `ghostText`, `useVoice`, `replyButtons`; memory/savings skip `quiet: true` requests (sent to G).

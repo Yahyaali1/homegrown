@@ -16,4 +16,10 @@ Files: `content/writing.js`, `content/ghost.js`, `content/replies.js`, `content/
 
 ## Status
 
-Drafted by an agent; smoke check in progress. Update with results and any shared-file changes needed.
+Done (agent A, one smoke run on the real model): Proofread + Replace, ghost text with Tab, reply pill
+draft + insert, jargon tooltip, form helper (fills name/email, leaves password/card), tweet template
+insert, voice samples stored. "Insert" also works for any answer at the caret of the last text box.
+
+Left: "Rewrite as ▸" not clicked (same path as Proofread); form helper skips checkboxes/radios.
+Requests: settings switches for `ghostText`, `useVoice`, `replyButtons`; history/savings must skip
+requests marked `quiet: true` (forwarded to group G).
