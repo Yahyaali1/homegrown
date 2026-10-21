@@ -13,4 +13,10 @@ Files: `bg/tabs.js`, `bg/monitors.js`, `content/tabs.js`, `sidepanel.html/js/css
 
 ## Status
 
-Drafted by an agent; smoke check in progress. Update with results and any shared-file changes needed.
+Done (agent F, smoke-checked on the real model): Compare tabs (real comparison table), Tidy tabs (named
+group, notes, duplicate offer), Watch this page (detected an edit and summarized it; alarm created),
+scheduled task (Run now saved a summary), Tasks tab editing/reordering/{variables}/export-import/JSON share,
+schedules and monitors lists, Chat tab note.
+
+Left: compare/summaries don't stream; monitors diff lines as a set (order ignored) and see raw HTML text
+for JavaScript-built pages; notification display not confirmed. No shared-file changes.

@@ -19,6 +19,7 @@
 
   <main>
     <section id="chat" role="tabpanel">
+      <p class="muted">You don't need this panel to use Edge Gallery: select text, point at an image or press Alt+Shift+A on any page. Use it for models and settings.</p>
       <div id="page-tasks" class="row" aria-label="Run on this page"></div>
       <ol id="messages" aria-live="polite"></ol>
       <div id="attached" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" aria-label="Remove selected text">×</button></div>
@@ -75,6 +76,23 @@
         <textarea id="task-prompt" rows="3" placeholder="Instruction, e.g. Turn the following into a short tweet:" aria-label="Instruction" required></textarea>
         <div class="row"><button>Add task</button><button id="task-reset" type="button" class="secondary">Reset to defaults</button></div>
       </form>
+      <div id="task-vars" class="stack"></div>
+      <h3>Share tasks</h3>
+      <div class="row">
+        <button id="task-export" type="button" class="secondary">Export file</button>
+        <button id="task-import-btn" type="button" class="secondary">Import file</button>
+        <input id="task-import" type="file" accept="application/json,.json" hidden>
+        <button id="task-copy" type="button" class="secondary">Copy as text</button>
+      </div>
+      <div class="row"><textarea id="task-paste" rows="2" placeholder="Paste shared tasks here" aria-label="Shared tasks"></textarea><button id="task-paste-go" type="button" class="secondary">Import</button></div>
+      <h3>Scheduled tasks</h3>
+      <form id="sched-form" class="stack">
+        <div class="row"><select id="sched-task" aria-label="Page task"></select><select id="sched-interval" aria-label="How often"><option value="daily">Every day</option><option value="hourly">Every hour</option></select></div>
+        <div class="row"><input id="sched-url" type="url" placeholder="https://example.com/page" aria-label="Page URL" required><button>Schedule</button></div>
+      </form>
+      <ul id="sched-list" class="task-list"></ul>
+      <h3>Watched pages</h3>
+      <ul id="mon-list" class="task-list"><li class="muted">None yet. Use ✦ → Watch this page on any page.</li></ul>
     </section>
 
     <section id="models" role="tabpanel" hidden>

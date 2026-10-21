@@ -110,7 +110,7 @@ h3 { font-size: 13px; margin: 8px 0 0; }
 .task-list .p { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-list button { background: none; color: var(--muted); padding: 0 4px; }
 #page-tasks button { padding: 4px 10px; font-size: 12px; }
-#task-title { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; flex: 1; }
+#task-title, #sched-url, #task-vars input, .task-list input { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; flex: 1; }
 
 #model-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 #model-list li { border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -130,3 +130,7 @@ footer {
   font-variant-numeric: tabular-nums;
 }
 footer b { color: var(--text); font-weight: 600; }
+.task-list .edit { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.task-list .result { display: block; font-size: 12px; white-space: pre-wrap; margin-top: 4px; }
+#task-vars label { display: flex; gap: 6px; align-items: center; }
+#sched-url, #task-paste { flex: 1; }
