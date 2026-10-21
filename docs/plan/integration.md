@@ -12,4 +12,5 @@ Done after the group agents report. Owner: the main session.
 
 ## Shared-file change requests
 
-(none recorded yet)
+- C: add a `translateTo` field (target language) to settings.html.
+- D: add an `autoAltText` switch to settings.html.

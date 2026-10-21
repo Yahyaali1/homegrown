@@ -13,4 +13,10 @@ Files: `content/translate.js`, `engine/imgtext.js` (uses `ocrRegions` from `visi
 
 ## Status
 
-Drafted by an agent; smoke check in progress. Update with results and any shared-file changes needed.
+Done (agent C, smoke-checked on `tests/fixtures/translate/fr.html`):
+- Bilingual page (5 French blocks translated; modes and removal work), Ctrl+hover, "Translate into…" with
+  Replace in a textarea, image translation overlay (LIBRARY → BIBLIOTHEQUE, OPEN 9 AM - 5 PM → OUVERT 9H - 17H).
+- `EG.translate` is exposed for other features.
+
+Left: Chrome's built-in Translator path not exercised (test Chromium lacks it); overlay boxes slightly
+small; `translateTo` setting needs a field in settings.html (group G / integration). No shared-file changes.
