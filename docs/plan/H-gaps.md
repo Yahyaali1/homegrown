@@ -13,4 +13,8 @@ team plans are out by decision: local models only.)
 
 ## Status
 
-In progress (three agents: H1 ePub + search fallback + YouTube, H2 last-visit diff, H3 live audio translation).
+- What changed since last visit — DONE (agent H2): snapshots saved when a task runs or a highlight is saved
+  (IndexedDB, 300 pages × 50k chars, URL without hash); chip appears after ≥3 lines or ≥5% changed, no model
+  call until clicked; card lists added/removed lines and Gemma summarizes them. Smoke: no chip when unchanged,
+  chip after an edit, correct summary, no chip after viewing.
+- ePub, search fallback, YouTube transcripts (H1) and live audio translation (H3): in progress.

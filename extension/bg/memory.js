@@ -1,18 +1,23 @@
-// Memory: answer history, highlights, a small knowledge base of pages you ran tasks on, and the
-// savings meter. Everything stays in this browser (IndexedDB 'eg-memory', chrome.storage.local 'savings').
+// Memory: answer history, highlights, a small knowledge base of pages you ran tasks on, page snapshots
+// for "changed since your last visit", and the savings meter. Everything stays in this browser (IndexedDB 'eg-memory', chrome.storage.local 'savings').
 import { engine, ask } from './engine.js';
 
 const HISTORY_CAP = 2000;
+const SNAPSHOT_CAP = 300; // pages kept for "changed since your last visit"
+const SNAPSHOT_CHARS = 50000;
 const SIMILAR = 0.6; // cosine for "same topic"; calibrated on MiniLM: related pages ~0.72, unrelated < 0.1
 const RATE = { inPerM: 0.5, outPerM: 1.5 }; // ponytail: rough cloud price (USD per 1M tokens) for the estimate
 
 const db = new Promise((resolve, reject) => {
-  const r = indexedDB.open('eg-memory', 1);
-  r.onupgradeneeded = () => {
+  const r = indexedDB.open('eg-memory', 2);
+  r.onupgradeneeded = (e) => {
     const d = r.result;
-    d.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
-    d.createObjectStore('highlights', { keyPath: 'id', autoIncrement: true }).createIndex('url', 'url');
-    d.createObjectStore('kb', { keyPath: 'id', autoIncrement: true }).createIndex('url', 'url');
+    if (e.oldVersion < 1) {
+      d.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
+      d.createObjectStore('highlights', { keyPath: 'id', autoIncrement: true }).createIndex('url', 'url');
+      d.createObjectStore('kb', { keyPath: 'id', autoIncrement: true }).createIndex('url', 'url');
+    }
+    if (e.oldVersion < 2) d.createObjectStore('snapshots', { keyPath: 'url' });
   };
   r.onsuccess = () => resolve(r.result);
   r.onerror = () => reject(r.error);
@@ -66,6 +71,37 @@ async function addKb(url, title, summary) {
   s.add({ url, title, summary, embedText, vec, time: Date.now() });
 }
 
+// ---- page snapshots: "changed since your last visit" ----
+const pageKey = (url) => url.split('#')[0];
+const lines = (text) => new Set(text.split('\n').map((l) => l.trim()).filter(Boolean));
+
+async function saveSnapshot(url, text) {
+  if (!url?.startsWith('http') || !text) return;
+  const s = await store('snapshots', 'readwrite');
+  s.put({ url: pageKey(url), text: text.slice(0, SNAPSHOT_CHARS), time: Date.now() });
+  const items = await done(s.getAll());
+  if (items.length > SNAPSHOT_CAP) items.sort((a, b) => a.time - b.time).slice(0, items.length - SNAPSHOT_CAP).forEach((i) => s.delete(i.url));
+}
+
+// Snapshot the tab's main text (same element EG.pageInfo reads) when a task ran on a selection.
+async function snapshotTab(tabId, url) {
+  if (!tabId) return;
+  const [res] = await chrome.scripting
+    .executeScript({ target: { tabId }, func: () => (document.querySelector('article, main, [role=main]') || document.body).innerText })
+    .catch(() => []);
+  saveSnapshot(url, res?.result);
+}
+
+// Line-set diff against the snapshot; null when nothing is stored or the change is too small to mention.
+export function diffLines(oldText, newText) {
+  const [a, b] = [lines(oldText), lines(newText)];
+  const added = [...b].filter((l) => !a.has(l));
+  const removed = [...a].filter((l) => !b.has(l));
+  const changed = added.length + removed.length;
+  if (changed < 3 && changed / Math.max(a.size, b.size, 1) < 0.05) return null;
+  return { added, removed };
+}
+
 export async function onAnswer(req, r, sender) {
   // Only what a person asked for (saved tasks have a title, free questions a question). Feature-driven
   // calls (ghost text, gists, page translation) send quiet: true or no title, and would flood history and savings.
@@ -82,6 +118,11 @@ export async function onAnswer(req, r, sender) {
   savings.bytes += new TextEncoder().encode(input).length;
   chrome.storage.local.set({ savings });
   if (!req.history?.length && url.startsWith('http') && (req.page || (req.selection?.length || 0) > 500)) addKb(url, title, r.text.slice(0, 800));
+  // The "what changed" card itself carries a diff as its page text: content/memory.js updates the snapshot.
+  if (!req.history?.length && req.task?.id !== 'last-visit') {
+    if (req.page?.text) saveSnapshot(url, req.page.text);
+    else if (req.selection) snapshotTab(sender?.tab?.id, url);
+  }
 }
 
 function keywordScore(q, text) {
@@ -99,9 +140,10 @@ export const handlers = {
   async memClearHistory() {
     await done((await store('history', 'readwrite')).clear());
   },
-  async memHighlightSave({ text, url, title, wantNote }) {
+  async memHighlightSave({ text, url, title, wantNote }, sender) {
     const item = { text, url, title, note: '', embedText: `${title}\n${text}`.slice(0, 1500), time: Date.now() };
     item.id = await done((await store('highlights', 'readwrite')).add(item));
+    snapshotTab(sender?.tab?.id, url);
     if (wantNote) {
       item.note = await ask('In one sentence, say why this passage might matter to the reader later. Reply with the sentence only.', text).catch(() => '');
       (await store('highlights', 'readwrite')).put(item);
@@ -140,6 +182,13 @@ export const handlers = {
     const answer = await ask(`Answer this question using only the saved notes below. Cite them like [1]. If they don't answer it, say so.\nQuestion: ${question}`, notes);
     return { answer, sources };
   },
+  async memChanged({ url, text }) {
+    const snap = await done((await store('snapshots')).get(pageKey(url)));
+    if (!snap) return null;
+    const d = diffLines(snap.text, text);
+    return d && { ...d, since: snap.time };
+  },
+  memSnapshot: ({ url, text }) => saveSnapshot(url, text),
   async memSavings() {
     const { savings = { answers: 0, inTokens: 0, outTokens: 0, bytes: 0 } } = await chrome.storage.local.get('savings');
     return { ...savings, usd: (savings.inTokens * RATE.inPerM + savings.outTokens * RATE.outPerM) / 1e6, rate: RATE };

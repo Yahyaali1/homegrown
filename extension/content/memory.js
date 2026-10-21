@@ -1,5 +1,5 @@
-// Memory in the page: save highlights (shown again on revisit), "You read about this before" chip,
-// and "Turn off on this site". Storage lives in bg/memory.js.
+// Memory in the page: save highlights (shown again on revisit), "You read about this before" and
+// "Changed since your last visit" chips, and "Turn off on this site". Storage lives in bg/memory.js.
 (() => {
   const EG = window.EG;
   if (!EG) return;
@@ -69,6 +69,32 @@
   // "You read about this before": top frame, article-sized pages, once the page has settled.
   if (window !== window.top) return;
   setTimeout(() => requestIdleCallback(checkSeen), 3000);
+  setTimeout(() => requestIdleCallback(checkChanged), 3000);
+
+  // "Changed since your last visit": bg diffs against the snapshot taken when you last ran a task here.
+  // No model call until the chip is clicked.
+  async function checkChanged() {
+    if (!EG.enabled()) return;
+    const { title, url, text } = EG.pageInfo();
+    const diff = await EG.bg('memChanged', { url, text }).catch(() => null);
+    if (!diff) return;
+    const keep = () => EG.bg('memSnapshot', { url, text }).catch(() => {});
+    const chip = Object.assign(document.createElement('div'), { className: 'changed', role: 'status' });
+    const open = Object.assign(document.createElement('button'), { className: 'link', textContent: '✦ Changed since your last visit' });
+    open.onclick = () => {
+      chip.remove();
+      const lines = (sign, list) => list.slice(0, 80).map((l) => `${sign} ${l}`).join('\n');
+      const task = { id: 'last-visit', kind: 'page', title: 'What changed', prompt: `Summarize what changed on this page since the reader's last visit (${new Date(diff.since).toLocaleDateString()}). Lines starting with + were added, - were removed. Be specific and brief.` };
+      EG.run({ task, page: { title, url, text: `${lines('+', diff.added)}\n${lines('-', diff.removed)}` } }, 'What changed since your last visit', EG.topRect());
+      keep();
+    };
+    chip.append(open, Object.assign(document.createElement('button'), { textContent: '✕', ariaLabel: 'Dismiss', onclick: () => (chip.remove(), keep()) }));
+    EG.style(`.changed { position: fixed; right: 18px; bottom: 112px; display: flex; gap: 6px; align-items: center; padding: 6px 10px;
+      border-radius: 10px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+      .changed .link { background: none; color: var(--accent); padding: 0; } .changed button { padding: 0 6px; }`);
+    EG.mount();
+    EG.root.append(chip);
+  }
   async function checkSeen() {
     if (!EG.enabled()) return;
     const { text } = EG.pageInfo();
