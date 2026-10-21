@@ -1,0 +1,15 @@
+# Integration
+
+Done after the group agents report. Owner: the main session.
+
+1. Apply shared-file changes the groups asked for (list them here with the group letter as they arrive).
+2. Launcher UX: many actions now register on `EG.actions.page`. Group them (Read · Write · Translate ·
+   Images · Web · Tabs · Memory) behind one row of category chips so the launcher stays one glance wide.
+   Same for the text toolbar: tasks first, feature actions under "More ▸".
+3. Settings: one place (settings.html) for every toggle; side panel links to it.
+4. Run `npx playwright test` and one combined smoke under `./scripts/gpu.sh`; fix regressions.
+5. Update README.md feature list and docs/plan/README.md status; commit per group.
+
+## Shared-file change requests
+
+(none recorded yet)
