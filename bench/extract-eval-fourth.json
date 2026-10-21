@@ -1,0 +1,162 @@
+{
+ "date": "2026-10-21T14:01:24.851Z",
+ "set": "fourth",
+ "passed": 10,
+ "total": 10,
+ "results": [
+  {
+   "case": "quotes.toscrape humor tag: first author",
+   "pass": true,
+   "secs": "21",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "Jane Austen"
+   },
+   "got": {
+    "quote": "“The person, be it gentleman or lady, who has not pleasure in a good novel, must be intolerably stupid.”",
+    "author": "Jane Austen"
+   }
+  },
+  {
+   "case": "books.toscrape: cheapest mystery book",
+   "pass": true,
+   "secs": "4",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Tastes Like Fear (DI Marnie Rome #3)",
+    "value": 10.69
+   },
+   "got": {
+    "title": "Tastes Like Fear (DI Marnie Rome #3)",
+    "price": 10.69
+   }
+  },
+  {
+   "case": "webscraper.io static: cheapest touch phone",
+   "pass": true,
+   "secs": "4",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Nokia 123",
+    "value": 24.99
+   },
+   "got": {
+    "phone": "Nokia 123",
+    "price": 24.99
+   }
+  },
+  {
+   "case": "scrapethissite: Detroit season with most wins",
+   "pass": true,
+   "secs": "6",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "1995",
+    "value": 62
+   },
+   "got": {
+    "year": 1995,
+    "wins": 62
+   }
+  },
+  {
+   "case": "Wikipedia: elevation of Kilimanjaro (infobox)",
+   "pass": true,
+   "secs": "3",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Kilimanjaro",
+    "value": 5895
+   },
+   "got": {
+    "mountain": "Mount Kilimanjaro",
+    "elevation_m": 5895
+   }
+  },
+  {
+   "case": "Wikipedia: length of the Amazon River (infobox)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Amazon",
+    "range": [
+     6400,
+     7100
+    ]
+   },
+   "got": {
+    "river": "Amazon River",
+    "length_km": 6575
+   }
+  },
+  {
+   "case": "Wikipedia: year Rust first appeared (infobox date)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Rust",
+    "text": "2012"
+   },
+   "got": {
+    "language": "Rust (programming language)",
+    "first_appeared": "January 20, 2012; 14 years ago"
+   }
+  },
+  {
+   "case": "Wikipedia: largest economy by nominal GDP (table)",
+   "pass": true,
+   "secs": "7",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "United States"
+   },
+   "got": {
+    "country": "United States",
+    "gdp": 32642373
+   }
+  },
+  {
+   "case": "Hacker News Show: post with the most points",
+   "pass": true,
+   "secs": "7",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Show HN: SimCity, but with Permits",
+    "value": 856
+   },
+   "got": {
+    "post": "Show HN: SimCity, but with Permits",
+    "points": 856
+   }
+  },
+  {
+   "case": "Wikipedia: total length of the Golden Gate Bridge (infobox)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Golden Gate",
+    "value": [
+     2737,
+     2737.4
+    ]
+   },
+   "got": {
+    "bridge": "Golden Gate Bridge",
+    "total_length_m": 2740
+   }
+  }
+ ]
+}

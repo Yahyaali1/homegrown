@@ -147,8 +147,23 @@ const EMPTY = /^(null|none|n\/?a|unknown|-+|)$/i;
 const NUMERIC = /price|cost|rating|range|score|miles|km|count|size|weight|speed|reviews|elevation|height|population|area|length|depth|wins|losses|points|awards|comments|votes|floors|storeys|stories|rooms|seats|capacity|employees|members|views|downloads|stars|_m$|_kg$|_ft$/;
 // A value that is a number with at most a short unit ("49", "829.8 m", "$1,099", "1.4E7 km²") becomes a number.
 const NUMBERISH = /^[~≈]?\s*[$€£¥₹]?\s*-?\d[\d.,\s]*(?:e[+-]?\d+)?\s*[a-zA-Z%²³°]{0,4}\.?(?:\s*\(.*\))?\s*$/i;
+// A field named with a unit takes the number written with that unit: "8,981 ft (2,737.4 m)" → total_length_m = 2737.4.
+const UNIT = { m: 'm|metres?|meters?', km: 'km|kilometres?|kilometers?', ft: 'ft|feet', mi: 'mi|miles?', kg: 'kg|kilograms?', lb: 'lb|lbs|pounds?', km2: 'km2|km²|sq km', mi2: 'mi2|mi²|sq mi' };
+// Same quantity in another unit converts: "8980 ft, about 1.70 mi (2.74 km)" for total_length_m → 2740.
+const TO_BASE = { m: 1, km: 1000, ft: 0.3048, mi: 1609.344, kg: 1, lb: 0.45359237, km2: 1, mi2: 2.589988 };
+const SAME = { m: ['m', 'km', 'ft', 'mi'], km: ['km', 'm', 'mi', 'ft'], ft: ['ft', 'm', 'mi', 'km'], mi: ['mi', 'km', 'm', 'ft'], kg: ['kg', 'lb'], lb: ['lb', 'kg'], km2: ['km2', 'mi2'], mi2: ['mi2', 'km2'] };
+function byUnit(v, f) {
+  const want = (/_(m|km|ft|mi|kg|lb|km2|mi2)$/.exec(f) || [])[1];
+  if (!want || typeof v !== 'string') return null;
+  for (const have of SAME[want]) {
+    const m = new RegExp(`(-?\\d[\\d,]*(?:\\.\\d+)?)\\s*(?:${UNIT[have]})(?![a-z])`, 'i').exec(v);
+    if (m) return +((num(m[1]) * TO_BASE[have]) / TO_BASE[want]).toPrecision(6);
+  }
+  return null;
+}
 const normalize = (row, fields) => {
   for (const f of fields) {
+    if (typeof row[f] === 'string' && byUnit(row[f], f) != null) row[f] = byUnit(row[f], f);
     if (row[f] == null || EMPTY.test(String(row[f]).trim())) row[f] = null;
     else if (typeof row[f] === 'string' && (NUMERIC.test(f) || NUMBERISH.test(row[f]))) row[f] = num(row[f]) ?? row[f]; // first number, units and notes dropped
   }
@@ -256,7 +271,11 @@ async function extractRows(page, fields, goal, single = false) {
     let best = null;
     if (pick) {
       const row = { _source: page.title, _url: page.url, _via: 'table' };
+      // The first field names the page's subject ("mountain", "language"): it is the page, never a label
+      // ("Mountain type: Stratovolcano", "Implementation language: OCaml").
+      const subjectField = !NUMERIC.test(fields[0]) ? fields[0] : null;
       for (const f of fields) {
+        if (f === subjectField) { row[f] = page.heading || page.title; continue; }
         const k = NAMEY.test(f) ? null : await choose(f, labelsFor(Object.keys(pick.t.pairs), f), pick.t.pairs); // the subject is the page itself
         row[f] = k ? pick.t.pairs[k] : NAMEY.test(f) ? page.heading || page.title : null;
       }
@@ -302,6 +321,14 @@ async function extractRows(page, fields, goal, single = false) {
     const col = fields.map((f) => headerFor(t.headers, f));
     // The first field names the thing ("film", "story"): when no header says so, the Title/Name column or the first.
     if (col[0] < 0) col[0] = Math.max(0, t.headers.findIndex((h) => /^(title|name)\b/i.test(h)));
+    // A numeric field no header names ("gdp" over "IMF (2026)" columns): the first mostly-numeric column.
+    const numericCol = (i) => t.rows.slice(0, 20).filter((r) => r[i] && NUMBERISH.test(r[i].replace(/\[.*?\]/g, ''))).length >= Math.min(10, t.rows.length * 0.6);
+    fields.forEach((f, i) => {
+      if (col[i] < 0 && i > 0 && NUMERIC.test(f) || (col[i] < 0 && i > 0 && fields.length === 2)) {
+        const c = t.headers.findIndex((_, k) => k !== col[0] && !col.includes(k) && numericCol(k));
+        if (c >= 0) col[i] = c;
+      }
+    });
     if (col.filter((c) => c >= 0).length >= Math.min(2, fields.length)) {
       candidates.push(t.rows.map((r) => normalize({ _source: page.title, _url: page.url, _via: 'table', ...Object.fromEntries(fields.map((f, i) => [f, col[i] >= 0 ? r[col[i]] : null])) }, fields)));
     }
@@ -431,6 +458,9 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
         say(runId, { step: i, status: 'done', detail: step.field && step.value !== '' ? `${rows.length} of ${before} kept` : 'off', rows });
       } else if (step.type === 'rank') {
         rows = rows.filter((r) => r[step.by] != null && r[step.by] !== '');
+        // Summary rows ("World", "Total") aren't items: they would always rank first.
+        const nameKey = Object.keys(rows[0] || {}).find((k) => !k.startsWith('_') && typeof rows[0][k] === 'string');
+        rows = rows.filter((r) => !/^(world|total|sum|all|overall|average|grand total|world total)\b/i.test(String(r[nameKey] ?? '').trim()));
         // The same listing often appears on several pages: keep one per name + value.
         const name = Object.keys(rows[0] || {}).find((k) => !k.startsWith('_') && typeof rows[0][k] === 'string');
         const seen = new Set();

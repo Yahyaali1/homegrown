@@ -1,5 +1,5 @@
 {
- "date": "2026-10-21T13:50:09.417Z",
+ "date": "2026-10-21T14:02:39.991Z",
  "set": "heldout",
  "passed": 9,
  "total": 9,
@@ -7,7 +7,7 @@
   {
    "case": "books.toscrape: most expensive travel book (category page)",
    "pass": true,
-   "secs": "12",
+   "secs": "5",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -22,7 +22,7 @@
   {
    "case": "webscraper.io: cheapest touch phone (microdata grid)",
    "pass": true,
-   "secs": "7",
+   "secs": "4",
    "via": "structured",
    "rows": 5,
    "expected": {
@@ -37,7 +37,7 @@
   {
    "case": "Wikipedia: elevation of Mount Everest (infobox)",
    "pass": true,
-   "secs": "6",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -52,7 +52,7 @@
   {
    "case": "quotes.toscrape: author of the first \"love\" quote (tag page)",
    "pass": true,
-   "secs": "46",
+   "secs": "29",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -81,7 +81,7 @@
   {
    "case": "Wikipedia: year Python first appeared (infobox date)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -96,7 +96,7 @@
   {
    "case": "Wikipedia: most populous city (large table)",
    "pass": true,
-   "secs": "8",
+   "secs": "5",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -114,7 +114,7 @@
   {
    "case": "scrapethissite: 2015 film with the most Oscars (loads after a click)",
    "pass": true,
-   "secs": "12",
+   "secs": "7",
    "via": "table",
    "rows": 5,
    "expected": {

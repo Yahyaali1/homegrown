@@ -1,5 +1,5 @@
 {
- "date": "2026-10-21T13:50:01.605Z",
+ "date": "2026-10-21T14:02:03.755Z",
  "set": "fresh",
  "passed": 9,
  "total": 9,
@@ -7,7 +7,7 @@
   {
    "case": "quotes.toscrape page 2: first author",
    "pass": true,
-   "secs": "47",
+   "secs": "30",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -21,7 +21,7 @@
   {
    "case": "books.toscrape: cheapest poetry book",
    "pass": true,
-   "secs": "9",
+   "secs": "5",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -36,7 +36,7 @@
   {
    "case": "webscraper.io: most expensive tablet",
    "pass": true,
-   "secs": "7",
+   "secs": "5",
    "via": "structured",
    "rows": 5,
    "expected": {
@@ -51,7 +51,7 @@
   {
    "case": "scrapethissite: New York team-season with most losses",
    "pass": true,
-   "secs": "6",
+   "secs": "4",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -66,7 +66,7 @@
   {
    "case": "Wikipedia: mean radius of the Moon (infobox)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -100,7 +100,7 @@
   {
    "case": "Wikipedia: year JavaScript first appeared (infobox date)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -130,7 +130,7 @@
   {
    "case": "Wikipedia: largest lake by area (table)",
    "pass": true,
-   "secs": "10",
+   "secs": "7",
    "via": "table",
    "rows": 5,
    "expected": {
