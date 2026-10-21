@@ -48,12 +48,35 @@ export function parseDuckDuckGo(html, n = 8) {
   return out;
 }
 
-// DuckDuckGo first; it answers 202 with a bot challenge when rate limited, so fall back to
-// Wikipedia's keyless search API (narrower, but always available).
+// Bing's HTML results: <li class="b_algo"><h2><a href>title</a></h2> … <p>snippet</p>. Its links go
+// through bing.com/ck/a?…&u=a1<base64url of the real URL>.
+export function parseBing(html, n = 8) {
+  const out = [];
+  const strip = (s) => decode(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+  for (const m of html.matchAll(/<li class="b_algo"[\s\S]*?(?=<li class="b_algo"|<\/ol>)/g)) {
+    const a = /<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(m[0]);
+    if (!a) continue;
+    let url = decode(a[1]);
+    const u = /[?&]u=a1([^&]+)/.exec(url);
+    if (u) url = atob(u[1].replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(u[1].length / 4) * 4, '='));
+    if (!/^https?:/.test(url)) continue;
+    out.push({ title: strip(a[2]), url, snippet: strip(/<p\b[^>]*>([\s\S]*?)<\/p>/.exec(m[0])?.[1] || '') });
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+// DuckDuckGo first; it answers 202 with a bot challenge when rate limited, so fall back to Bing's
+// HTML results, then Wikipedia's keyless search API (narrower, but always available).
 async function search({ q, n = 8 }) {
   const ddg = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, { credentials: 'omit' }).catch(() => null);
-  const results = ddg?.ok ? parseDuckDuckGo(await ddg.text(), n) : [];
+  let results = ddg?.ok ? parseDuckDuckGo(await ddg.text(), n) : [];
   if (results.length) return results;
+  const bing = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=en`, { credentials: 'omit' }).catch(() => null);
+  // Bing sometimes answers bot-like clients with unrelated results: keep only ones that share a query word.
+  const words = q.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+  results = (bing?.ok ? parseBing(await bing.text(), n) : []).filter((r) => words.some((w) => `${r.title} ${r.snippet}`.toLowerCase().includes(w)));
+  if (results.length >= 2) return results;
   // Wikipedia ANDs every word, so a whole sentence finds nothing: retry with its longer words.
   const keywords = q.split(/\W+/).filter((w) => w.length > 3).slice(0, 7).join(' ');
   let hits = [];
@@ -62,12 +85,39 @@ async function search({ q, n = 8 }) {
     hits = wiki.ok ? (await wiki.json()).query?.search || [] : [];
     if (hits.length) break;
   }
-  if (!hits.length) throw new Error('Web search is unavailable right now (DuckDuckGo is rate limiting and Wikipedia found nothing).');
+  if (!hits.length) throw new Error('Web search is unavailable right now (DuckDuckGo and Bing returned no results and Wikipedia found nothing).');
   return hits.map((h) => ({
     title: h.title,
     url: `https://en.wikipedia.org/wiki/${encodeURIComponent(h.title.replace(/ /g, '_'))}`,
     snippet: decode(h.snippet.replace(/<[^>]+>/g, '')),
   }));
+}
+
+// Turns YouTube captions on or off through the player's own API (page world), so the player requests
+// them and content/youtube-main.js can note the URL. Returns whether they were on before.
+async function ytCaptions({ on }, sender) {
+  const [r] = await chrome.scripting.executeScript({
+    target: { tabId: sender.tab.id },
+    world: 'MAIN',
+    args: [on],
+    func: (on) => {
+      const p = document.getElementById('movie_player');
+      const was = !!p?.isSubtitlesOn?.();
+      if (on && !was) p?.toggleSubtitlesOn?.();
+      if (!on && was) p?.toggleSubtitlesOff?.();
+      return was;
+    },
+  });
+  return r?.result ?? false;
+}
+
+// The page-world caption recorder for YouTube (no manifest entry needed: registered at runtime).
+export async function init() {
+  const id = 'eg-youtube-main';
+  if ((await chrome.scripting.getRegisteredContentScripts({ ids: [id] })).length) return;
+  await chrome.scripting.registerContentScripts([
+    { id, matches: ['*://*.youtube.com/*'], js: ['content/youtube-main.js'], world: 'MAIN', runAt: 'document_start', allFrames: false },
+  ]);
 }
 
 const numbered = (items) => items.map((s, i) => `[${i + 1}] ${s.title} (${s.url})\n${s.notes || s.snippet || ''}`).join('\n\n');
@@ -133,4 +183,4 @@ async function related(msg) {
   return { why, sources: results.map(({ title, url }) => ({ title, url })) };
 }
 
-export const handlers = { fetchText, search, research, checkClaim, related };
+export const handlers = { fetchText, search, research, checkClaim, related, ytCaptions };

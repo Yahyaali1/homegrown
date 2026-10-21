@@ -1,4 +1,4 @@
-// Document reader: shows a PDF, DOCX, text, Markdown, CSV, JSON or HTML file as plain readable text,
+// Document reader: shows a PDF, ePub, DOCX, text, Markdown, CSV, JSON or HTML file as plain readable text,
 // so the content scripts (loaded by reader.html) can select, summarize, translate and ask about it.
 // Chrome's own PDF viewer blocks extensions, which is why PDFs open here.
 import * as pdfjs from './vendor/reading/pdf.min.mjs';
@@ -25,9 +25,59 @@ async function pdfToNodes(data) {
   return pages;
 }
 
+// Zip entries by name, each a function returning its bytes. Reads the central directory; handles stored
+// and deflated entries (all an ePub uses) with the built-in DecompressionStream.
+function unzip(buf) {
+  const v = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  let end = buf.byteLength - 22;
+  while (end >= 0 && v.getUint32(end, true) !== 0x06054b50) end--;
+  if (end < 0) throw new Error('Not a zip file');
+  const files = {};
+  for (let i = 0, p = v.getUint32(end + 16, true); i < v.getUint16(end + 10, true); i++) {
+    const method = v.getUint16(p + 10, true);
+    const size = v.getUint32(p + 20, true);
+    const nameLen = v.getUint16(p + 28, true);
+    const off = v.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nameLen));
+    const start = off + 30 + v.getUint16(off + 26, true) + v.getUint16(off + 28, true);
+    const data = u8.subarray(start, start + size);
+    files[name] = async () =>
+      method === 0 ? data : new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    p += 46 + nameLen + v.getUint16(p + 30, true) + v.getUint16(p + 32, true);
+  }
+  return files;
+}
+
+// ePub: container.xml → OPF → spine order → each chapter's headings and paragraphs.
+async function epubToNodes(buf) {
+  const files = unzip(buf);
+  const read = async (path) => new TextDecoder().decode(await files[path]());
+  const xml = (s) => new DOMParser().parseFromString(s, 'application/xml');
+  const opfPath = xml(await read('META-INF/container.xml')).querySelector('rootfile').getAttribute('full-path');
+  const opf = xml(await read(opfPath));
+  const dir = opfPath.replace(/[^/]*$/, '');
+  const href = Object.fromEntries([...opf.querySelectorAll('manifest > item')].map((i) => [i.getAttribute('id'), i.getAttribute('href')]));
+  const out = [];
+  const title = opf.getElementsByTagName('dc:title')[0]?.textContent;
+  if (title) out.push(el('p', { className: 'hint', textContent: title }));
+  for (const ref of opf.querySelectorAll('spine > itemref')) {
+    const path = decodeURIComponent(dir + (href[ref.getAttribute('idref')] || '').split('#')[0]);
+    if (!files[path]) continue;
+    const body = new DOMParser().parseFromString(await read(path), 'text/html').body;
+    const blocks = [...body.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li,blockquote,pre')]
+      .map((b) => el(/^H\d$/.test(b.tagName) ? 'h2' : 'p', { textContent: b.textContent.replace(/\s+/g, ' ').trim() }))
+      .filter((b) => b.textContent);
+    if (blocks.length) out.push(el('section', { className: 'page' }, blocks));
+  }
+  if (out.length < 2) throw new Error('No readable chapters in this ePub.');
+  return out;
+}
+
 async function toNodes(name, type, buf) {
   const ext = (name.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
   if (ext === 'pdf' || type.includes('pdf')) return pdfToNodes(buf);
+  if (ext === 'epub' || type.includes('epub')) return epubToNodes(buf);
   if (ext === 'docx') {
     const { value } = await window.mammoth.convertToHtml({ arrayBuffer: buf });
     return [...new DOMParser().parseFromString(value, 'text/html').body.childNodes]; // mammoth emits plain markup; extension CSP blocks scripts anyway

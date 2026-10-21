@@ -24,4 +24,12 @@ team plans are out by decision: local models only.)
   with Stop. Offscreen reasons now include USER_MEDIA. Verified with audio fed from a file (French
   captions ~20 s after start incl. Whisper load); real tab capture needs a real click, not testable headless.
   Quality caveat: Gemma mistranslated "Honeybees" once.
-- ePub, search fallback, YouTube transcripts (H1): in progress.
+- ePub — DONE (agent H1): zip read with `DecompressionStream`, OPF spine order; `tests/fixtures/reading/bees.epub`
+  rendered both chapters in order and Summarize worked.
+- Search fallback — DONE with a caveat: DuckDuckGo → Bing (`li.b_algo`) → Wikipedia. Bing returned unrelated
+  results from this machine, so Bing results are kept only when they share words with the query, else Wikipedia.
+- Live YouTube transcripts — NOT VERIFIED (time-boxed): headless YouTube serves empty captions even to its own
+  player. Built for normal Chrome: `content/youtube-main.js` (page world, registered at runtime by bg/web.js)
+  records the caption file the player downloads (its URL carries a one-time token); a `ytCaptions` handler turns
+  captions on via the player API; fallback to the transcript panel, then a clear "YouTube didn't share this
+  video's transcript" message. Next step: check in a real Chrome profile on a captioned video.

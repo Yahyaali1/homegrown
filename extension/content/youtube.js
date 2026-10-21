@@ -42,18 +42,59 @@
     if (!tracks.length) throw new Error("This video has no captions, so Edge Gallery can't read it.");
     const pref = navigator.language.split('-')[0];
     const track = tracks.find((t) => t.languageCode === pref) || tracks.find((t) => t.languageCode === 'en') || tracks[0];
-    const body = await (await fetch(`${track.baseUrl}&fmt=json3`, { credentials: 'include' })).text();
-    let list = body
+    let list = await json3(`${track.baseUrl}&fmt=json3`);
+    // YouTube now often serves empty caption files without the player's token: use the URL the player
+    // itself requests (it carries the token), then fall back to the transcript panel.
+    if (!list.length) list = await fromPlayer(v);
+    if (!list.length) list = await fromTranscriptPanel();
+    if (!list.length) throw new Error("YouTube didn't share this video's transcript. Try again after the video starts playing.");
+    cache = { v, cues: list };
+    return list;
+  }
+
+  async function json3(url) {
+    if (!url) return [];
+    const body = await (await fetch(url, { credentials: 'include' })).text();
+    return body
       ? (JSON.parse(body).events || [])
           .filter((e) => e.segs)
           .map((e) => ({ start: e.tStartMs, dur: e.dDurationMs || 2000, text: e.segs.map((s) => s.utf8).join('').replace(/\s+/g, ' ').trim() }))
           .filter((c) => c.text)
       : [];
-    // YouTube now often serves empty caption files without the player's token: read its transcript panel instead.
-    if (!list.length) list = await fromTranscriptPanel();
-    if (!list.length) throw new Error("YouTube didn't share this video's transcript. Try again after the video starts playing.");
-    cache = { v, cues: list };
-    return list;
+  }
+
+  // Cues from the caption file the player itself downloaded (content/youtube-main.js keeps a copy; the
+  // player's URL carries a one-time token). Captions are switched on for a moment if they haven't loaded.
+  async function fromPlayer(v) {
+    const d = document.documentElement.dataset;
+    const noted = () => d.egCaptionsBody && new URL(d.egCaptions).searchParams.get('v') === v;
+    if (!noted()) {
+      const was = await EG.bg('ytCaptions', { on: true }).catch(() => true);
+      for (let i = 0; i < 32 && !noted(); i++) await new Promise((r) => setTimeout(r, 250));
+      if (!was) EG.bg('ytCaptions', { on: false }).catch(() => {});
+    }
+    return noted() ? parseCaptions(d.egCaptionsBody) : [];
+  }
+
+  // json3 ({events:[{tStartMs, dDurationMs, segs}]}) or the XML formats (<text start dur> / <p t d>).
+  function parseCaptions(body) {
+    if (body.trimStart().startsWith('{')) {
+      return (JSON.parse(body).events || [])
+        .filter((e) => e.segs)
+        .map((e) => ({ start: e.tStartMs, dur: e.dDurationMs || 2000, text: e.segs.map((s) => s.utf8).join('').replace(/\s+/g, ' ').trim() }))
+        .filter((c) => c.text);
+    }
+    const doc = new DOMParser().parseFromString(body, 'text/xml');
+    return [...doc.querySelectorAll('text, p')]
+      .map((n) => {
+        const sec = n.hasAttribute('start');
+        return {
+          start: sec ? +n.getAttribute('start') * 1000 : +n.getAttribute('t'),
+          dur: sec ? +(n.getAttribute('dur') || 2) * 1000 : +(n.getAttribute('d') || 2000),
+          text: n.textContent.replace(/\s+/g, ' ').trim(),
+        };
+      })
+      .filter((c) => c.text);
   }
 
   // Opens YouTube's own "Show transcript" panel and reads its segments.
