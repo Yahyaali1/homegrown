@@ -59,7 +59,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 |---|---|---|
 | Replace / Insert into text boxes | Under any answer that came from a text box | ✅ |
 | Proofread, templates (10) | Toolbar More ▸ and launcher Write ▸ | ✅ |
-| Rewrite as ▸ (8 modes) | Standard, Fluent, Formal, Casual, Shorter, Longer, Simple, Creative | ◐ same path as Proofread |
+| Rewrite as ▸ (8 modes) | Standard, Fluent, Formal, Casual, Shorter, Longer, Simple, Creative | ✅ |
 | Your voice | Inserted answers become local style samples for later drafts | ✅ |
 | Ghost text | Grey completions while you type, Tab accepts (opt-in) | ✅ |
 | Reply drafts | ✦ Reply on Gmail, Outlook, LinkedIn, X, Slack, WhatsApp, Discord and other compose boxes | ✅ |
@@ -81,7 +81,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 |---|---|---|
 | Describe, extract text, ask about an image | Florence-2 reads the pixels on-device, Gemma answers | ✅ |
 | Ask about an area | Drag a box over the page | ✅ |
-| Create image | Janus-Pro-1B on-device (~2.4 GB, ~12 s per image), with Download and Copy | ✅ generation · ○ Download/Copy |
+| Create image | Janus-Pro-1B on-device (~2.4 GB, ~12 s per image), with Download and Copy | ✅ |
 | Illustrate this | Gemma writes the prompt from your selection, Janus draws it | ✅ |
 | Drop an image file | On the launcher or card to ask about it | ✅ |
 | Alt text for the web | Writes alt text for images that have none (opt-in) | ✅ |
@@ -110,7 +110,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 |---|---|---|
 | History, highlights, Ask your library | Library page; highlights re-marked on revisit | ✅ |
 | Flashcard review | Spaced repetition from cards made in Read ▸ | ✅ |
-| Voice | "Speak…" (Whisper) to ask about the page; Read aloud on every answer | ◐ speech model and Read aloud checked; live microphone not yet |
+| Voice | "Speak…" (Whisper) to ask about the page; Read aloud on every answer | ✅ (microphone checked with Chrome's fake audio input) |
 | Tasks | Your own tasks with `{variables}`, reorder, export/import; they appear in the toolbar, palette and menus | ✅ |
 | Savings meter | Answers run, tokens, estimated cloud cost avoided, data kept off servers | ✅ |
 | Per-site off switch, feature toggles | Settings, or "Turn off on this site" in the launcher | ✅ |
