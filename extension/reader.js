@@ -76,7 +76,10 @@ async function epubToNodes(buf) {
 
 async function toNodes(name, type, buf) {
   const ext = (name.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
-  if (ext === 'pdf' || type.includes('pdf')) return pdfToNodes(buf);
+  // The file's own first bytes beat the URL: arXiv-style links (/pdf/2508.04412) have no .pdf extension.
+  const head = new TextDecoder().decode(new Uint8Array(buf.slice(0, 64)));
+  if (head.startsWith('%PDF') || ext === 'pdf' || type.includes('pdf')) return pdfToNodes(buf);
+  if (head.startsWith('PK') && head.includes('mimetypeapplication/epub')) return epubToNodes(buf);
   if (ext === 'epub' || type.includes('epub')) return epubToNodes(buf);
   if (ext === 'docx') {
     const { value } = await window.mammoth.convertToHtml({ arrayBuffer: buf });
@@ -113,7 +116,11 @@ addEventListener('drop', (e) => {
 const url = new URLSearchParams(location.search).get('url');
 if (url) {
   show(decodeURIComponent(url.split(/[?#]/)[0].split('/').pop()) || url, '', async () => {
-    const res = await fetch(url); // host_permissions let the extension read any http(s) URL
+    const res = await fetch(url).catch((e) => {
+      // Local files need Chrome's per-extension "Allow access to file URLs" switch.
+      if (url.startsWith('file:')) throw new Error('To open local files, turn on "Allow access to file URLs" for Homegrown in chrome://extensions (Details), or drop the file here.');
+      throw e;
+    }); // host_permissions let the extension read any http(s) URL
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.arrayBuffer();
   });

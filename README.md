@@ -32,7 +32,8 @@ Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chro
 | **✦ launcher** (bottom-right, Alt+Shift+A) | Page tasks, **Mission…**, page-specific actions, then Write ▸ Read ▸ Translate ▸ Images ▸ Web ▸ Tabs ▸ |
 | **Command palette** (Alt+K) | One search box for every task, action and saved mission; type a question or a goal |
 | **Address bar** | `eg` + space + a goal starts a mission |
-| **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDFs |
+| **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDF links and pages |
+| **PDFs** | Chrome's PDF viewer keeps the text away from extensions, so on a PDF tab the launcher offers **Read this PDF with Homegrown**, which reopens it in the reader in the same tab — where selection, tasks, translation and missions all work |
 | **Shortcuts** | Alt+Shift+A launcher · Alt+Shift+S summarize page · Alt+Shift+L live captions · Alt+K palette |
 | **Side panel / Settings / Library** | Models, tasks, toggles; history, highlights, flashcards, Ask your library |
 
@@ -48,7 +49,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 |---|---|---|
 | Summarize / explain / ask about a selection or page | Toolbar, launcher, palette; answer streams into a card with follow-ups | ✅ |
 | Long-page Q&A | Pages over ~9k characters are chunked and searched (MiniLM embeddings) so the answer covers the whole page | ✅ |
-| Document reader | PDF, ePub, DOCX, TXT, MD, CSV, JSON, HTML — every toolbar and page feature works inside it | ✅ PDF, ePub, DOCX · ○ others |
+| Document reader | PDF, ePub, DOCX, TXT, MD, CSV, JSON, HTML — every toolbar and page feature works inside it; PDFs are detected by their content, so links without `.pdf` (arXiv) work | ✅ PDF (incl. from a PDF tab and arXiv-style links), ePub, DOCX · ○ others |
 | YouTube | Summary with clickable timestamps, chat with the video, translated subtitles | ◐ on a test page; live YouTube captions unverified |
 | Mind map, podcast, quiz, flashcards | Launcher → Read ▸; podcast is two voices via the browser's speech synthesis | ✅ |
 | Gist margins | One-line summary beside each section as you scroll (opt-in) | ✅ |
@@ -161,14 +162,23 @@ ghost text on every pause, missions that read many pages, and everything offline
 The full feature catalogue, priorities and the 12 creative ideas are in the planning doc
 [Edge Gallery: paid-extension feature map and local-first plan](https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 
+## Many things at once
+
+The GPU runs one generation at a time, so requests queue — in two lanes. What you just asked for (a card,
+the palette, a rewrite) always goes before background work (missions, margin gists, page translation,
+search-page answers, monitors), so a question never waits behind a whole mission, only behind the one call
+already running. Measured: 4 parallel requests all answered correctly with no mix-ups; a question asked
+while 6 long background jobs were queued was answered after 1 of them (3.4 s) instead of all 6 (~22 s).
+
 ## Privacy and safety
 
 - Nothing you read, type or ask leaves the device; only model downloads and the pages you choose to open
   (missions, research, link previews) use the network.
 - Missions and research use **read-only tools**: they open and read pages in a collapsed background tab
   group and close them. They never click buy buttons, submit forms or log in.
-- Page text is passed to the model as data, with an instruction to ignore instructions inside it
-  (prompt-injection mitigation). The form helper never fills password or payment fields.
+- Page text is passed to the model as data; sentences that try to give the model instructions are removed
+  first, extraction runs at temperature 0, and every value the model reads off a page must appear on that
+  page or it's dropped (checked against a planted "ignore previous instructions" test page). The form helper never fills password or payment fields.
 
 ## How it's built
 
@@ -194,6 +204,8 @@ developer or agent: [`docs/plan/`](docs/plan/README.md).
   Florence-2 first. Florence's OCR can merge lines ("LIBRARYOPEN 9 AM").
 - **Live YouTube captions** depend on YouTube serving the player's caption file; unverified in headless tests.
 - **Search** falls back from DuckDuckGo to Bing to Wikipedia when engines block or return junk.
+- **Local `file://` PDFs** need Chrome's "Allow access to file URLs" switch for Homegrown (or drop the file on the reader).
+- **Scanned PDFs** have no text layer; use ✦ on their images.
 - **First answer in a new profile** takes ~18 s while the GPU warms up; later ones start in ~0.2 s.
 - **Selections are cut by a character estimate** (LiteRT-LM web has no tokenizer API).
 - Google Docs draws text on a canvas, so there's no selection to act on there.

@@ -3,7 +3,13 @@
 const open = (url) => chrome.tabs.create({ url: chrome.runtime.getURL(`reader.html?url=${encodeURIComponent(url)}`) });
 
 export const handlers = {
-  openReader: async ({ url }) => (await open(url), true),
+  // replace: open the reader in the asking tab (e.g. a PDF tab), so the PDF stays where the user was.
+  openReader: async ({ url, replace }, sender) => {
+    const reader = chrome.runtime.getURL(`reader.html?url=${encodeURIComponent(url)}`);
+    if (replace && sender?.tab) await chrome.tabs.update(sender.tab.id, { url: reader });
+    else await open(url);
+    return true;
+  },
 };
 
 const ITEMS = [

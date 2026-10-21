@@ -31,6 +31,7 @@
     background: var(--bg); color: var(--accent); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18); opacity: .85; }
   .fab:hover { opacity: 1; }
   .bar .wide { flex-basis: 100%; }
+  .bar .note { color: var(--muted); font-size: 12px; font-weight: 400; padding: 2px 6px 4px; max-width: 360px; white-space: normal; }
   .card { width: 400px; max-width: calc(100vw - 16px); border-radius: 12px; display: flex; flex-direction: column; max-height: 60vh; }
   .card header { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--line); cursor: move; }
   .card header .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -170,8 +171,19 @@
   }
 
   // ---- launcher: ask about the page or run a page task without a selection ----
+  // Chrome's PDF viewer draws the PDF where extensions can't read or select it, so on a PDF tab the
+  // launcher leads to the Homegrown reader (same tab), where every tool works on the text.
+  const isPdf = document.contentType === 'application/pdf';
+  const openPdf = () => bg('openReader', { url: location.href, replace: true });
   function showLauncher() {
     mount();
+    if (isPdf) {
+      const go = Object.assign(document.createElement('button'), { className: 'primary', textContent: 'Read this PDF with Homegrown', onclick: openPdf });
+      const why = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦' });
+      const note = Object.assign(document.createElement('span'), { className: 'note wide', textContent: "Chrome's PDF viewer keeps the text away from extensions. The reader shows it with selection, tasks, translation and missions." });
+      bar.replaceChildren(why, go, note);
+      return place(bar, fab.hidden ? { top: 60, bottom: 60, left: innerWidth - 440, right: innerWidth } : fab.getBoundingClientRect());
+    }
     const rect = fab.hidden ? { top: 60, bottom: 60, left: innerWidth - 440, right: innerWidth } : fab.getBoundingClientRect();
     const chips = tasks.filter((t) => t.kind === 'page').map((t) => {
       const b = document.createElement('button');
@@ -203,6 +215,8 @@
     input.focus();
   }
   fab.onclick = () => (bar.hidden ? showLauncher() : (bar.hidden = true));
+  // On a PDF tab, offer the reader once without waiting for a click.
+  if (isPdf && window === top) setTimeout(() => enabled && bar.hidden && showLauncher(), 1500);
 
   // Cards opened from the launcher sit at the top-right, so they never cover the ✦ button.
   const topRect = () => ({ top: 60, bottom: 60, left: innerWidth - 420, right: innerWidth });
