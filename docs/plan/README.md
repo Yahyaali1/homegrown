@@ -18,7 +18,8 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | E Search, research, links | [E-web.md](E-web.md) | Done, smoke-checked (see Status) |
 | F Tabs, automation, tasks, side panel | [F-tabs.md](F-tabs.md) | Done, smoke-checked (see Status) |
 | G Memory, platform, voice | [G-memory.md](G-memory.md) | Done, smoke-checked (see Status) |
-| Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Not started |
+| H Remaining gaps (ePub, search fallback, last-visit diff, live audio translation, YouTube) | [H-gaps.md](H-gaps.md) | In progress |
+| Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Done: launcher grouped, shared fixes applied, suite 10/10 |
 
 Update the State column and each plan's "Status" section as work lands.
 
