@@ -55,8 +55,9 @@ export function enforceSubject(rows, brief) {
   const words = brief?.subjectWords?.length ? brief.subjectWords : forms(brief?.subject);
   if (!words.length) return { rows, dropped };
   const isThing = rows.filter((r) => words.some((w) => word(w).test(textOf(r))));
-  // None mention it (a page that lists models without naming the category): keep them all rather than nothing.
-  let kept = isThing.length ? isThing : rows;
+  // None mention it: keep them only if they carry the must-haves (a list of model numbers that never says
+  // "monitor"); otherwise they're about something else entirely (flight deals on a headphones mission).
+  let kept = isThing.length ? isThing : brief.must?.length ? rows : [];
   dropped.subject = rows.length - kept.length;
   if (brief.avoid?.length) {
     const before = kept.length;

@@ -33,4 +33,7 @@ eq(productKey({ product: 'Dell 27 Plus 4K USB-C Monitor S2725QC' }), 'model:s272
 eq(productKey({ product: 'Sony WH-1000XM5 Wireless Headphones' }), 'model:wh1000xm5', 'hyphenated model');
 eq(productKey({ product: 'Anything', _gtin: '0884116472357' }), 'id:0884116472357', 'GTIN wins');
 ok(describe(brief).startsWith('a monitor · must have 27, 4k, usb-c'), 'describe');
+const flights = [{ product: 'Book flights to Chicago', price: 125 }, { product: 'Cheap flights to Italy', price: 237 }];
+eq(enforceSubject(flights, { subject: 'headphones', subjectWords: ['headphones'], must: [] }).rows, [], 'unrelated rows dropped, not kept as a fallback');
+eq(enforceSubject([{ product: 'Dell S2725QC', price: 279 }], { subject: 'monitor', subjectWords: ['monitor'], must: ['s2725qc'] }).rows.length, 1, 'model-number rows kept when they carry the must-haves');
 console.log('brief ok: cleaning, subject + accessory + avoid filter, product keys');

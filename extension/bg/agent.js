@@ -110,6 +110,9 @@ function briefProblems(form) {
     }
   }
   for (const w of form.prefer || []) {
+    if (/^(cheapest|lowest|highest|best|top|most|least|biggest|largest|smallest|lightest|fastest|longest)\b/i.test(String(w).trim())) {
+      p.push(`"prefer" contains "${w}", which says how to order the results: express it as "rank" (e.g. cheapest → {"by": "price", "order": "asc"}) and remove it from "prefer"`);
+    }
     if (/^(not|no|non|without|never|avoid|exclude|except)\b/i.test(String(w).trim())) {
       p.push(`"prefer" contains "${w}", which is an exclusion: put the excluded thing in "avoid" (e.g. "not refurbished" → "refurbished") and remove it from "prefer"`);
     }
@@ -117,6 +120,19 @@ function briefProblems(form) {
   if (form.rank?.by && /price|cost/.test(form.rank.by) && !(form.fields || []).some((f) => /price|cost/.test(f))) p.push('"rank" uses price but "fields" has no price column');
   if (!form.subject) p.push('"subject" is empty: name the kind of thing the user wants');
   return p;
+}
+
+// Grounding: must-haves and exclusions have to appear in the goal, so the model can't add requirements the user
+// never stated. Checks Gemma's claims against the user's words; it doesn't read the words itself. (Grounding the
+// budget with a quoted span was tried: the extra field shifted Gemma's other answers, 22/25 → 20/25.)
+function ground(goal, form) {
+  const g = goal.toLowerCase().replace(/[‐-―]/g, '-');
+  const inGoal = (t) => !!t && g.includes(String(t).toLowerCase().trim());
+  form.must = (form.must || []).filter((m) => inGoal(m) || inGoal(String(m).replace(/-/g, ' ')) || inGoal(String(m).replace(/ /g, '-')));
+  form.avoid = (form.avoid || []).filter((a) => inGoal(a) || inGoal(String(a).replace(/s$/, '')));
+  // A wish counts if its words are the user's ("at least 256GB" from "…with at least 256GB storage"), not invented ("quiet").
+  form.prefer = (form.prefer || []).filter((w) => String(w).toLowerCase().split(/\s+/).filter((x) => x.length > 2).every((x) => g.includes(x)));
+  return form;
 }
 
 // Verification (chain-of-verification): a short, narrow question about each numbered must-have, the part the
@@ -145,7 +161,7 @@ async function agentPlan({ goal, context }) {
     if (fixed?.query && Array.isArray(fixed.fields)) form = fixed;
   }
   const ok = !!(form?.query && Array.isArray(form.fields));
-  if (ok) form = await verifyBrief(goal, form);
+  if (ok) form = await verifyBrief(goal, ground(goal, form));
   const brief = ok ? normalizeBrief(form) : null;
   return { goal, brief, steps: buildSteps(ok ? form : templateForm(goal), brief), planner: ok ? 'gemma' : 'template' };
 }
@@ -168,7 +184,7 @@ async function readInTab(url, run, terms = []) {
   const tab = await chrome.tabs.create({ url, active: false });
   try {
     run.group = await chrome.tabs.group({ tabIds: tab.id, ...(run.group && { groupId: run.group }) }).catch(() => run.group);
-    if (run.group) chrome.tabGroups.update(run.group, { title: '✦ Mission', collapsed: true }).catch(() => {});
+    if (run.group) chrome.tabGroups.update(run.group, { title: '❀ Mission', collapsed: true }).catch(() => {});
     await waitLoaded(tab.id, 20000);
     await sleep(1200); // late-rendered prices
     // lib/pageread.js builds the page model (structured data, markdown, tables, item lists, text).
@@ -197,14 +213,22 @@ function scrapeResults() {
   return [
     ...pick('li.b_algo', 'h2', 'h2 a', '.b_caption p, p'),
     ...pick('article[data-testid=result]', 'h2', 'a[data-testid=result-title-a]', '[data-result=snippet]'),
+    ...pick('#results .snippet[data-type=web]', '.title', 'a', '.snippet-description, .generic-snippet'),
   ].filter((r) => r.title && /^https?:/.test(r.url));
 }
-async function searchInTab(q, n, run) {
-  const tab = await chrome.tabs.create({ url: `https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=en`, active: false });
+// Engines in order; the next is tried when one returns too few results about the subject (or is blocked).
+const ENGINES = [
+  (q) => `https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=en`,
+  (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}&kl=us-en`,
+  (q) => `https://search.brave.com/search?q=${encodeURIComponent(q)}`,
+];
+async function searchInTab(q, n, run, engine = 0) {
+  const tab = await chrome.tabs.create({ url: ENGINES[engine](q), active: false });
   try {
     run.group = await chrome.tabs.group({ tabIds: tab.id, ...(run.group && { groupId: run.group }) }).catch(() => run.group);
-    if (run.group) chrome.tabGroups.update(run.group, { title: '✦ Mission', collapsed: true }).catch(() => {});
+    if (run.group) chrome.tabGroups.update(run.group, { title: '❀ Mission', collapsed: true }).catch(() => {});
     await waitLoaded(tab.id, 15000);
+    if (engine) await sleep(2000); // DuckDuckGo and Brave draw their results with JavaScript
     const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: scrapeResults });
     return result.slice(0, n);
   } finally {
@@ -649,6 +673,24 @@ export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.
         const fresh = ctx ? results.filter((r) => !ctx.seen.has(r.url)) : results; // later rounds read new pages only
         say(runId, { step: i, status: 'done', detail: `${fresh.length} ${ctx && fresh.length < results.length ? 'new ' : ''}results`, log: fresh.map((r) => `found ${r.title}`) });
         results = fresh;
+        // Results that name neither the thing nor a must-have aren't worth opening (a "cheapest headphones" search
+        // that comes back with flight sites). Too few left: ask the other search engine too. None: this round fails
+        // and the loop searches again with a query built from the brief.
+        if (brief?.subjectWords?.length && !urls.length) {
+          const words = [...brief.subjectWords, ...(brief.must || [])];
+          const about = (list) => list.filter((r) => words.some((w) => `${r.title} ${r.snippet || ''}`.toLowerCase().includes(w)) && !ctx?.seen.has(r.url));
+          let relevant = about(results);
+          for (let e = 1; e < ENGINES.length && relevant.length < 2 && !run.cancelled; e++) {
+            const more = about(await searchInTab(step.query, step.n || 8, run, e).catch(() => []));
+            relevant = [...relevant, ...more.filter((r) => !relevant.some((x) => x.url === r.url))];
+          }
+          if (relevant.length < 2) {
+            const more = about(await web.search({ q: step.query, n: step.n || 8 }).catch(() => []));
+            relevant = [...relevant, ...more.filter((r) => !relevant.some((x) => x.url === r.url))];
+          }
+          if (relevant.length < results.length) say(runId, { step: i, status: 'done', detail: `${relevant.length} results about ${brief.subject}`, log: [`skipped ${results.length - relevant.length} off-topic results`] });
+          results = relevant;
+        }
       } else if (step.type === 'open') {
         const todo = results.slice(0, step.limit || 6);
         pages = [];
@@ -697,7 +739,7 @@ export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.
         pool = rows; // everything found, before ranking trims it — carried into the next round
         // Rows that have the ranking field are ranked; the rest follow rather than vanish (shops often show no rating).
         const has = (r) => r[step.by] != null && r[step.by] !== '';
-        const unranked = rows.filter((r) => !has(r));
+        let unranked = rows.filter((r) => !has(r));
         rows = rows.filter(has);
         // Summary rows ("World", "Total") aren't items: they would always rank first.
         const nameKey = Object.keys(rows[0] || {}).find((k) => !k.startsWith('_') && typeof rows[0][k] === 'string');
@@ -711,14 +753,16 @@ export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.
         });
         // Prices in different currencies can't be ranked together: keep the most common currency.
         let aside = 0;
-        if (/price|cost/.test(step.by)) {
+        if (/price|cost/.test(step.by) || rows.concat(unranked).some((r) => r._currency)) {
           const count = {};
-          for (const r of rows) if (r._currency) count[r._currency] = (count[r._currency] || 0) + 1;
+          for (const r of rows.concat(unranked)) if (r._currency) count[r._currency] = (count[r._currency] || 0) + 1;
           const main = Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0];
           if (main && Object.keys(count).length > 1) {
-            const before = rows.length;
-            rows = rows.filter((r) => !r._currency || r._currency === main);
-            aside = before - rows.length;
+            const before = rows.length + unranked.length;
+            const same = (r) => !r._currency || r._currency === main;
+            rows = rows.filter(same);
+            unranked = unranked.filter(same);
+            aside = before - rows.length - unranked.length;
           }
         }
         // A price a tenth of the median is a misread cell (a rating, a count), not a bargain.
@@ -817,7 +861,10 @@ function revise(wf, verdict) {
   if (wf.fixedUrls) return null; // the user's own pages (open tabs): no web search to widen into
   delete search.urls;
   // Feedback query first; otherwise widen: shopping words, the goal itself, reviews.
-  const query = [verdict.query, `${base} buy price`, wf.goal, `${base} review comparison`].find((q) => q && !tried.includes(q));
+  // The brief's own words make the most reliable query: must-haves, the thing, and "price" when shopping.
+  const b = wf.brief;
+  const fromBrief = b?.subject && [...(b.must || []), b.subject, b.shopping || b.rank?.by === 'price' ? 'price' : ''].filter(Boolean).join(' ');
+  const query = [fromBrief, verdict.query, `${base} buy price`, wf.goal, `${base} review comparison`].find((q) => q && !tried.includes(q));
   if (!query) return null;
   Object.assign(search, { query, n: Math.min((search.n || 8) + 4, 16) });
   Object.assign(open, { limit: Math.max(open.limit || 6, 6) });
@@ -847,7 +894,7 @@ export async function runMission(workflow, runId = crypto.randomUUID()) {
       rounds.push({ round, note: wf.note || 'First pass', why: verdict.why, achieved: verdict.achieved });
       say(runId, { round, phase: 'verdict', achieved: verdict.achieved, why: verdict.why, rows: result.rows, answer: result.answer });
       if (verdict.achieved) break;
-      if (round > 1 && !progressed && ctx.seen.size === before.seen) {
+      if (round > 1 && !progressed && ctx.seen.size === before.seen && result.pool.length) { // stalled with rows: stop; with none, try another query
         rounds.at(-1).why += ' · stopped: the last round found nothing new';
         break;
       }

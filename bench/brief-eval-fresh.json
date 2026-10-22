@@ -30,7 +30,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 16765
+    "ms": 11102
   },
   {
     "goal": "compare three robot lawn mowers under 1500 euros",
@@ -65,7 +65,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9937
+    "ms": 8868
   },
   {
     "goal": "which air fryer is the biggest under $150",
@@ -100,7 +100,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10810
+    "ms": 9893
   },
   {
     "goal": "best rated Thai restaurant in Brooklyn",
@@ -131,7 +131,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 8449
+    "ms": 8182
   },
   {
     "goal": "a 4-person tent lighter than 3 kg, not a pop-up",
@@ -164,7 +164,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 18386
+    "ms": 17545
   },
   {
     "goal": "top 10 longest-lasting AA rechargeable batteries",
@@ -198,7 +198,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 10897
+    "ms": 9681
   },
   {
     "goal": "cheapest flight Berlin to Rome in June",
@@ -229,7 +229,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9819
+    "ms": 8570
   },
   {
     "goal": "noise-cancelling headphones under $200, not refurbished",
@@ -266,7 +266,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10233
+    "ms": 8514
   },
   {
     "goal": "a USB-C hub with HDMI 2.1 and ethernet under 60 dollars",
@@ -305,6 +305,6 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 11079
+    "ms": 9904
   }
 ]

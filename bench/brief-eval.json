@@ -31,7 +31,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9833
+    "ms": 14225
   },
   {
     "goal": "Compare the best noise-cancelling headphones under $300",
@@ -66,7 +66,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 7983
+    "ms": 9655
   },
   {
     "goal": "Which electric car has the longest range for the money?",
@@ -101,7 +101,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8757
+    "ms": 10175
   },
   {
     "goal": "electric cars under 40k with the longest range",
@@ -138,7 +138,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8542
+    "ms": 9369
   },
   {
     "goal": "top 5 lightest laptops under 1.2 kg",
@@ -169,7 +169,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 8419
+    "ms": 8415
   },
   {
     "goal": "cheapest 2TB NVMe SSD under £120",
@@ -205,7 +205,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10682
+    "ms": 10078
   },
   {
     "goal": "a quiet robot vacuum for pet hair under 400 euros",
@@ -241,7 +241,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10572
+    "ms": 9860
   },
   {
     "goal": "phones with at least 256GB storage under $600",
@@ -276,7 +276,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10426
+    "ms": 10182
   },
   {
     "goal": "best rated ramen in Tokyo near Shinjuku",
@@ -309,7 +309,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 10041
+    "ms": 8078
   },
   {
     "goal": "used mountain bike, not carbon, under $800",
@@ -346,7 +346,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 16772
+    "ms": 15478
   },
   {
     "goal": "3 good espresso machines for a beginner, not too expensive",
@@ -385,7 +385,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 18843
+    "ms": 15987
   },
   {
     "goal": "wireless gaming mouse lighter than 60 grams",
@@ -419,7 +419,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 9989
+    "ms": 8179
   },
   {
     "goal": "flights from London to Lisbon in May, cheapest",
@@ -450,7 +450,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10384
+    "ms": 9080
   },
   {
     "goal": "the most popular open-source password manager",
@@ -483,7 +483,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 11112
+    "ms": 9103
   },
   {
     "goal": "standing desk under 500 dollars with memory presets",
@@ -518,7 +518,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 11073
+    "ms": 8813
   },
   {
     "goal": "which 65 inch OLED TV has the best picture under 2000",
@@ -554,6 +554,6 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 11908
+    "ms": 9925
   }
 ]

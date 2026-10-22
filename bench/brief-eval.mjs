@@ -57,14 +57,11 @@ function score(b, want) {
 const { ctx, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') });
 const page = await ctx.newPage();
 await page.goto(`chrome-extension://${id}/agent.html`);
-// EG_MODEL=Gemma-4-E4B-it scores another downloaded model on the same goals.
-if (process.env.EG_MODEL) {
-  const r = await page.evaluate(async (name) => {
-    await chrome.runtime.sendMessage({ target: 'bg', cmd: 'ensure' });
-    return chrome.runtime.sendMessage({ target: 'engine', cmd: 'load', name });
-  }, process.env.EG_MODEL);
-  console.log(`model: ${process.env.EG_MODEL}`, r?.ok ? 'loaded' : r?.error);
-}
+// The model is pinned through the Missions setting (the planner runs as a mission task): EG_MODEL, else E2B.
+// Never trust what happens to be loaded or set in the profile.
+const MODEL = process.env.EG_MODEL || 'Gemma-4-E2B-it';
+await page.evaluate((m) => chrome.storage.sync.set({ taskModels: { missions: m } }), MODEL);
+const used = async () => page.evaluate(async () => (await chrome.runtime.sendMessage({ target: 'engine', cmd: 'status' })).result.loaded?.name);
 const results = [];
 const SET = process.argv[2] === 'fresh' ? FRESH : GOALS;
 for (const [goal, want] of SET) {
@@ -73,9 +70,11 @@ for (const [goal, want] of SET) {
   const b = r?.result?.brief;
   const fails = score(b, want);
   results.push({ goal, ok: !fails.length, fails, brief: b, planner: r?.result?.planner, ms: Date.now() - t });
+  if (!results.length - 1 && results.length === 1) console.log(`model: ${await used()} (asked for ${MODEL})`);
   console.log(`${fails.length ? '✗' : '✓'} ${goal}${fails.length ? `  — ${fails.join('; ')}` : ''}  (${((Date.now() - t) / 1000).toFixed(1)} s)`);
 }
 const pass = results.filter((r) => r.ok).length;
 console.log(`\n${pass}/${results.length} goals read correctly`);
-fs.writeFileSync(path.join(ROOT, `bench/brief-eval${SET === FRESH ? '-fresh' : ''}${process.env.EG_MODEL ? `-${process.env.EG_MODEL}` : ''}.json`), JSON.stringify(results, null, 2));
+fs.writeFileSync(path.join(ROOT, `bench/brief-eval${SET === FRESH ? '-fresh' : ''}-${MODEL}.json`), JSON.stringify(results, null, 2));
+await page.evaluate(() => chrome.storage.sync.remove('taskModels')); // leave the profile as it was
 await ctx.close();

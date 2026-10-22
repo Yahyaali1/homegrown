@@ -280,7 +280,9 @@ async function renderTasks() {
   const move = async (id, by) => {
     const list = await getTasks();
     const i = list.findIndex((x) => x.id === id);
-    const j = i + by;
+    // Swap with the nearest task of the same kind: the list mixes kinds, but each group shows only its own.
+    let j = i + by;
+    while (j >= 0 && j < list.length && list[j].kind !== list[i].kind) j += by;
     if (j < 0 || j >= list.length) return;
     [list[i], list[j]] = [list[j], list[i]];
     saveTasks(list);
@@ -523,7 +525,9 @@ async function renderTaskModels() {
     sel.value = taskModels[task] || '';
     sel.onchange = async () => chrome.storage.sync.set({ taskModels: { ...(await chrome.storage.sync.get('taskModels')).taskModels, [task]: sel.value } });
     const row = Object.assign(document.createElement('label'), { className: 'row' });
-    row.append(Object.assign(document.createElement('span'), { className: 'grow', textContent: label }), sel);
+    // Measured (bench/brief-eval.mjs): E4B reads 9/9 unseen goals, E2B 5/9. A hint, not a switch.
+    const hint = task === 'missions' && downloadedModels().includes('Gemma-4-E4B-it') && taskModels.missions !== 'Gemma-4-E4B-it' ? ' · Gemma-4-E4B-it reads goals better' : '';
+    row.append(Object.assign(document.createElement('span'), { className: 'grow', textContent: label + hint }), sel);
     return row;
   }));
 }

@@ -105,15 +105,32 @@ regex can't know what someone means.
 | + numbered must-haves verification only (shipped) | 14/16 | 5/8 |
 | Constrained decoding: plan as a LiteRT tool call with a JSON schema | 7/16 | 3/8 |
 | After removing an example that taught invented exclusions | 14/16 | 5/8 |
-| **+ critic: a negated wish ("not refurbished") belongs in avoid** (shipped; held-out set now 9) | 13/16 | **9/9** |
-| **Same prompt on Gemma 4 E4B** (2.97 GB) | 13/16 | **8/8** |
+| + critic: a negated wish ("not refurbished") belongs in avoid (shipped; held-out set now 9 goals) | 14/16 | 5/9 |
+| **Same prompt on Gemma 4 E4B** (2.97 GB), shipped version | 14/16 | **9/9** |
+| Shipped version on Gemma 4 E2B (pinned, final) | 14/16 | 5/9 |
+
+Correction: an earlier run reported E2B at 9/9 held-out. The test profile still had "Missions: Gemma-4-E4B-it"
+from the chat-settings test, so that run was E4B. `bench/brief-eval.mjs` now pins the model through the Missions
+setting and prints which model answered.
 
 - **Constrained decoding:** the JSON always parses, but Gemma leaves optional fields out (budget, rank, must). It was
   removed.
 - **Held-out misses (E2B):** a ranking word on a non-shopping goal ("biggest air fryer", "cheapest flight") and "4" in
   "4-person". E4B reads all eight held-out goals right, at about 7 s per goal versus 5 s. The editable brief is the
   safety net either way.
-- **Other open models with LiteRT builds** (Qwen3-4B-Instruct, Qwen3.5-4B, Ministral-3-3B, SmolLM3, Phi-4-mini) have no
+- **Every other open model with a LiteRT build was tried** in the browser engine, each downloaded, loaded and deleted
+  (scratch script, not kept):
+
+  | Model | Load error |
+  |---|---|
+  | Qwen3-1.7B, Qwen3.5-2B, Qwen3.5-4B | "Streaming LlmExecutorMetadata section is not supported yet." |
+  | Qwen3-4B-Instruct-2507, Ministral-3-3B, SmolLM3-3B | "Streaming HF_Tokenizer_Zlib section is not supported yet." |
+  | Phi-4-mini | "Streaming kTfLitePrefillDecode models is not supported yet." |
+
+  The web engine (@litert-lm/core) only reads the `-web.litertlm` layout, so today Gemma 4 E2B and E4B are the only
+  choices, and **E4B is the one that understands goals**. Settings shows a hint beside the Missions picker; nothing
+  switches on its own.
+- **Older note, kept for reference: other open models with LiteRT builds** (Qwen3-4B-Instruct, Qwen3.5-4B, Ministral-3-3B, SmolLM3, Phi-4-mini) have no
   official *web* build, so they weren't benchmarked. Gemma 4 E4B is the only bigger model the browser engine is
   known to run. NuExtract3 (a 4B JSON-extraction fine-tune of Qwen3.5) would be the next to try if a web build appears.
 

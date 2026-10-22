@@ -30,7 +30,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 7479
+    "ms": 9679
   },
   {
     "goal": "compare three robot lawn mowers under 1500 euros",
@@ -43,8 +43,8 @@
         "robot lawn mowers",
         "mower",
         "mowers",
-        "robot garden",
-        "robot gardens"
+        "grass cutter",
+        "grass cutters"
       ],
       "must": [],
       "avoid": [],
@@ -65,7 +65,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8246
+    "ms": 7668
   },
   {
     "goal": "which air fryer is the biggest under $150",
@@ -81,9 +81,7 @@
       ],
       "must": [],
       "avoid": [],
-      "prefer": [
-        "biggest"
-      ],
+      "prefer": [],
       "budget": {
         "op": "<",
         "value": 150,
@@ -100,19 +98,19 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8828
+    "ms": 16869
   },
   {
     "goal": "best rated Thai restaurant in Brooklyn",
     "ok": true,
     "fails": [],
     "brief": {
-      "subject": "thai restaurant",
+      "subject": "restaurant",
       "subjectWords": [
-        "thai restaurant",
-        "thai restaurants",
-        "thai food",
-        "thai foods"
+        "restaurant",
+        "restaurants",
+        "thai",
+        "thais"
       ],
       "must": [],
       "avoid": [],
@@ -129,7 +127,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 6589
+    "ms": 10216
   },
   {
     "goal": "a 4-person tent lighter than 3 kg, not a pop-up",
@@ -140,8 +138,8 @@
       "subjectWords": [
         "tent",
         "tents",
-        "shelter",
-        "shelters"
+        "camping tent",
+        "camping tents"
       ],
       "must": [
         "4-person"
@@ -149,10 +147,7 @@
       "avoid": [
         "pop-up"
       ],
-      "prefer": [
-        "lighter than 3 kg",
-        "not a pop-up"
-      ],
+      "prefer": [],
       "budget": null,
       "rank": {
         "by": "weight_kg",
@@ -165,7 +160,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 8865
+    "ms": 14509
   },
   {
     "goal": "top 10 longest-lasting AA rechargeable batteries",
@@ -177,19 +172,17 @@
         "batteries",
         "battery",
         "batterys",
-        "aa",
-        "aas",
-        "rechargeable",
-        "rechargeables"
+        "aa rechargeable",
+        "aa rechargeables"
       ],
-      "must": [],
+      "must": [
+        "aa"
+      ],
       "avoid": [],
-      "prefer": [
-        "longest-lasting"
-      ],
+      "prefer": [],
       "budget": null,
       "rank": {
-        "by": "life_cycle_hours",
+        "by": "life_span",
         "order": "desc"
       },
       "want": {
@@ -199,7 +192,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 7562
+    "ms": 16073
   },
   {
     "goal": "cheapest flight Berlin to Rome in June",
@@ -230,7 +223,44 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 6991
+    "ms": 7684
+  },
+  {
+    "goal": "noise-cancelling headphones under $200, not refurbished",
+    "ok": true,
+    "fails": [],
+    "brief": {
+      "subject": "headphones",
+      "subjectWords": [
+        "headphones",
+        "headphone",
+        "headset",
+        "headsets"
+      ],
+      "must": [],
+      "avoid": [
+        "refurbished"
+      ],
+      "prefer": [
+        "noise-cancelling"
+      ],
+      "budget": {
+        "op": "<",
+        "value": 200,
+        "currency": "USD"
+      },
+      "rank": {
+        "by": "rating",
+        "order": "desc"
+      },
+      "want": {
+        "kind": "list",
+        "n": 5
+      },
+      "shopping": true
+    },
+    "planner": "gemma",
+    "ms": 8276
   },
   {
     "goal": "a USB-C hub with HDMI 2.1 and ethernet under 60 dollars",
@@ -269,6 +299,6 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9379
+    "ms": 9567
   }
 ]
