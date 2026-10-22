@@ -105,21 +105,29 @@
 
 /* ---- the flower (ui/flower.js) ---- */
 .flower { flex: none; overflow: visible; vertical-align: -3px; }
-.flower .petal { transform-box: view-box; transform-origin: 12px 12px; }
-.flower .seed { fill: var(--pollen); stroke: var(--seed-ring, var(--panel)); stroke-width: 1.4; transform-box: view-box; transform-origin: 12px 12px; }
-.flower .petals { transform-box: view-box; transform-origin: 12px 12px; transition: transform var(--d-bloom) var(--ease-grow); }
-/* bloom: petals open one after another, then the seed — the entrance of the mark, and "done" */
-.flower.bloom .petal { animation: hg-petal-open var(--d-bloom) var(--ease-grow) both; animation-delay: calc(var(--i) * 45ms); }
-.flower.bloom .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) .2s both; }
-/* thinking: light travels round the petals, one at a time — the model is working */
-.flower.thinking .petal { animation: hg-petal-pulse var(--d-pulse) ease-in-out infinite; animation-delay: calc(var(--i) * var(--d-pulse) / 5); }
+.flower .petal, .flower .seed, .flower .leaf, .flower .pot { transform-box: fill-box; transform-origin: center; }
+.flower .seed { fill: var(--pollen); stroke: var(--seed-ring, var(--panel)); stroke-width: 1.4; }
+.flower .petals { transform-box: view-box; transition: transform var(--d-bloom) var(--ease-grow); }
+/* bloom: the ten petals ripple open, then the seed lights — the mark arriving, and "done" */
+.flower.bloom .petal, .flower.sprout .petal { animation: hg-petal-open var(--d-bloom) var(--ease-grow) both; animation-delay: calc(var(--i) * 30ms); }
+.flower.bloom .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) .22s both; }
+/* sprout (potted mark): the pot settles, the stem rises out of it, the leaf unfolds, then it blooms */
+.flower.sprout .pot { transform-origin: 50% 100%; animation: hg-pot .4s var(--ease-out) both; }
+.flower.sprout .stem { stroke-dasharray: 30; animation: hg-stem .5s var(--ease-out) .25s both; }
+.flower.sprout .leaf { transform-origin: 100% 50%; animation: hg-seed .4s var(--ease-grow) .55s both; }
+.flower.sprout .petal { animation-delay: calc(.7s + var(--i) * 30ms); }
+.flower.sprout .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) 1.05s both; }
+/* thinking: light ripples round the ten petals; the seed breathes — the model is working */
+.flower.thinking .petal { animation: hg-petal-pulse var(--d-pulse) ease-in-out infinite; animation-delay: calc(var(--i) * var(--d-pulse) / 10); }
 .flower.thinking .seed { animation: hg-breathe var(--d-pulse) ease-in-out infinite; }
-/* turning toward the light: hover rotates the petals by one position */
-:hover > .flower .petals, .flower.turn .petals { transform: rotate(72deg); }
+/* turning toward you: hover turns the head by one petal */
+:hover > .flower .petals, .flower.turn .petals { transform: rotate(36deg); }
 
-@keyframes hg-petal-open { from { opacity: 0; transform: scale(.3); } }
+@keyframes hg-petal-open { from { opacity: 0; transform: scale(.2); } }
 @keyframes hg-seed { from { opacity: 0; transform: scale(0); } }
-@keyframes hg-petal-pulse { 0%, 60%, 100% { opacity: .28; } 20% { opacity: 1; } }
+@keyframes hg-petal-pulse { 0%, 50%, 100% { opacity: .3; } 12% { opacity: 1; } }
+@keyframes hg-pot { from { opacity: 0; transform: translateY(3px); } }
+@keyframes hg-stem { from { stroke-dashoffset: 30; } }
 
 @keyframes hg-pop { from { opacity: 0; transform: translateY(4px) scale(var(--enter-scale)); } }
 @keyframes hg-rise { from { opacity: 0; transform: translateY(4px); } }

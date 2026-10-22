@@ -3,37 +3,49 @@
 <img src="../extension/ui/flower.svg" width="72" alt="The Homegrown flower">
 
 Homegrown is an AI that grows on your own machine. It isn't rented from a data centre, and it
-isn't shipped in a box. Its symbol is a **flower**: something you grow yourself, slowly, in your
-own soil, that opens when it is ready.
+isn't shipped in a box. Its symbol is a **daisy leaning out of a pot**: something you grow
+yourself, at home, that turns toward the light and opens when it is ready.
 
-Every visual decision starts from the flower: shape, colour and, most of all, motion. This file is
-the *why*. The tokens and component rules (the *how*) are in [design-system.md](design-system.md),
-and all values live in `extension/ui/tokens.css`.
+Every visual decision starts from it: shape, colour and, most of all, motion. This file is the
+*why*. The tokens and component rules (the *how*) are in [design-system.md](design-system.md), and
+all values live in `extension/ui/tokens.css`.
 
 ## The mark
 
-Five petals around a seed. It is drawn in one place, `extension/ui/flower.js`; `ui/flower.svg` is
-the static copy for docs.
+Drawn in one place, `extension/ui/flower.js`; `ui/flower.svg` is the static copy for docs. It was
+chosen from seven explored marks (a canvas of options A–G): F "potted" combined with C "daisy on a
+bend".
 
-| Part | Geometry (24-unit grid) | Meaning |
+| Part | Geometry | Meaning |
 |---|---|---|
-| Petals | 5 ellipses, rx 3 × ry 5, centred 5.5 from the middle, rotated 0°, 72°, 144°, 216°, 288° | The five promises (below). Small gaps between petals keep the mark open and readable at 16px. |
-| Seed | circle r 2.6 in `--pollen`, with a 1.4 ring in the surface colour | The local model: small, at the centre, the source. The ring separates it from the petals at any size. |
+| Pot | A rim (21 × 4, radius 1.5) over a tapered body, at the bottom of a 48-unit grid | **Your machine.** Homegrown lives in it, not in a cloud. |
+| Stem | One curve rising from the pot and leaning right, 2.4 stroke, round caps | **Growth with a direction:** toward the light, toward you. Nothing in the mark stands rigidly upright. |
+| Leaf | One leaf on the left of the stem | Balances the lean, and gives the stem something to unfold. |
+| Petals | 10 slim ellipses (1.6 × 4.2) at 36° steps around the head | **What it does for you:** reading, writing, translating, seeing, searching… Many small things, one flower. |
+| Seed | Circle r 3.2 in `--pollen`, with a 1.4 ring in the surface colour | **The local model:** at the centre, the source, the only warm colour. |
 
-**The five petals are the five promises:**
-1. **On your device:** the model runs on your GPU.
-2. **Private:** nothing you read or write leaves the machine.
-3. **Offline:** it works on a plane.
-4. **No account:** no sign-in, no meter, no subscription.
-5. **Yours to shape:** your tasks, your missions, your settings.
+**Two forms**
+
+| Form | Use | Call |
+|---|---|---|
+| Potted daisy (full mark) | ≥ 28px: page headers, app icon at 32 px and up, docs | `hgFlower.full(size, 'sprout')` |
+| Daisy head (pot and stem dropped) | < 28px: the ❀ launcher, toolbar, answer card, menu rows, 16px icon | `hgFlower(size, 'bloom')` |
+
+The head keeps the ten petals and the large seed, so it reads at 16px where the pot and stem
+would turn to noise.
+
+**The five promises** stay as copy, not geometry:
+1. On your device.
+2. Private.
+3. Offline.
+4. No account.
+5. Yours to shape.
 
 **Usage**
-- Petals take `currentColor`: gray-12 on light, gray-12 (near-white) on dark. The mark is never
-  outlined, never drawn as a gradient, never given a drop shadow.
-- **Text stand-in:** where only text is possible (labels, notifications, help copy), use ❀
-  (U+2740). Never ✦, which was the old mark.
-- **App icon:** the flower on a `#191919` rounded tile (22% corner radius), petals `#eeeeee`, seed
-  `--pollen`. The tile reads on both light and dark browser toolbars.
+- Mark parts take `currentColor`: gray-12 in both themes. Never outlined, never a gradient,
+  never a drop shadow.
+- **Text stand-in:** ❀ (U+2740). Never ✦, which was the old mark.
+- **App icon:** the mark on a `#191919` tile with 22% corner radius, mark `#eeeeee`, seed `--pollen`.
 
 ## Colour: a gray garden with one bloom
 
@@ -51,19 +63,22 @@ lives. Status colours (green, amber, red) still exist, but only as text.
   it: panels and cards are 12px round, controls 6px, chips are full pills.
 - **No sharp corners on anything that floats.** Hard 90° corners appear only in tables and code,
   which are about structure, not growth.
-- **Five, not four.** Wherever a count is a design choice (stagger steps, skeleton lines, loading
-  dots), prefer five. A full lap of the working pulse passes all five petals.
+- **Lean, don't stand.** The stem leans, so the mark has a direction. Motion that travels
+  (ripples, staggers) goes clockwise round the head, the way the light moves round the petals.
+- **The pot is the only flat edge.** Its rim is the one straight line in the mark, as the
+  machine is the one fixed thing; everything that grows from it is curved.
 
 ## Motion: things grow, they don't slide
 
-The flower gives the interface four motions. Every animation in Homegrown is one of them.
+The mark gives the interface five motions. Every animation in Homegrown is one of them.
 
 | Motion | What happens | Used for | Token |
 |---|---|---|---|
-| **Bloom** | Petals open one after another (45 ms apart) from 30% size, overshooting slightly as they settle; the seed appears last | The mark arriving, a finished answer, a mission that met its goal | `.flower.bloom`, `--ease-grow` (`cubic-bezier(.34, 1.36, .64, 1)`), `--d-bloom` .5s |
-| **Pulse** | Light travels round the petals, one at a time; the seed breathes | The model is thinking (answer card header, any "working" state) | `.flower.thinking`, `--d-pulse` 1.4s per lap |
-| **Turn** | The petals rotate one position (72°) toward the pointer | Hovering the ❀ launcher or anything that holds the mark | `:hover > .flower`, `.flower.turn` |
-| **Unfurl** | Panels open from where they came from: fade, rise 4px, scale .97 → 1 | Toolbar, menu, card, palette | `hg-pop`, `--ease-out`, `--d-popover` 160 ms |
+| **Grow** | The pot settles, the stem draws up out of it with its lean, the leaf unfolds, the ten petals ripple open, the seed lights last (about 1.4 s) | The full mark arriving: page headers, first run | `.flower.sprout` |
+| **Bloom** | The ten petals ripple open (30 ms apart) from 20% size with a slight overshoot; the seed appears last | The head arriving, a finished answer, a mission that met its goal | `.flower.bloom`, `--ease-grow` (`cubic-bezier(.34, 1.36, .64, 1)`), `--d-bloom` .5s |
+| **Pulse** | Light ripples clockwise round the ten petals; the seed breathes | The model is thinking (answer card header, any "working" state) | `.flower.thinking`, `--d-pulse` 1.4s per lap |
+| **Turn** | The head turns one petal (36°) toward the pointer | Hovering the ❀ launcher or anything that holds the mark | `:hover > .flower`, `.flower.turn` |
+| **Unfurl** | Panels open from their source: fade, rise 4px, scale .97 → 1 | Toolbar, menu, card, palette | `hg-pop`, `--ease-out`, `--d-popover` 160 ms |
 
 **Rules**
 - **Growth has a source.** A panel unfurls from the thing that opened it: the launcher menu from
@@ -83,9 +98,10 @@ The flower gives the interface four motions. Every animation in Homegrown is one
 
 | App state | The flower |
 |---|---|
-| Resting (launcher on a page) | Fully open, still |
-| Pointer over it | Turns one petal |
-| Working (generating, a mission round) | Pulses round the petals |
+| Resting (launcher on a page) | The head, fully open, still |
+| A page opening (Mission control, Settings) | The potted daisy grows in once |
+| Pointer over it | The head turns one petal |
+| Working (generating, a mission round) | Light ripples round the ten petals |
 | Done (answer finished, goal met) | Blooms once |
 | Off on this site | Hidden; Homegrown never shows a wilted or greyed flower |
 
@@ -97,7 +113,7 @@ No exclamation marks, no "magic", no sparkles.
 ## Checklist for anything new
 
 - Does it use only Radix grays plus `--pollen` in the seed?
-- Is its motion one of bloom, pulse, turn or unfurl? Is overshoot used only for the flower and success?
+- Is its motion one of grow, bloom, pulse, turn or unfurl? Is overshoot used only for the flower and success?
 - Does its working state pulse rather than spin?
 - Does it open from its source?
 - Does it work, and still read, with Reduce Motion on?

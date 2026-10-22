@@ -124,13 +124,19 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 
 <img src="extension/ui/flower.svg" width="48" alt="">
 
-**Grown, not built.** Homegrown's symbol is a flower: five petals, one for each promise (on your
-device, private, offline, no account, yours to shape), around a seed, the local model.
+**Grown, not built.** Homegrown's mark is a daisy leaning out of a pot:
+- the pot is your machine;
+- the stem grows toward the light;
+- the ten petals are what it does for you;
+- the yellow seed is the local model.
+
+Small places show the daisy head alone.
 - **Colour:** the interface is a quiet gray garden (Radix Colors + Themes). The only brand colour
   is the pollen-yellow seed.
 - **Motion:** every animation comes from the flower.
-  - The mark **blooms** when something arrives or a goal is met.
-  - It **pulses** round its petals while the model thinks.
+  - The potted daisy **grows** in when a page opens.
+  - The head **blooms** when something arrives or a goal is met.
+  - Light **ripples** round its ten petals while the model thinks.
   - It **turns** toward your pointer.
   - Panels **unfurl** from whatever opened them.
 - **Floating UI:** in dark mode it is lighter than the page, so it stands out on dark websites.
