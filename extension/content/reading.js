@@ -1,5 +1,5 @@
 // Reading tools: mind map, podcast, quiz, flashcards, gist margins and long-page Q&A (retrieval with
-// local embeddings). Registers launcher (✦) actions and a "Mind map" button under answers.
+// local embeddings). Registers launcher (❀) actions and a "Mind map" button under answers.
 (() => {
   const EG = window.EG;
   if (!EG) return;
@@ -149,7 +149,7 @@
       const left = r.left >= 214 ? r.left - 206 : innerWidth - r.right >= 214 ? r.right + 16 : null;
       if (left === null) {
         // No free margin: a small note just above the paragraph, in the page itself.
-        return p.before(el('div', { textContent: `✦ ${line}`, style: 'font:italic 12px/1.4 system-ui,sans-serif;opacity:.65;margin:0 0 4px' }));
+        return p.before(el('div', { textContent: `❀ ${line}`, style: 'font:italic 12px/1.4 system-ui,sans-serif;opacity:.65;margin:0 0 4px' }));
       }
       EG.mount();
       EG.root.append(el('div', { className: 'gist', textContent: line, style: `left:${left + scrollX}px;top:${r.top + scrollY}px` }));

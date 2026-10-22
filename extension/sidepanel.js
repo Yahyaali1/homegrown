@@ -438,7 +438,7 @@ async function renderSchedules() {
       return li;
     }),
   );
-  if (!monitors.length) return ($('#mon-list').innerHTML = '<li class="muted">None yet. Use ✦ → Watch this page on any page.</li>');
+  if (!monitors.length) return ($('#mon-list').innerHTML = '<li class="muted">None yet. Use ❀ → Watch this page on any page.</li>');
   $('#mon-list').replaceChildren(
     ...monitors.map((m) => {
       const li = document.createElement('li');

@@ -23,7 +23,7 @@ best score), YouTube timestamp seeking and translated subtitles on a fake watch 
 Integration fixes (main session): background.js calls each module's `menus()` after rebuilding menus
 (reader items no longer dropped) and ignores menu ids it doesn't own; shortcuts and menu actions reach the
 reader page via a runtime message addressed to its tab (`toTab`, checked in core.js); launcher cards open
-top-right so they don't cover ✦. Also fixed: the Alt+Shift+A launcher message threw (a local `top`
+top-right so they don't cover ❀. Also fixed: the Alt+Shift+A launcher message threw (a local `top`
 shadowed `window.top`). Verified in one run.
 
 Left: live YouTube transcripts (YouTube serves empty caption files without the player token; the

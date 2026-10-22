@@ -28,8 +28,8 @@ Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chro
 | Where | What you get |
 |---|---|
 | **Select text** | Your tasks (Summarize, Explain, Translate, Rewrite, your own), then **More ▸** and **Ask…** |
-| **Point at an image** (80 px+) | ✦ button: Describe, Extract text, Translate image, Write alt text, Ask |
-| **✦ launcher** (bottom-right, Alt+Shift+A) | The command menu, anchored above the button: type a question, or pick from sections (This page, Read, Write, Translate, Images, Web, Tabs, Voice) |
+| **Point at an image** (80 px+) | ❀ button: Describe, Extract text, Translate image, Write alt text, Ask |
+| **❀ launcher** (bottom-right, Alt+Shift+A) | The command menu, anchored above the button: type a question, or pick from sections (This page, Read, Write, Translate, Images, Web, Tabs, Voice) |
 | **Command palette** (Alt+K) | One search box for every task, action and saved mission; type a question or a goal |
 | **Address bar** | `eg` + space + a goal starts a mission |
 | **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDF links and pages |
@@ -65,7 +65,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Rewrite as ▸ (8 modes) | Standard, Fluent, Formal, Casual, Shorter, Longer, Simple, Creative | ✅ |
 | Your voice | Inserted answers become local style samples for later drafts | ✅ |
 | Ghost text | Grey completions while you type, Tab accepts (opt-in) | ✅ |
-| Reply drafts | ✦ Reply on Gmail, Outlook, LinkedIn, X, Slack, WhatsApp, Discord and other compose boxes | ✅ |
+| Reply drafts | ❀ Reply on Gmail, Outlook, LinkedIn, X, Slack, WhatsApp, Discord and other compose boxes | ✅ |
 | Jargon lens | Hold Alt over a term for a plain-language definition | ✅ |
 | Form helper | Explains fields and fills suggested values only after you click Fill; never passwords or payment fields | ✅ |
 
@@ -122,14 +122,22 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 
 ## Design
 
-Homegrown follows [Radix Colors + Radix Themes](https://www.radix-ui.com/themes), with Apple's
-dark-mode rule for floating UI: raised surfaces are lighter than the page and have a visible edge,
-so the toolbar, card and launcher stand out on dark websites.
-- The ✦ launcher and Alt+K open the same command menu: a search box, then sections of plain rows.
-- The theme is your choice: system, light or dark.
-- Motion is Radix's 160 ms slide-and-fade.
+<img src="extension/ui/flower.svg" width="48" alt="">
 
-Tokens are in `extension/ui/tokens.css`; rules are in [docs/design-system.md](docs/design-system.md).
+**Grown, not built.** Homegrown's symbol is a flower: five petals, one for each promise (on your
+device, private, offline, no account, yours to shape), around a seed, the local model.
+- **Colour:** the interface is a quiet gray garden (Radix Colors + Themes). The only brand colour
+  is the pollen-yellow seed.
+- **Motion:** every animation comes from the flower.
+  - The mark **blooms** when something arrives or a goal is met.
+  - It **pulses** round its petals while the model thinks.
+  - It **turns** toward your pointer.
+  - Panels **unfurl** from whatever opened them.
+- **Floating UI:** in dark mode it is lighter than the page, so it stands out on dark websites.
+- **Theme:** system, light or dark.
+
+Read [docs/design-philosophy.md](docs/design-philosophy.md) for the why, and
+[docs/design-system.md](docs/design-system.md) for the tokens (`extension/ui/tokens.css`).
 
 ## Models (all on-device)
 
@@ -218,7 +226,7 @@ developer or agent: [`docs/plan/`](docs/plan/README.md).
 - **Live YouTube captions** depend on YouTube serving the player's caption file; unverified in headless tests.
 - **Search** falls back from DuckDuckGo to Bing to Wikipedia when engines block or return junk.
 - **Local `file://` PDFs** need Chrome's "Allow access to file URLs" switch for Homegrown (or drop the file on the reader).
-- **Scanned PDFs** have no text layer; use ✦ on their images.
+- **Scanned PDFs** have no text layer; use ❀ on their images.
 - **First answer in a new profile** takes ~18 s while the GPU warms up; later ones start in ~0.2 s.
 - **Selections are cut by a character estimate** (LiteRT-LM web has no tokenizer API).
 - Google Docs draws text on a canvas, so there's no selection to act on there.

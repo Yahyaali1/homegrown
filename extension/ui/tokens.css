@@ -43,6 +43,8 @@
   --focus: var(--blue-8);
   --link: var(--blue-11);
   --good: var(--green-11); --warn: var(--amber-11); --danger: var(--red-11);
+  /* the one brand colour: the flower's seed (Radix amber-9). Nowhere else. */
+  --pollen: #ffc53d;
 
   /* buttons (Radix "surface" variant): a fill plus a 1px edge, so they read in both themes */
   --btn-bg: light-dark(#ffffff, var(--gray-a3));
@@ -75,6 +77,9 @@
   --ease-swift: var(--ease-out);
   --d-fast: .12s; --d-popover: .16s; --d-overlay: .24s;
   --enter-scale: .97;
+  /* growth: a petal settling, a small overshoot. For the flower and for moments of success only. */
+  --ease-grow: cubic-bezier(.34, 1.36, .64, 1);
+  --d-bloom: .5s; --d-pulse: 1.4s;
 
   /* older names still used by some surfaces */
   --text: var(--fg); --border: var(--line); --surface: var(--chip); --glass: var(--panel);
@@ -97,6 +102,24 @@
 /* indeterminate 2px bar along the top edge of whatever is working (needs position: relative/absolute) */
 .hg-progress::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; opacity: .5; }
+
+/* ---- the flower (ui/flower.js) ---- */
+.flower { flex: none; overflow: visible; vertical-align: -3px; }
+.flower .petal { transform-box: view-box; transform-origin: 12px 12px; }
+.flower .seed { fill: var(--pollen); stroke: var(--seed-ring, var(--panel)); stroke-width: 1.4; transform-box: view-box; transform-origin: 12px 12px; }
+.flower .petals { transform-box: view-box; transform-origin: 12px 12px; transition: transform var(--d-bloom) var(--ease-grow); }
+/* bloom: petals open one after another, then the seed — the entrance of the mark, and "done" */
+.flower.bloom .petal { animation: hg-petal-open var(--d-bloom) var(--ease-grow) both; animation-delay: calc(var(--i) * 45ms); }
+.flower.bloom .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) .2s both; }
+/* thinking: light travels round the petals, one at a time — the model is working */
+.flower.thinking .petal { animation: hg-petal-pulse var(--d-pulse) ease-in-out infinite; animation-delay: calc(var(--i) * var(--d-pulse) / 5); }
+.flower.thinking .seed { animation: hg-breathe var(--d-pulse) ease-in-out infinite; }
+/* turning toward the light: hover rotates the petals by one position */
+:hover > .flower .petals, .flower.turn .petals { transform: rotate(72deg); }
+
+@keyframes hg-petal-open { from { opacity: 0; transform: scale(.3); } }
+@keyframes hg-seed { from { opacity: 0; transform: scale(0); } }
+@keyframes hg-petal-pulse { 0%, 60%, 100% { opacity: .28; } 20% { opacity: 1; } }
 
 @keyframes hg-pop { from { opacity: 0; transform: translateY(4px) scale(var(--enter-scale)); } }
 @keyframes hg-rise { from { opacity: 0; transform: translateY(4px); } }

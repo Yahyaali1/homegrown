@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Homegrown reader</title>
   <script src="ui/theme.js"></script>
+  <script src="ui/flower.js"></script>
   <link rel="stylesheet" href="reader.css">
 </head>
 <body>
   <header>
-    <span class="brand">✦ Homegrown reader</span>
+    <span class="brand"><i class="hg-mark"></i> Homegrown reader</span>
     <label class="pick">Open a file <input id="file" type="file" accept=".pdf,.epub,.docx,.txt,.md,.csv,.json,.html,.htm"></label>
   </header>
   <main id="doc" tabindex="-1">
     <p class="hint">Drop a PDF, Word (.docx), text, Markdown, CSV, JSON or HTML file here, or open one above.
-      Select any text to summarize, explain or translate it, or use ✦ to ask about the whole document.</p>
+      Select any text to summarize, explain or translate it, or use ❀ to ask about the whole document.</p>
   </main>
   <!-- Same order as manifest content_scripts, so the toolbar, launcher and page tasks work here too. -->
   <script src="content/keyguard.js"></script>

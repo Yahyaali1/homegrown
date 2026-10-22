@@ -38,7 +38,7 @@ the browser; it fills a **plan form** and deterministic tools do the work.
    the best result changes or a condition holds (`best.price < 250`).
 5. **Entry points (no side panel needed):**
    - Address bar: type `eg` + space + goal (`chrome.omnibox`).
-   - ✦ launcher → "Mission…".
+   - ❀ launcher → "Mission…".
    - On product pages (JSON-LD Product found): a "Find it cheaper" chip that prefills the mission.
    - Mission control page `agent.html`: composer, example goals, saved missions, run history.
 
@@ -65,14 +65,14 @@ Done (main session), checked headless on the real model:
   duplicates removed; prices carry a currency and mismatched currencies are set aside.
 
 Also done:
-- Command palette (`content/palette.js`): Alt+K on any page, or the ✦ launcher (opens it anchored above the button). Fuzzy
+- Command palette (`content/palette.js`): Alt+K on any page, or the ❀ launcher (opens it anchored above the button). Fuzzy
   search over saved tasks, every feature action and saved missions; with a selection, its actions come
   first; typed text offers "Ask about this page", "Mission: …" and "Across my open tabs: …". Checked: fuzzy
   match, free question answered, selection ordering.
 - Missions over open tabs: reads the window's open web tabs instead of searching (3 shop tabs → correct
   ranking and cited answer).
 
-- Product chip: "✦ Find it cheaper" appeared on a JSON-LD product page; clicking opened Mission control with
+- Product chip: "❀ Find it cheaper" appeared on a JSON-LD product page; clicking opened Mission control with
   "Find the lowest price for Blue Widget Pro".
 - Scheduled alert: saved mission (alert: price < 135), alarm fired, mission ran in the background, notification
   for Bravo Mart $129 in 8 s, `lastBest` updated.

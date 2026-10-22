@@ -1,4 +1,4 @@
-// Core of the in-page UI: a toolbar next to selected text, a button on images, the ✦ launcher, and an
+// Core of the in-page UI: a toolbar next to selected text, a button on images, the ❀ launcher, and an
 // answer card that streams the local model's reply where you are reading, with follow-ups.
 // Lives in a shadow root so page styles can't break it. Classic script: content scripts can't be modules,
 // so feature files (content/*.js, loaded after this one) plug in through the window.EG API at the bottom.
@@ -30,14 +30,14 @@
   button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--panel)); }
   /* a quiet hairline between groups of toolbar items */
   .sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--line); }
-  .brand { font-weight: 600; padding: 0 8px; color: var(--fg); letter-spacing: -.01em; }
+  .brand { display: inline-flex; align-items: center; padding: 0 6px; color: var(--fg); }
   .bar form { display: flex; gap: 4px; }
   input { border: 0; box-shadow: inset 0 0 0 1px var(--line-strong); border-radius: var(--r-sm); height: 28px; padding: 0 10px; background: var(--chip); color: var(--fg);
     min-width: 220px; flex: 1; transition: box-shadow var(--d-fast); }
   input:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
   input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--focus), 0 0 0 1px var(--focus); }
-  .imgbtn { border-radius: 50%; width: 30px; height: 30px; padding: 0; font-size: 14px; animation: hg-pop var(--d-popover) var(--ease-out) both; }
-  .fab { position: fixed; right: 18px; bottom: 18px; width: 40px; height: 40px; border-radius: 50%; font-size: 16px; padding: 0;
+  .imgbtn { display: grid; place-items: center; border-radius: 50%; width: 30px; height: 30px; padding: 0; animation: hg-pop var(--d-popover) var(--ease-out) both; }
+  .fab { position: fixed; right: 18px; bottom: 18px; width: 40px; height: 40px; border-radius: 50%; padding: 0; display: grid; place-items: center; --seed-ring: var(--panel);
     transition: transform var(--d-overlay) var(--ease-out), box-shadow var(--d-fast); }
   .fab:hover { background: var(--panel); transform: scale(1.06); box-shadow: inset 0 1px 0 light-dark(#ffffff00, #ffffff14), var(--shadow-modal); }
   .fab:active { transform: scale(.94); }
@@ -48,7 +48,8 @@
   .card.live { position: absolute; }
   .card.live::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none; opacity: .55;
     background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; }
-  .card header { display: flex; align-items: center; gap: 2px; padding: 8px 8px 6px 14px; cursor: move; border-bottom: 1px solid var(--line); }
+  .card header { display: flex; align-items: center; gap: 2px; padding: 8px 8px 6px 12px; cursor: move; border-bottom: 1px solid var(--line); }
+  .card header > .flower { margin-right: 8px; color: var(--fg); }
   .card header .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.01em; }
   .card header button { height: 24px; padding: 0 8px; color: var(--muted); font-size: var(--t-sm); background: transparent; box-shadow: none; }
   .card header button:hover { background: var(--btn-bg-hover); } .card header button:hover { color: var(--fg); }
@@ -74,10 +75,10 @@
     color: transparent; animation: hg-shimmer 2s linear infinite; }
 </style>
 <div class="bar" role="toolbar" aria-label="Homegrown" hidden></div>
-<button class="fab" title="Homegrown: ask about this page (Alt+Shift+A)" aria-label="Open Homegrown" hidden>✦</button>
-<button class="imgbtn" title="Ask Homegrown about this image" aria-label="Ask Homegrown about this image" hidden>✦</button>
+<button class="fab" title="Homegrown: ask about this page (Alt+Shift+A)" aria-label="Open Homegrown" hidden>${hgFlower(20, 'bloom')}</button>
+<button class="imgbtn" title="Ask Homegrown about this image" aria-label="Ask Homegrown about this image" hidden>${hgFlower(15)}</button>
 <section class="card" role="dialog" aria-label="Homegrown answer" hidden>
-  <header><span class="title"></span><button class="save" hidden>Save as task</button><button class="copy">Copy</button><button class="stop">Stop</button><button class="close" aria-label="Close">✕</button></header>
+  <header>${hgFlower(16)}<span class="title"></span><button class="save" hidden>Save as task</button><button class="copy">Copy</button><button class="stop">Stop</button><button class="close" aria-label="Close">✕</button></header>
   <div class="body" aria-live="polite"></div>
   <div class="meta"></div>
   <div class="actions"></div>
@@ -164,7 +165,8 @@
     const chips = tasks.filter((t) => t.kind === kind).map((t) => chip(t.title, () => run({ task: { ...t, prompt: fillVars(t.prompt) }, ...payload() }, t.title, rect)));
     const extra = actions[kind].filter((a) => !a.when || a.when(ctx)).map((a) => chip(a.label, () => ((bar.hidden = true), a.run({ ...payload(), ctx, rect }))));
     const ask = chip('Ask…', () => askMode(kind, rect, payload));
-    const brand = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦', title: 'Homegrown (local model)' });
+    const brand = Object.assign(document.createElement('span'), { className: 'brand', title: 'Homegrown (local model)' });
+    brand.append(hgFlower.el(16, 'bloom'));
     // Saved tasks stay one click away; feature actions wait behind "More ▸" so the bar stays short.
     const more = chip('More ▸', () => (bar.replaceChildren(brand, ...extra, back), place(bar, rect)));
     const back = chip('‹', () => showBar(kind, rect, payload, ctx));
@@ -205,19 +207,20 @@
     mount();
     if (isPdf) {
       const go = Object.assign(document.createElement('button'), { className: 'primary', textContent: 'Read this PDF with Homegrown', onclick: openPdf });
-      const why = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦' });
+      const why = Object.assign(document.createElement('span'), { className: 'brand' });
+      why.append(hgFlower.el(16, 'bloom'));
       const note = Object.assign(document.createElement('span'), { className: 'note wide', textContent: "Chrome's PDF viewer keeps the text away from extensions. The reader shows it with selection, tasks, translation and missions." });
       bar.replaceChildren(why, go, note);
       return place(bar, fab.hidden ? { top: 60, bottom: 60, left: innerWidth - 440, right: innerWidth } : fab.getBoundingClientRect());
     }
-    // Everything else is the command palette (content/palette.js), opened as a menu above the ✦ button.
+    // Everything else is the command palette (content/palette.js), opened as a menu above the ❀ button.
     window.EG.palette({ anchor: fab.hidden ? null : fab.getBoundingClientRect() });
   }
   fab.onclick = () => (bar.hidden ? showLauncher() : (bar.hidden = true));
   // On a PDF tab, offer the reader once without waiting for a click.
   if (isPdf && window === top) setTimeout(() => enabled && bar.hidden && showLauncher(), 1500);
 
-  // Cards opened from the launcher sit at the top-right, so they never cover the ✦ button.
+  // Cards opened from the launcher sit at the top-right, so they never cover the ❀ button.
   const topRect = () => ({ top: 60, bottom: 60, left: innerWidth - 420, right: innerWidth });
 
   // Palette/launcher sections, by action label; anything unlisted lands in "More".
@@ -308,6 +311,7 @@
     answerEl.className = 'cursor thinking'; // a shimmer until the first token
     $('.body').append(answerEl);
     card.classList.add('live');
+    $('.card header .flower').setAttribute('class', 'flower thinking');
     raw = '';
     $('.stop').hidden = false;
     port = chrome.runtime.connect({ name: 'run' });
@@ -323,6 +327,7 @@
         answerEl.className = '';
         $('.stop').hidden = true;
         card.classList.remove('live');
+        $('.card header .flower').setAttribute('class', 'flower bloom');
         if (m.type === 'error') {
           answerEl.replaceChildren(Object.assign(document.createElement('span'), { className: 'err', textContent: m.message }));
           if (m.code === 'no-model') offerDownload(m.model, req, answerEl);

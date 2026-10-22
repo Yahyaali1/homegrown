@@ -26,7 +26,7 @@ async function renderSites() {
       return li;
     }),
   );
-  if (!disabledSites.length) $('#sites').append(Object.assign(document.createElement('li'), { className: 'muted', textContent: 'None. Use "Turn off on this site" in the ✦ launcher, or add one here.' }));
+  if (!disabledSites.length) $('#sites').append(Object.assign(document.createElement('li'), { className: 'muted', textContent: 'None. Use "Turn off on this site" in the ❀ launcher, or add one here.' }));
 }
 $('#site-form').onsubmit = async (e) => {
   e.preventDefault();

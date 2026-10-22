@@ -1,5 +1,8 @@
 # Homegrown design system
 
+The *why* behind it (the flower, its colour, its four motions) is in
+[design-philosophy.md](design-philosophy.md). This file is the *how*.
+
 Homegrown follows **Radix Colors + Radix Themes** ([radix-ui.com/colors](https://www.radix-ui.com/colors),
 [radix-ui.com/themes](https://www.radix-ui.com/themes)). For floating UI in dark mode it also
 follows Apple's Human Interface Guidelines.
@@ -35,7 +38,7 @@ follows Apple's Human Interface Guidelines.
    border; they get a fill on hover or keyboard focus (`--chip-hover`). Groups are split by a
    hairline (`.sep`) or a section label. Bordered buttons (`--btn-*`) are only for buttons that
    stand alone on a page.
-4. **One way in.** The ✦ launcher and Alt+K open the same command menu: one search box, then
+4. **One way in.** The ❀ launcher and Alt+K open the same command menu: one search box, then
    sections. Type to filter, or press Enter to ask about the page.
 5. **Gray first, colour for meaning.** The primary action is solid `--accent` (`gray-12`) with
    `--accent-fg` text. Blue is only for focus and links. Green, amber and red are only for status
@@ -64,6 +67,7 @@ follows Apple's Human Interface Guidelines.
 | Shape | `--r-xs` 4 · `--r-sm` 6 · `--r-md` 12 · `--r-lg` 16 · `--r-pill` | menu rows, kbd · controls · panels, cards · large · chips |
 | Space | `--s1` 4 … `--s6` 32 | 4px grid |
 | Elevation | `--shadow-small`, `--shadow-menu`, `--shadow-modal`, `--shadow-float` | Radix shadow-2 · shadow-5 · shadow-6 · shadow-5 plus the lit top edge, for UI over web pages |
+| Flower | `--pollen` (#ffc53d, the only brand colour, seed only), `--ease-grow`, `--d-bloom` .5s, `--d-pulse` 1.4s, `--seed-ring` | `ui/flower.js` mark: `.bloom`, `.thinking`, `.turn` |
 | Motion | `--ease-out`; `--d-fast` .12s · `--d-popover` .16s · `--d-overlay` .24s; `--enter-scale` .97 | hover/press · popovers · cards and content |
 
 Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--user`,
@@ -85,13 +89,13 @@ Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--u
 ## Components
 
 - **Command menu**
-  - Opened by the ✦ launcher (anchored above the button, no scrim) and by Alt+K (centred, page dimmed).
+  - Opened by the ❀ launcher (anchored above the button, no scrim) and by Alt+K (centred, page dimmed).
   - It has a borderless search field and 32px ghost rows in sections: Selection, This page, Read,
     Write, Translate, Images, Web, Tabs, Voice, More, Saved missions.
   - Typing filters to the 9 best matches, with the matched letters underlined, followed by
     "Ask: …", "Mission: …" and "Across my open tabs: …". ↑↓ move, ↵ runs.
   - The footer shows the page title and keyboard hints.
-- **Selection toolbar:** one `--panel` surface: ✦ | saved tasks, actions, More ▸ | Ask…, with
+- **Selection toolbar:** one `--panel` surface: ❀ | saved tasks, actions, More ▸ | Ask…, with
   hairlines between groups. Items are ghost and 28px high.
 - **Answer card:** `--panel`, header and form split by `--line`, result chips as `--chip` pills.
   Working state is the 2px bar plus "Thinking…".
@@ -109,4 +113,5 @@ Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--u
 - No new hues. Emphasis comes from weight, `--fg`, or a 1–2px rule.
 - Every element that appears gets an entrance (`hg-pop` / `hg-rise`). Every interactive element has
   hover, press and focus states.
-- No icon libraries. Use Unicode glyphs (✦ › ◎ ▤ ↵ ✓) in `--muted`.
+- The mark is `hgFlower(size, 'bloom' | 'thinking' | 'turn')` from `ui/flower.js`. In text-only places use ❀. Never ❀.
+- No icon libraries. Use Unicode glyphs (› ◎ ▤ ↵ ✓) in `--muted`.

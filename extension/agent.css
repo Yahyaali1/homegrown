@@ -6,9 +6,8 @@ body { margin: 0; background: var(--page); color: var(--fg); font: var(--t-base)
 aside { background: var(--card); border-right: 1px solid var(--line); padding: var(--s5) var(--s4); display: flex; flex-direction: column; gap: var(--s2);
   position: sticky; top: 0; height: 100vh; overflow: auto; }
 main { padding: var(--s6) clamp(16px, 4vw, 48px); display: flex; flex-direction: column; gap: var(--s4); max-width: 1200px; width: 100%; }
-h1 { font-size: var(--t-lg); font-weight: 600; margin: 0; letter-spacing: -.01em; } h2 { font-size: var(--t-lg); font-weight: 600; margin: 0; letter-spacing: -.01em; }
+h1 { font-size: var(--t-lg); font-weight: 600; margin: 0; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; --seed-ring: var(--card); } h2 { font-size: var(--t-lg); font-weight: 600; margin: 0; letter-spacing: -.01em; }
 h3 { font-size: var(--t-base); font-weight: 600; margin: var(--s5) 0 var(--s3); }
-.spark { color: var(--fg); }
 .muted { color: var(--muted); } .small { font-size: var(--t-sm); font-weight: 400; }
 kbd { box-shadow: 0 0 0 1px var(--line); border-radius: 4px; padding: 0 5px; font: var(--t-xs) var(--mono); background: var(--card); }
 button { font: inherit; font-weight: 500; border: 0; border-radius: var(--r-sm); height: 32px; padding: 0 12px; cursor: pointer; background: var(--btn-bg); color: var(--fg);
@@ -38,7 +37,7 @@ section { background: var(--card); border-radius: var(--r-md); padding: var(--s5
 .grow { flex: 1; }
 .badge { font-size: var(--t-xs); font-weight: 500; background: var(--chip); color: var(--muted); box-shadow: 0 0 0 1px var(--line); border-radius: var(--r-pill);
   padding: 2px 8px; margin-left: 6px; vertical-align: middle; animation: hg-pop var(--d-popover) var(--ease-swift) both; }
-.badge.good { color: var(--good); } .badge.warn { color: var(--warn); }
+.badge.good { color: var(--good); } .badge .flower { color: var(--fg); vertical-align: -2px; --seed-ring: var(--card); } .badge.warn { color: var(--warn); }
 
 /* the workflow drawn as a pipeline of cards */
 .pipeline { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; }

@@ -62,7 +62,7 @@ See `docs/design-system.md`. It took three passes:
    - Items inside panels are ghost rows.
 
 What changed in pass 3:
-- The ✦ launcher now opens the command palette (`content/palette.js`) anchored above the button,
+- The ❀ launcher now opens the command palette (`content/palette.js`) anchored above the button,
   with sections from `EG.groupOf`. The old launcher grid in `core.js` is gone. The "Search
   everything" action was removed (the launcher is the search).
 - The selection toolbar has ghost items with hairline separators.

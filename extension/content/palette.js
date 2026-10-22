@@ -1,4 +1,4 @@
-// Command palette: Alt+K on any page, and the ✦ launcher (opened as a menu anchored above the button).
+// Command palette: Alt+K on any page, and the ❀ launcher (opened as a menu anchored above the button).
 // One box that finds every task, feature action and saved mission; typed text can be asked about the page
 // or start a mission. Empty, it lists everything in sections. With text selected, text actions come first.
 (() => {
@@ -20,7 +20,7 @@
     .pal li[aria-selected=true] { background: var(--chip-hover); }
     .pal li.h { height: auto; padding: 10px 10px 4px; font-size: var(--t-xs); font-weight: 500; color: var(--faint); cursor: default; }
     .pal li .k { margin-left: auto; font-size: var(--t-xs); color: var(--faint); white-space: nowrap; }
-    .pal li .i { width: 16px; text-align: center; color: var(--muted); filter: grayscale(1); }
+    .pal li .i { width: 16px; display: grid; place-items: center; color: var(--muted); filter: grayscale(1); } .pal li .i:has(.flower) { filter: none; color: var(--fg); --seed-ring: var(--panel); }
     .pal li span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pal li mark { background: none; color: var(--fg); font-weight: 600; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
     .pal .ctx { padding: 6px 14px; font-size: var(--t-xs); color: var(--faint); border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; order: 3; }
@@ -36,10 +36,10 @@
     const add = (icon, label, kind, run, group) => list.push({ icon, label, kind, run, group });
     const tasks = EG.settings.tasks || [];
     if (sel) {
-      for (const t of tasks.filter((t) => t.kind === 'text')) add('✦', t.title, '', () => EG.run({ task: t, selection: sel.text }, t.title, sel.rect), 'Selection');
+      for (const t of tasks.filter((t) => t.kind === 'text')) add('flower', t.title, '', () => EG.run({ task: t, selection: sel.text }, t.title, sel.rect), 'Selection');
       for (const a of EG.actions.text.filter((a) => !a.when || a.when(ctx))) add('›', a.label, '', () => a.run({ selection: sel.text, ctx, rect: sel.rect }), 'Selection');
     }
-    for (const t of tasks.filter((t) => t.kind === 'page')) add('✦', t.title, '', () => EG.run({ task: t, page: EG.pageInfo() }, t.title, EG.topRect()), 'This page');
+    for (const t of tasks.filter((t) => t.kind === 'page')) add('flower', t.title, '', () => EG.run({ task: t, page: EG.pageInfo() }, t.title, EG.topRect()), 'This page');
     for (const a of EG.actions.page.filter((a) => !a.when || a.when())) add('›', a.label, '', () => a.run({ page: EG.pageInfo(), rect: EG.topRect() }), EG.groupOf(a.label) === 'More' && a.when ? 'This page' : EG.groupOf(a.label));
     try {
       for (const m of await EG.bg('missionsList')) add('◎', m.name, '', () => EG.bg('agentOpen', { goal: m.goal, run: true }), 'Saved missions');
@@ -68,7 +68,7 @@
   const order = (g) => (SECTIONS.indexOf(g) + 1 || 99);
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-  // opts.anchor: a DOMRect to open above (the ✦ button) as a menu, without dimming the page.
+  // opts.anchor: a DOMRect to open above (the ❀ button) as a menu, without dimming the page.
   async function show(opts = {}) {
     if (open) return close();
     const anchor = opts?.anchor;
@@ -97,7 +97,7 @@
         : [];
       shown = [...found.map((x) => ({ ...x.it, html: x.m.html })), ...free.map((f) => ({ ...f, html: esc(f.label) }))];
       at = Math.min(at, Math.max(shown.length - 1, 0));
-      ul.innerHTML = shown.map((it, i) => `${!q && it.group !== shown[i - 1]?.group ? `<li class="h" role="presentation">${esc(it.group || '')}</li>` : ''}<li role="option" aria-selected="${i === at}" data-i="${i}"><span class="i">${esc(it.icon)}</span><span>${it.html}</span><span class="k">${esc(it.kind || '')}</span></li>`).join('');
+      ul.innerHTML = shown.map((it, i) => `${!q && it.group !== shown[i - 1]?.group ? `<li class="h" role="presentation">${esc(it.group || '')}</li>` : ''}<li role="option" aria-selected="${i === at}" data-i="${i}"><span class="i">${it.icon === 'flower' ? hgFlower(14) : esc(it.icon)}</span><span>${it.html}</span><span class="k">${esc(it.kind || '')}</span></li>`).join('');
       ul.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest' });
     };
     const go = (i) => {

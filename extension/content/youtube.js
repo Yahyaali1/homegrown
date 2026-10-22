@@ -1,5 +1,5 @@
 // YouTube: summarize or chat with a video from its captions (timestamps seek the video), and show
-// live translated subtitles under the player. Adds launcher (✦) actions on watch pages only.
+// live translated subtitles under the player. Adds launcher (❀) actions on watch pages only.
 (() => {
   const EG = window.EG;
   if (!EG || !/(^|\.)youtube\.com$/.test(location.hostname)) return;

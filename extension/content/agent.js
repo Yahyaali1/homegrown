@@ -43,7 +43,7 @@
     EG.mount();
     EG.style('.price-chips{position:fixed;right:68px;bottom:24px;display:flex;gap:6px}.price-chips button{border-radius:999px;padding:7px 12px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:600;box-shadow: var(--shadow-menu);cursor:pointer}.price-chips .x{color:var(--muted);font-weight:400;padding:7px 10px}');
     const bar = Object.assign(document.createElement('div'), { className: 'price-chips' });
-    const find = Object.assign(document.createElement('button'), { textContent: '✦ Find it cheaper', title: `Search other stores for ${name}`, onclick: () => (open(`Find the lowest price for ${name}`, true), bar.remove()) });
+    const find = Object.assign(document.createElement('button'), { textContent: '❀ Find it cheaper', title: `Search other stores for ${name}`, onclick: () => (open(`Find the lowest price for ${name}`, true), bar.remove()) });
     // Watch this page daily; notify when the price goes below today's.
     const watch = Object.assign(document.createElement('button'), {
       textContent: '🔔 Alert me if it drops',

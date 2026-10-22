@@ -1,4 +1,4 @@
-// Reply pill: when a compose box is focused next to a visible conversation, "✦ Reply" drafts a reply
+// Reply pill: when a compose box is focused next to a visible conversation, "❀ Reply" drafts a reply
 // from the thread in your voice, previewed in the card with Insert.
 (() => {
   const EG = window.EG;
@@ -20,7 +20,7 @@
   const known = THREAD[location.hostname];
 
   EG.style('.eg-reply { position: absolute; border-radius: 999px; font-size: 12px; padding: 3px 10px; color: var(--accent); background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow-menu); }');
-  const pill = Object.assign(document.createElement('button'), { className: 'eg-reply', textContent: '✦ Reply', hidden: true });
+  const pill = Object.assign(document.createElement('button'), { className: 'eg-reply', textContent: '❀ Reply', hidden: true });
   EG.root.append(pill);
   let box = null;
 

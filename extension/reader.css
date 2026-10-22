@@ -13,3 +13,5 @@ main.drop { outline: 2px dashed var(--accent); outline-offset: 8px; }
 pre { white-space: pre-wrap; font: 14px/1.5 ui-monospace, monospace; }
 table { border-collapse: collapse; } td, th { border: 1px solid var(--line); padding: 4px 8px; }
 img { max-width: 100%; }
+
+.brand .flower { vertical-align: -3px; margin-right: 4px; color: var(--fg); --seed-ring: var(--bg); }

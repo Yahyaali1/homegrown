@@ -54,7 +54,7 @@
     run: async () => {
       const { disabledSites = [] } = await chrome.storage.sync.get('disabledSites');
       await chrome.storage.sync.set({ disabledSites: [...new Set([...disabledSites, location.hostname])] });
-      EG.hideAll(); // core re-reads settings and hides the toolbar and ✦ here
+      EG.hideAll(); // core re-reads settings and hides the toolbar and ❀ here
     },
   });
 
@@ -80,7 +80,7 @@
     if (!diff) return;
     const keep = () => EG.bg('memSnapshot', { url, text }).catch(() => {});
     const chip = Object.assign(document.createElement('div'), { className: 'changed', role: 'status' });
-    const open = Object.assign(document.createElement('button'), { className: 'link', textContent: '✦ Changed since your last visit' });
+    const open = Object.assign(document.createElement('button'), { className: 'link', textContent: '❀ Changed since your last visit' });
     open.onclick = () => {
       chip.remove();
       const lines = (sign, list) => list.slice(0, 80).map((l) => `${sign} ${l}`).join('\n');
@@ -109,7 +109,7 @@
     EG.mount();
     const chip = Object.assign(document.createElement('div'), { className: 'seen', role: 'status' });
     chip.append(
-      document.createTextNode('✦ You read about this on '),
+      document.createTextNode('❀ You read about this on '),
       Object.assign(document.createElement('a'), { href: hit.url, textContent: hit.title || hit.url, target: '_blank', title: hit.url }),
       Object.assign(document.createElement('button'), { textContent: '✕', ariaLabel: 'Dismiss', onclick: () => chip.remove() }),
     );

@@ -21,7 +21,7 @@ async function pdfToNodes(data) {
     const text = items.map((it) => it.str + (it.hasEOL ? (/[.!?:]\s*$/.test(it.str) ? '\n\n' : '\n') : '')).join('');
     pages.push(el('section', { className: 'page' }, [el('h2', { textContent: `Page ${i}` }), ...paras(text)]));
   }
-  if (!pages.some((p) => p.querySelector('p'))) throw new Error('This PDF has no text layer (it is a scan). Use ✦ on its images to read them instead.');
+  if (!pages.some((p) => p.querySelector('p'))) throw new Error('This PDF has no text layer (it is a scan). Use ❀ on its images to read them instead.');
   return pages;
 }
 
