@@ -1,5 +1,8 @@
-/* Homegrown design system, built on Vercel's Geist (vercel.com/geist): a monochrome gray scale, blue
-   only for focus and links, hairline "shadow borders", short swift motion.
+/* Homegrown design system, built on Radix Colors + Radix Themes (radix-ui.com/colors, radix-ui.com/themes).
+   Each of the 12 gray steps has a job, in light and dark: 1–2 backgrounds · 3–5 element fills (rest/hover/pressed)
+   6–8 borders (subtle/element/hover) · 9–10 solid · 11 secondary text · 12 primary text.
+   Floating UI follows Apple's HIG for dark mode: shadows barely read on dark pages, so raised surfaces are
+   lighter than the page and carry a visible edge.
    Loaded by every extension page (@import) and by the in-page shadow UI (<link> in content/core.js).
    Rules and usage: docs/design-system.md. Change a value here, never in a surface's stylesheet. */
 
@@ -7,76 +10,75 @@
   color-scheme: light dark; /* follows the system; [data-theme] pins it on pages (ui/theme.js); core.js sets it on its host */
   interpolate-size: allow-keywords; /* lets height/width animate to and from auto */
 
-  /* Geist gray scale, light-dark(light, dark). 100 bg · 200 hover bg · 300 active bg · 400 border · 500 hover border
-     600 active border · 700 high-contrast bg · 800 its hover · 900 secondary text · 1000 primary text */
-  --gray-100: light-dark(hsl(0 0% 95%), hsl(0 0% 10%));
-  --gray-200: light-dark(hsl(0 0% 92%), hsl(0 0% 12%));
-  --gray-300: light-dark(hsl(0 0% 90%), hsl(0 0% 16%));
-  --gray-400: light-dark(hsl(0 0% 92%), hsl(0 0% 18%));
-  --gray-500: light-dark(hsl(0 0% 79%), hsl(0 0% 27%));
-  --gray-600: light-dark(hsl(0 0% 66%), hsl(0 0% 53%));
-  --gray-700: light-dark(hsl(0 0% 56%), hsl(0 0% 56%));
-  --gray-800: light-dark(hsl(0 0% 49%), hsl(0 0% 49%));
-  --gray-900: light-dark(hsl(0 0% 30%), hsl(0 0% 63%));
-  --gray-1000: light-dark(hsl(0 0% 9%), hsl(0 0% 93%));
-  --bg-100: light-dark(hsl(0 0% 100%), hsl(0 0% 4%));
-  --bg-200: light-dark(hsl(0 0% 98%), hsl(0 0% 0%));
-  --blue-700: hsl(212 100% 48%);
-  --blue-900: light-dark(hsl(211 100% 42%), hsl(210 100% 66%));
-  --green-900: light-dark(hsl(133 50% 32%), hsl(131 43% 57%));
-  --amber-900: light-dark(hsl(30 100% 32%), hsl(39 90% 50%));
-  --red-900: light-dark(hsl(358 66% 48%), hsl(358 100% 69%));
+  /* Radix gray, light-dark(light, dark) */
+  --gray-1: light-dark(#fcfcfc, #111111); --gray-2: light-dark(#f9f9f9, #191919); --gray-3: light-dark(#f0f0f0, #222222);
+  --gray-4: light-dark(#e8e8e8, #2a2a2a); --gray-5: light-dark(#e0e0e0, #313131); --gray-6: light-dark(#d9d9d9, #3a3a3a);
+  --gray-7: light-dark(#cecece, #484848); --gray-8: light-dark(#bbbbbb, #606060); --gray-9: light-dark(#8d8d8d, #6e6e6e);
+  --gray-10: light-dark(#838383, #7b7b7b); --gray-11: light-dark(#646464, #b4b4b4); --gray-12: light-dark(#202020, #eeeeee);
+  /* alpha grays: the same steps, but they work on any background (the page under our UI is unknown) */
+  --gray-a2: light-dark(#00000006, #ffffff09); --gray-a3: light-dark(#0000000f, #ffffff12); --gray-a4: light-dark(#00000017, #ffffff1b);
+  --gray-a5: light-dark(#0000001f, #ffffff22); --gray-a6: light-dark(#00000026, #ffffff2c); --gray-a7: light-dark(#00000031, #ffffff3b);
+  --gray-a8: light-dark(#00000044, #ffffff55);
+  --blue-8: light-dark(#5eb1ef, #2870bd); --blue-11: light-dark(#0d74ce, #70b8ff);
+  --green-11: light-dark(#218358, #3dd68c); --amber-11: light-dark(#ab6400, #ffca16); --red-11: light-dark(#ce2c31, #ff9592);
 
   /* roles */
-  --bg: var(--bg-100);              /* surfaces, popovers, cards */
-  --bg-2: var(--bg-200);            /* page base behind surfaces, used sparingly */
-  --fg: var(--gray-1000);
-  --muted: var(--gray-900);
-  --faint: var(--gray-700);
-  --line: var(--gray-400);
-  --chip: var(--gray-100);          /* quiet fill; hover = --gray-200, pressed = --gray-300 */
-  --accent: var(--gray-1000);       /* primary action is high contrast, not coloured */
-  --accent-fg: var(--bg-100);
-  --accent-soft: var(--gray-100);
-  --focus: var(--blue-700);
-  --link: var(--blue-900);
-  --good: var(--green-900); --warn: var(--amber-900); --danger: var(--red-900);
+  --bg: light-dark(#ffffff, var(--gray-1));       /* page background (Radix --color-background) */
+  --bg-2: var(--gray-2);                          /* subtle background: sidebars, table heads, code */
+  --panel: light-dark(#ffffff, var(--gray-3));    /* anything floating over a page: one step up in dark */
+  --page: light-dark(var(--gray-2), var(--gray-1)); /* extension page base under cards */
+  --card: light-dark(#ffffff, var(--gray-2));     /* cards and sections on extension pages (Radix panel-solid) */
+  --fg: var(--gray-12);
+  --muted: var(--gray-11);
+  --faint: var(--gray-10);
+  --line: var(--gray-a6);                         /* separators, card edges */
+  --line-strong: var(--gray-a7);                  /* control edges */
+  --line-hover: var(--gray-a8);
+  --chip: var(--gray-a3);                         /* element fill at rest */
+  --chip-hover: var(--gray-a4);
+  --chip-active: var(--gray-a5);
+  --accent: var(--gray-12);                       /* primary action: high-contrast solid, no hue */
+  --accent-fg: var(--gray-1);
+  --accent-soft: var(--gray-a3);
+  --focus: var(--blue-8);
+  --link: var(--blue-11);
+  --good: var(--green-11); --warn: var(--amber-11); --danger: var(--red-11);
 
-  /* buttons: secondary buttons always show an edge; in dark they also get a lifted fill */
-  --btn-bg: light-dark(hsl(0 0% 100%), hsl(0 0% 11%));
-  --btn-bg-hover: light-dark(hsl(0 0% 95%), hsl(0 0% 16%));
-  --btn-edge: light-dark(#00000024, #ffffff2e);
+  /* buttons (Radix "surface" variant): a fill plus a 1px edge, so they read in both themes */
+  --btn-bg: light-dark(#ffffff, var(--gray-a3));
+  --btn-bg-hover: var(--gray-a4);
+  --btn-edge: var(--gray-a7);
 
-  /* type: Geist if installed, then the system face */
-  --font: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* type */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
   --serif: Georgia, "Iowan Old Style", serif;
   --t-xs: 11px; --t-sm: 12px; --t-md: 13px; --t-base: 14px; --t-lg: 16px; --t-xl: 20px; --t-2xl: 32px;
 
-  /* Geist materials: base/small 6px, menu/modal 12px, fullscreen 16px */
-  --r-sm: 6px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
+  /* Radix radius (medium): 3 4 6 8 12 16 */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 12px; --r-lg: 16px; --r-pill: 9999px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
 
-  /* shadows double as borders (Geist "shadow-border") */
-  --sh-ring: light-dark(#00000014, #ffffff25);
-  --sh-1: light-dark(#00000005, #00000029); --sh-2: light-dark(#0000000a, #00000052); --sh-3: light-dark(#0000000f, #00000052);
-  --shadow-border-base: 0 0 0 1px var(--sh-ring);
-  --shadow-border: var(--shadow-border-base), 0 0 0 1px var(--bg-200);
-  --shadow-small: var(--shadow-border-base), 0 2px 2px var(--sh-2);
-  --shadow-tooltip: var(--shadow-border-base), 0 1px 1px var(--sh-1), 0 4px 8px var(--sh-2);
-  --shadow-menu: var(--shadow-border-base), 0 1px 1px var(--sh-1), 0 4px 8px -4px var(--sh-2), 0 16px 24px -8px var(--sh-3);
-  --shadow-modal: var(--shadow-border-base), 0 1px 1px var(--sh-1), 0 8px 16px -4px var(--sh-2), 0 24px 32px -8px var(--sh-3);
-  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus);
+  /* Radix shadows 2 (card), 5 (popover), 6 (dialog), with their light and dark values */
+  --ring: light-dark(#0000000f, #ffffff2c);
+  --shadow-small: 0 0 0 1px var(--ring), 0 1px 1px light-dark(#00000006, #00000066), 0 2px 1px -1px light-dark(#0000000d, #00000066),
+    0 1px 3px light-dark(#0000000d, #0000004d);
+  --shadow-menu: 0 0 0 1px var(--ring), 0 12px 60px light-dark(#00000026, #0000004d), 0 12px 32px -16px light-dark(#0000001f, #00000080);
+  --shadow-modal: 0 0 0 1px var(--ring), 0 12px 60px light-dark(#00000026, #00000033), 0 16px 64px light-dark(#00000006, #00000066),
+    0 16px 36px -20px light-dark(#00000031, #000000e6);
+  /* floating over unknown pages: the popover shadow plus a lit top edge in dark, so it lifts off dark sites */
+  --shadow-float: inset 0 1px 0 light-dark(#ffffff00, #ffffff14), var(--shadow-menu);
+  --focus-ring: 0 0 0 2px var(--focus);
 
-  /* Geist motion: popovers .2s, overlays .3s from scale .96, on the "swift" curve (a small overshoot) */
-  --ease-swift: cubic-bezier(.175, .885, .32, 1.1);
+  /* Radix motion: popovers 160ms, slide 4px + scale .97 + fade, ease cubic-bezier(.16, 1, .3, 1) */
   --ease-out: cubic-bezier(.16, 1, .3, 1);
-  --d-fast: .15s; --d-popover: .2s; --d-overlay: .3s;
-  --enter-scale: .96;
+  --ease-swift: var(--ease-out);
+  --d-fast: .12s; --d-popover: .16s; --d-overlay: .24s;
+  --enter-scale: .97;
 
   /* older names still used by some surfaces */
-  --text: var(--fg); --border: var(--line); --panel: var(--bg); --surface: var(--gray-100); --glass: var(--bg);
-  --accent-text: var(--accent-fg); --user: var(--gray-100); --warn-bg: var(--gray-100);
+  --text: var(--fg); --border: var(--line); --surface: var(--chip); --glass: var(--panel);
+  --accent-text: var(--accent-fg); --user: var(--chip); --warn-bg: var(--chip);
   --shadow: var(--shadow-menu); --shadow-sm: var(--shadow-small);
 }
 :root[data-theme=light] { color-scheme: light; }
@@ -84,10 +86,10 @@
 
 /* ---- primitives (opt in by class) ---- */
 
-/* popover entrance: fade, rise 4px, scale from .96 */
-.hg-enter { animation: hg-pop var(--d-popover) var(--ease-swift) both; }
+/* popover entrance: fade, slide 4px, scale from .97 */
+.hg-enter { animation: hg-pop var(--d-popover) var(--ease-out) both; }
 /* skeleton while waiting for the first token */
-.hg-shimmer { border-radius: var(--r-sm); background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%) 0 0/300% 100%;
+.hg-shimmer { border-radius: var(--r-sm); background: linear-gradient(90deg, var(--chip) 25%, var(--chip-active) 50%, var(--chip) 75%) 0 0/300% 100%;
   animation: hg-shimmer 1.6s linear infinite; }
 /* gray text with a light sweep: "Thinking…", "Checking…" */
 .hg-thinking { background: linear-gradient(90deg, var(--faint) 35%, var(--fg) 50%, var(--faint) 65%) 0 0/300% 100%;

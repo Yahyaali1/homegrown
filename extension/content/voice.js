@@ -28,7 +28,7 @@
     .player select { font: inherit; font-size: 12px; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; max-width: 150px; }
     .player .pos { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
     ::highlight(eg-read) { background: color-mix(in srgb, var(--fg) 14%, transparent); }
-    .now { background: var(--gray-200); border-radius: 4px; }
+    .now { background: var(--chip-hover); border-radius: 4px; }
   `);
 
   const el = (tag, props = {}, kids = []) => {

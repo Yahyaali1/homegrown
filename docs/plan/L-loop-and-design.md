@@ -51,16 +51,20 @@ why, achieved}`. Mission control draws them as the feedback-loop rail. The resul
 
 ## Design system
 
-See `docs/design-system.md`.
-- The first version used glass and a four-colour glow. Feedback was that more colour didn't help,
-  so it was rebuilt on Vercel's Geist.
-- Tokens were copied from Geist's published CSS: gray scale, shadows, motion
-  (`cubic-bezier(.175,.885,.32,1.1)`, 0.2s/0.3s, scale .96).
-- `ui/tokens.css` replaces the five palettes that used to be copied across the core shadow UI,
-  side panel, library, reader and agent.
-- The in-page modules' hard-coded shadows and blues now use tokens.
-- Fluid motion:
-  - staggered entrances;
-  - an indeterminate bar and shimmer text while working;
-  - animated `<details>` height (`::details-content` + `interpolate-size`);
-  - a View Transition when sorting results.
+See `docs/design-system.md`. It took three passes:
+1. **Glass and glow:** too much colour.
+2. **Vercel Geist (monochrome):** near-black panels vanished on dark websites, and the launcher
+   was a grid of outlined buttons.
+3. **Radix Colors + Themes, with Apple's HIG rule for dark mode:**
+   - Floating UI uses `--panel`: white in light mode, `gray-3` in dark.
+   - It carries Radix's popover shadow plus a lit top edge.
+   - Edges are alpha grays.
+   - Items inside panels are ghost rows.
+
+What changed in pass 3:
+- The ✦ launcher now opens the command palette (`content/palette.js`) anchored above the button,
+  with sections from `EG.groupOf`. The old launcher grid in `core.js` is gone. The "Search
+  everything" action was removed (the launcher is the search).
+- The selection toolbar has ghost items with hairline separators.
+- Mission control uses `--page` and `--card`.
+- The theme switch (system/light/dark) works through `light-dark()` tokens and `color-scheme`.

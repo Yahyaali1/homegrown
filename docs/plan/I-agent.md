@@ -65,7 +65,7 @@ Done (main session), checked headless on the real model:
   duplicates removed; prices carry a currency and mismatched currencies are set aside.
 
 Also done:
-- Command palette (`content/palette.js`): Alt+K on any page, or "Search everything" in the launcher. Fuzzy
+- Command palette (`content/palette.js`): Alt+K on any page, or the ✦ launcher (opens it anchored above the button). Fuzzy
   search over saved tasks, every feature action and saved missions; with a selection, its actions come
   first; typed text offers "Ask about this page", "Mission: …" and "Across my open tabs: …". Checked: fuzzy
   match, free question answered, selection ordering.

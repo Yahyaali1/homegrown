@@ -12,37 +12,39 @@
   root.innerHTML = `
 <link rel="stylesheet" href="${chrome.runtime.getURL('ui/tokens.css')}">
 <style>
-  /* Geist (ui/tokens.css): opaque surfaces with hairline shadow borders, gray everywhere, motion on the swift curve. */
+  /* Radix (ui/tokens.css): floating panels one step lighter than the page in dark, an alpha edge, ghost items inside. */
   * { box-sizing: border-box; font: var(--t-md)/1.5 var(--font); -webkit-font-smoothing: antialiased; }
   [hidden] { display: none !important; }
-  .bar, .card, .imgbtn, .fab { position: absolute; background: var(--bg); color: var(--fg); box-shadow: var(--shadow-menu); }
-  .bar { z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 5px; border-radius: var(--r-md); width: max-content;
-    max-width: min(480px, calc(100vw - 16px)); animation: hg-pop var(--d-popover) var(--ease-swift) both; transform-origin: 24px 0; }
+  .bar, .card, .imgbtn, .fab { position: absolute; background: var(--panel); color: var(--fg); box-shadow: var(--shadow-float); }
+  .bar { z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px; border-radius: var(--r-md); width: max-content;
+    max-width: min(480px, calc(100vw - 16px)); animation: hg-pop var(--d-popover) var(--ease-out) both; transform-origin: 24px 0; }
   .bar > * { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
   .bar > :nth-child(2) { animation-delay: 15ms } .bar > :nth-child(3) { animation-delay: 30ms } .bar > :nth-child(4) { animation-delay: 45ms }
   .bar > :nth-child(5) { animation-delay: 60ms } .bar > :nth-child(n+6) { animation-delay: 75ms }
-  button { border: 0; border-radius: var(--r-sm); padding: 0 10px; height: 28px; background: var(--btn-bg); box-shadow: 0 0 0 1px var(--btn-edge); color: var(--fg); cursor: pointer; white-space: nowrap;
-    font-weight: 500; transition: background var(--d-fast), transform var(--d-fast) var(--ease-swift), color var(--d-fast); }
-  button:hover { background: var(--btn-bg-hover); }
-  button:active { background: var(--gray-300); transform: scale(.97); }
+  button { border: 0; border-radius: var(--r-sm); padding: 0 10px; height: 28px; background: transparent; color: var(--fg); cursor: pointer; white-space: nowrap;
+    font-weight: 500; transition: background var(--d-fast), transform var(--d-fast) var(--ease-out), color var(--d-fast); }
+  button:hover { background: var(--chip-hover); }
+  button:active { background: var(--chip-active); transform: scale(.97); }
   button:focus-visible, input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   button.primary { background: var(--accent); color: var(--accent-fg); box-shadow: none; }
-  button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--bg)); }
+  button.primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--panel)); }
+  /* a quiet hairline between groups of toolbar items */
+  .sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--line); }
   .brand { font-weight: 600; padding: 0 8px; color: var(--fg); letter-spacing: -.01em; }
   .bar form { display: flex; gap: 4px; }
-  input { border: 0; box-shadow: 0 0 0 1px var(--line); border-radius: var(--r-sm); height: 28px; padding: 0 10px; background: var(--bg); color: var(--fg);
+  input { border: 0; box-shadow: inset 0 0 0 1px var(--line-strong); border-radius: var(--r-sm); height: 28px; padding: 0 10px; background: var(--chip); color: var(--fg);
     min-width: 220px; flex: 1; transition: box-shadow var(--d-fast); }
-  input:hover { box-shadow: 0 0 0 1px var(--gray-500); }
-  input:focus { outline: none; box-shadow: 0 0 0 1px var(--gray-600), var(--focus-ring); }
-  .imgbtn { border-radius: 50%; width: 30px; height: 30px; padding: 0; font-size: 14px; animation: hg-pop var(--d-popover) var(--ease-swift) both; }
+  input:hover { box-shadow: inset 0 0 0 1px var(--line-hover); }
+  input:focus { outline: none; box-shadow: inset 0 0 0 1px var(--focus), 0 0 0 1px var(--focus); }
+  .imgbtn { border-radius: 50%; width: 30px; height: 30px; padding: 0; font-size: 14px; animation: hg-pop var(--d-popover) var(--ease-out) both; }
   .fab { position: fixed; right: 18px; bottom: 18px; width: 40px; height: 40px; border-radius: 50%; font-size: 16px; padding: 0;
-    transition: transform var(--d-overlay) var(--ease-swift), box-shadow var(--d-fast); }
-  .fab:hover { background: var(--bg); transform: scale(1.06); box-shadow: var(--shadow-modal); }
+    transition: transform var(--d-overlay) var(--ease-out), box-shadow var(--d-fast); }
+  .fab:hover { background: var(--panel); transform: scale(1.06); box-shadow: inset 0 1px 0 light-dark(#ffffff00, #ffffff14), var(--shadow-modal); }
   .fab:active { transform: scale(.94); }
   .bar .wide { flex-basis: 100%; }
   .bar .note { color: var(--muted); font-size: var(--t-sm); font-weight: 400; padding: 2px 8px 4px; max-width: 380px; white-space: normal; }
   .card { width: 420px; max-width: calc(100vw - 16px); border-radius: var(--r-md); display: flex; flex-direction: column; max-height: 62vh; overflow: hidden;
-    animation: hg-pop var(--d-overlay) var(--ease-swift) both; transform-origin: 24px 0; }
+    animation: hg-pop var(--d-overlay) var(--ease-out) both; transform-origin: 24px 0; }
   .card.live { position: absolute; }
   .card.live::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none; opacity: .55;
     background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; }
@@ -52,17 +54,17 @@
   .card header button:hover { background: var(--btn-bg-hover); } .card header button:hover { color: var(--fg); }
   .body { padding: 10px 14px; overflow: auto; flex: 1; scrollbar-width: thin; }
   .body p { margin: 0 0 8px; } .body ul, .body ol { margin: 0 0 8px; padding-left: 20px; }
-  .body pre { background: var(--gray-100); box-shadow: 0 0 0 1px var(--line); padding: 10px; border-radius: var(--r-sm); overflow: auto; white-space: pre-wrap; }
-  .body code { font-family: var(--mono); font-size: .92em; background: var(--gray-100); border-radius: 4px; padding: 1px 4px; }
+  .body pre { background: var(--chip); box-shadow: 0 0 0 1px var(--line); padding: 10px; border-radius: var(--r-sm); overflow: auto; white-space: pre-wrap; }
+  .body code { font-family: var(--mono); font-size: .92em; background: var(--chip); border-radius: 4px; padding: 1px 4px; }
   .body a { color: var(--link); }
   .q { color: var(--muted); margin: 12px 0 4px; font-weight: 500; animation: hg-rise var(--d-popover) var(--ease-out) both; }
   .err { color: var(--danger); }
   .meta { color: var(--faint); font-size: var(--t-xs); padding: 0 14px 6px; }
   .meta .warn { color: var(--warn); }
-  .card form { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--line); background: var(--bg-2); }
+  .card form { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
   .actions:empty { display: none; }
-  .actions button { border-radius: var(--r-pill); font-size: var(--t-sm); height: 26px; animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+  .actions button { background: var(--chip); border-radius: var(--r-pill); font-size: var(--t-sm); height: 26px; animation: hg-rise var(--d-overlay) var(--ease-out) both; }
   .actions button:nth-child(2) { animation-delay: 30ms } .actions button:nth-child(3) { animation-delay: 60ms } .actions button:nth-child(n+4) { animation-delay: 90ms }
   .cursor::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--fg); vertical-align: middle;
     animation: hg-breathe 1s ease-in-out infinite; }
@@ -166,7 +168,8 @@
     // Saved tasks stay one click away; feature actions wait behind "More ▸" so the bar stays short.
     const more = chip('More ▸', () => (bar.replaceChildren(brand, ...extra, back), place(bar, rect)));
     const back = chip('‹', () => showBar(kind, rect, payload, ctx));
-    bar.replaceChildren(brand, ...chips, ...(extra.length > 1 ? [more] : extra), ask);
+    const sep = () => Object.assign(document.createElement('span'), { className: 'sep' });
+    bar.replaceChildren(brand, sep(), ...chips, ...(extra.length > 1 ? [more] : extra), sep(), ask);
     place(bar, rect);
   }
 
@@ -207,35 +210,8 @@
       bar.replaceChildren(why, go, note);
       return place(bar, fab.hidden ? { top: 60, bottom: 60, left: innerWidth - 440, right: innerWidth } : fab.getBoundingClientRect());
     }
-    const rect = fab.hidden ? { top: 60, bottom: 60, left: innerWidth - 440, right: innerWidth } : fab.getBoundingClientRect();
-    const chips = tasks.filter((t) => t.kind === 'page').map((t) => {
-      const b = document.createElement('button');
-      b.textContent = t.title;
-      b.onclick = () => run({ task: t, page: pageInfo() }, t.title, topRect());
-      return b;
-    });
-    const form = document.createElement('form');
-    form.className = 'wide';
-    form.innerHTML = '<input aria-label="Question" placeholder="Ask about this page…"><button class="primary">Ask</button>';
-    const input = form.querySelector('input');
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      const q = input.value.trim();
-      if (q) run({ task: { kind: 'page' }, question: q, page: pageInfo() }, q, topRect());
-    };
-    const btn = (label, onclick) => Object.assign(document.createElement('button'), { textContent: label, onclick });
-    const act = (a) => btn(a.label, () => ((bar.hidden = true), a.run({ page: pageInfo(), rect: topRect() })));
-    const shown = actions.page.filter((a) => !a.when || a.when());
-    // Actions that only apply here (a video, a form, a long page) come first; the rest sit in categories.
-    const here = shown.filter((a) => a.when);
-    const byGroup = {};
-    for (const a of shown.filter((a) => !a.when)) (byGroup[groupOf(a.label)] ??= []).push(a);
-    const brand = Object.assign(document.createElement('span'), { className: 'brand', textContent: '✦' });
-    const groups = Object.entries(byGroup).map(([g, list]) =>
-      btn(`${g} ▸`, () => (bar.replaceChildren(brand, ...list.map(act), btn('‹', showLauncher)), place(bar, rect))));
-    bar.replaceChildren(brand, ...chips, ...here.map(act), ...groups, form);
-    place(bar, rect);
-    input.focus();
+    // Everything else is the command palette (content/palette.js), opened as a menu above the ✦ button.
+    window.EG.palette({ anchor: fab.hidden ? null : fab.getBoundingClientRect() });
   }
   fab.onclick = () => (bar.hidden ? showLauncher() : (bar.hidden = true));
   // On a PDF tab, offer the reader once without waiting for a click.
@@ -244,13 +220,13 @@
   // Cards opened from the launcher sit at the top-right, so they never cover the ✦ button.
   const topRect = () => ({ top: 60, bottom: 60, left: innerWidth - 420, right: innerWidth });
 
-  // Launcher categories, by action label; anything unlisted lands in "More".
+  // Palette/launcher sections, by action label; anything unlisted lands in "More".
   const GROUPS = {
-    Read: ['Mind map', 'Listen as podcast', 'Quiz me', 'Make flashcards', 'Related reading'],
+    Read: ['Mind map', 'Listen as podcast', 'Quiz me', 'Make flashcards', 'Gist margins'],
     Write: ['Write…'],
     Translate: ['Translate page (bilingual)', 'Live captions'],
     Images: ['Create image', 'Ask about an area'],
-    Web: ['Research…'],
+    Web: ['Mission…', 'Research…', 'Related reading', 'Find the best price'],
     Tabs: ['Compare tabs…', 'Tidy tabs', 'Watch this page'],
     Voice: ['Speak…'],
   };
@@ -559,6 +535,7 @@
     onSettings: (cb) => (settingsListeners.push(cb), cb(settings)),
     enabled: () => enabled,
     topRect,
+    groupOf,
     style: (css) => root.prepend(Object.assign(document.createElement('style'), { textContent: css })),
   };
 })();

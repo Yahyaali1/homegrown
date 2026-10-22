@@ -29,7 +29,7 @@ Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chro
 |---|---|
 | **Select text** | Your tasks (Summarize, Explain, Translate, Rewrite, your own), then **More ▸** and **Ask…** |
 | **Point at an image** (80 px+) | ✦ button: Describe, Extract text, Translate image, Write alt text, Ask |
-| **✦ launcher** (bottom-right, Alt+Shift+A) | Page tasks, **Mission…**, page-specific actions, then Write ▸ Read ▸ Translate ▸ Images ▸ Web ▸ Tabs ▸ |
+| **✦ launcher** (bottom-right, Alt+Shift+A) | The command menu, anchored above the button: type a question, or pick from sections (This page, Read, Write, Translate, Images, Web, Tabs, Voice) |
 | **Command palette** (Alt+K) | One search box for every task, action and saved mission; type a question or a goal |
 | **Address bar** | `eg` + space + a goal starts a mission |
 | **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDF links and pages |
@@ -122,16 +122,14 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 
 ## Design
 
-Homegrown follows Vercel's [Geist](https://vercel.com/geist) design system:
-- monochrome grays;
-- blue only for focus and links;
-- hairline shadow borders;
-- short "swift" motion (a .96 scale-in, staggered lists, height changes that animate, View
-  Transitions for sorting).
+Homegrown follows [Radix Colors + Radix Themes](https://www.radix-ui.com/themes), with Apple's
+dark-mode rule for floating UI: raised surfaces are lighter than the page and have a visible edge,
+so the toolbar, card and launcher stand out on dark websites.
+- The ✦ launcher and Alt+K open the same command menu: a search box, then sections of plain rows.
+- The theme is your choice: system, light or dark.
+- Motion is Radix's 160 ms slide-and-fade.
 
 Tokens are in `extension/ui/tokens.css`; rules are in [docs/design-system.md](docs/design-system.md).
-While the model works you see a thin moving bar and shimmering gray text, never extra colour.
-Reduce Motion is honoured.
 
 ## Models (all on-device)
 

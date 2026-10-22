@@ -1,133 +1,112 @@
 # Homegrown design system
 
-Homegrown follows **Vercel's Geist** design system ([vercel.com/geist](https://vercel.com/geist)).
-- **Why Geist:** it is monochrome, quiet and fast-feeling. That suits a tool that floats over other
-  people's web pages, where extra colour competes with the site. The earlier gradient-and-glow
-  version was dropped for this reason.
-- **Source of truth:** every token is in **`extension/ui/tokens.css`**. The values are copied from
-  Geist's published CSS (October 2026).
+Homegrown follows **Radix Colors + Radix Themes** ([radix-ui.com/colors](https://www.radix-ui.com/colors),
+[radix-ui.com/themes](https://www.radix-ui.com/themes)). For floating UI in dark mode it also
+follows Apple's Human Interface Guidelines.
+- **Source of truth:** every token is in **`extension/ui/tokens.css`**. Values are copied from
+  `@radix-ui/colors` 3.0.0 and `@radix-ui/themes` 3.3.0.
 - **Who loads it:**
-  - Every extension page loads it with `@import url('ui/tokens.css');` on the first line of its stylesheet.
-  - The in-page shadow UI loads it with a `<link>` in `content/core.js`, exposed through `web_accessible_resources`.
-  - A new surface imports it too. A surface never defines its own colours, radii, shadows or easings.
+  - Extension pages load it with `@import url('ui/tokens.css');` and run `ui/theme.js`.
+  - The in-page shadow UI loads it with a `<link>` in `content/core.js`.
+  - A surface never defines its own colours, radii, shadows or easings.
 
-## Principles (from Geist)
+## Why Radix, and why not the earlier versions
 
-1. **Gray does the work.** Hierarchy comes from the 10-step gray scale, weight and spacing, not hue.
-   - The primary button is `--gray-1000` with page-coloured text: black on light, white on dark.
-   - Blue appears only as the focus ring (`--focus`) and links (`--link`).
-   - Green, amber and red appear only as status text.
-2. **Shadows are borders.** Surfaces are opaque `--bg`, edged by a 1px shadow ring
-   (`--shadow-border-base`) plus a soft lift for floating things (`--shadow-menu`, `--shadow-modal`).
-   No glass, no glow.
-3. **Motion is short and physical.**
-   - Popovers: 0.2s. Overlays: 0.3s, entering from scale .96.
-   - Easing: Geist's "swift" curve, `cubic-bezier(.175, .885, .32, 1.1)`, which overshoots slightly.
-   - Lists stagger by 15–40 ms per item.
-   - Height changes animate (`interpolate-size: allow-keywords`), so nothing jumps.
-4. **"Working" is gray too:**
-   - a 2px indeterminate bar on the working element's top edge;
-   - shimmering gray text ("Thinking…", "Checking…");
-   - a breathing dot at the end of streamed text.
-5. **Reduce Motion is honoured.** All animation and transition collapse to one frame. State still
-   shows in text.
-6. **Light and dark are equal, and the user picks.**
-   - Every colour token is `light-dark(light, dark)`, so `color-scheme` alone switches the theme.
-   - The setting is `theme` in `chrome.storage.sync`: `system`, `light` or `dark`. You change it
-     with the ◐ ☀ ☾ switch in Settings → Appearance or in the Mission control sidebar.
-   - Extension pages load `ui/theme.js`, which sets `data-theme` on `<html>`. It paints from a
-     localStorage copy first, so there is no flash.
-   - The in-page UI sets `color-scheme` inline on its host, because the host's `all: initial`
-     would override a `:host` rule.
-   - Any `<div class="theme-switch">` on a page becomes the switch.
+1. **Glass and a four-colour glow:** too much colour.
+2. **Geist (monochrome):**
+   - Floating panels were near-black (`#0a0a0a`), so on dark websites they disappeared into the
+     page. Shadows can't separate dark from dark.
+   - The launcher was a wall of outlined buttons.
+3. **Radix fixes this:**
+   - Each of its 12 gray steps has a defined job in both themes. Floating surfaces take a lighter step.
+   - Alpha grays give edges that show on any page.
+   - Its menus are lists of ghost rows, not grids of boxes.
+
+## Principles
+
+1. **Raised means lighter in dark mode** (Apple HIG):
+   - Shadows barely read on dark pages, so anything floating (toolbar, card, menu, launcher) uses
+     `--panel`. That is white in light mode and `gray-3` (`#222`) in dark, one step above most dark
+     sites.
+   - It carries `--shadow-float`: Radix's popover shadow, plus a 1px lit top edge in dark.
+2. **Alpha edges.** Borders and fills use the alpha grays (`--gray-a3`…`a8`), so they keep their
+   contrast whatever page is underneath.
+3. **Ghost items inside panels.** A toolbar or menu is one surface. Items inside it have no
+   border; they get a fill on hover or keyboard focus (`--chip-hover`). Groups are split by a
+   hairline (`.sep`) or a section label. Bordered buttons (`--btn-*`) are only for buttons that
+   stand alone on a page.
+4. **One way in.** The ✦ launcher and Alt+K open the same command menu: one search box, then
+   sections. Type to filter, or press Enter to ask about the page.
+5. **Gray first, colour for meaning.** The primary action is solid `--accent` (`gray-12`) with
+   `--accent-fg` text. Blue is only for focus and links. Green, amber and red are only for status
+   text.
+6. **Motion is Radix's popover motion.** 160 ms, slide 4px, scale .97 → 1, fade, on
+   `cubic-bezier(.16, 1, .3, 1)`. List items stagger 15–40 ms. Height changes animate.
+   Working state is a 2px indeterminate bar, shimmering "Thinking…" text and a breathing dot.
+   Reduce Motion collapses all of it.
+7. **The user picks the theme.**
+   - The `theme` setting (`system` / `light` / `dark`) is in `chrome.storage.sync`; there is a
+     ◐ ☀ ☾ switch in Settings and Mission control.
+   - Tokens are `light-dark()`, so `color-scheme` alone flips them.
 
 ## Tokens
 
 | Group | Tokens | Use |
 |---|---|---|
-| Gray scale | `--gray-100` … `--gray-1000` | 100 bg · 200 hover · 300 pressed · 400 border · 500 hover border · 600 active border · 700–800 high-contrast bg · 900 secondary text · 1000 primary text |
-| Backgrounds | `--bg` (`--bg-100`), `--bg-2` (`--bg-200`) | surfaces · page base behind them (sparingly) |
-| Roles | `--fg`, `--muted`, `--faint`, `--line`, `--chip` | text · secondary text · tertiary/meta · borders · quiet fills |
-| Action | `--accent` (= gray-1000), `--accent-fg` | primary button only |
-| Buttons | `--btn-bg`, `--btn-bg-hover`, `--btn-edge` | secondary buttons: fill, hover fill, 1px ring |
-| Blue | `--focus`, `--link`, `--focus-ring` | keyboard focus, links |
-| Status | `--good`, `--warn`, `--danger` | text and small marks only |
-| Type | `--font` (Geist → Inter → system), `--mono`, `--serif`; `--t-xs` 11 … `--t-2xl` 32 | in-page `--t-md`, pages `--t-base`, headings tight (-.01 to -.04em) |
-| Radius | `--r-sm` 6 · `--r-md` 12 · `--r-lg` 16 · `--r-pill` | Geist materials: controls · menus, cards, modals · fullscreen |
+| Radix scale | `--gray-1` … `--gray-12`, `--gray-a2` … `--gray-a8` | 1–2 backgrounds · 3–5 fills (rest/hover/pressed) · 6–8 borders · 11 secondary text · 12 text |
+| Surfaces | `--bg`, `--bg-2`, `--page`, `--card`, `--panel` | page bg · subtle bg (table heads, code) · extension page base · cards and sections · anything floating over a web page |
+| Text | `--fg`, `--muted`, `--faint` | gray-12 · gray-11 · gray-10 |
+| Lines | `--line`, `--line-strong`, `--line-hover` | separators (a6) · control edges (a7) · hovered edges (a8) |
+| Fills | `--chip`, `--chip-hover`, `--chip-active` | items at rest (a3) · hover/keyboard (a4) · pressed (a5) |
+| Action | `--accent`, `--accent-fg` | the primary button only |
+| Buttons | `--btn-bg`, `--btn-bg-hover`, `--btn-edge` | standalone buttons (Radix "surface"): fill + 1px a7 edge |
+| Colour | `--focus` (blue-8), `--link` (blue-11), `--good`, `--warn`, `--danger` (step 11) | focus ring, links, status text |
+| Shape | `--r-xs` 4 · `--r-sm` 6 · `--r-md` 12 · `--r-lg` 16 · `--r-pill` | menu rows, kbd · controls · panels, cards · large · chips |
 | Space | `--s1` 4 … `--s6` 32 | 4px grid |
-| Elevation | `--shadow-border`, `--shadow-small`, `--shadow-tooltip`, `--shadow-menu`, `--shadow-modal` | edge · resting card · tooltip · popover/toolbar/card · palette/dialog |
-| Motion | `--ease-swift`, `--ease-out`; `--d-fast` .15s · `--d-popover` .2s · `--d-overlay` .3s; `--enter-scale` .96 | press/hover · popovers · overlays and content |
+| Elevation | `--shadow-small`, `--shadow-menu`, `--shadow-modal`, `--shadow-float` | Radix shadow-2 · shadow-5 · shadow-6 · shadow-5 plus the lit top edge, for UI over web pages |
+| Motion | `--ease-out`; `--d-fast` .12s · `--d-popover` .16s · `--d-overlay` .24s; `--enter-scale` .97 | hover/press · popovers · cards and content |
 
-The older names (`--text`, `--border`, `--panel`, `--surface`, `--glass`, `--accent-text`,
-`--user`, `--warn-bg`, `--shadow`, `--shadow-sm`) are aliases kept for existing stylesheets. New
-code uses the names in the table.
+Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--user`,
+`--warn-bg`, `--shadow`, `--shadow-sm`, `--ease-swift`) are aliases kept for existing stylesheets.
 
-## Primitives and keyframes (`tokens.css`)
+## Primitives (`tokens.css`)
 
 **Classes:**
 
 | Class | What it does |
 |---|---|
-| `.hg-enter` | popover entrance: fade, rise 4px, scale .96 → 1 on the swift curve |
-| `.hg-shimmer` | gray skeleton block |
-| `.hg-thinking` | gray text with a light sweep |
-| `.hg-progress` | indeterminate 2px top bar (the parent must be positioned) |
+| `.hg-enter` | popover entrance |
+| `.hg-shimmer` | skeleton block |
+| `.hg-thinking` | shimmering gray text |
+| `.hg-progress` | indeterminate 2px top bar |
 
 **Keyframes:** `hg-pop`, `hg-rise`, `hg-fade`, `hg-shimmer`, `hg-breathe`, `hg-indeterminate`.
 
 ## Components
 
-- **Selection toolbar** (`.bar`)
-  - A 12px-radius popover with `--shadow-menu`.
-  - It enters with `hg-pop`; its buttons follow with `hg-rise`, staggered by 15 ms.
-  - Buttons are 28px high and transparent. Hover fills `--gray-200`; press fills `--gray-300` and
-    scales to .97.
-  - One primary (black/white) button at most.
-- **Answer card** (`.card`)
-  - Enters from scale .96 in 0.3s.
-  - Header and follow-up form are divided by `--line`; the form sits on `--bg-2`.
-  - Waiting: shimmering "Thinking…". Streaming: the 2px indeterminate bar plus a breathing dot.
-    Both stop on done, error or close.
-  - Result chips are pill outlines that rise in a stagger.
-- **Launcher** (`.fab`): a 40px circle with `--shadow-menu`. Hover scales it to 1.06 and lifts it to
-  `--shadow-modal`. Press scales it to .94.
-- **Command palette:** `--shadow-modal`, entering with `hg-pop`, over a 20% black scrim that fades in.
-- **Buttons:**
-  - Secondary buttons always show an edge: a 1px `--btn-edge` ring on `--btn-bg`, with
-    `--btn-bg-hover` on hover.
-  - In dark mode the fill is lifted to 11% gray and the ring is 18% white, so buttons separate from
-    the near-black surface.
-  - Card-header buttons stay ghost (no fill or edge) to keep the header quiet.
-- **Inputs:** a 1px ring (`--line`). Hover deepens it to `--gray-500`. Focus shows `--gray-600` plus
-  the blue focus ring.
-- **Mission control**
-  - The page base is `--bg-2`, with white sections at `--shadow-small`.
-  - **Step cards** rise in a 40 ms stagger. While running, a step gets a `--gray-1000` ring, a 2px
-    lift, the indeterminate bar and a shimmering detail line. A finished step gets a ✓ that pops in.
-  - **Feedback loop:** a 1px rail with one row per round. The dot shows the phase:
-
-    | Phase | Dot | Text |
-    |---|---|---|
-    | running / checking | filled, breathing | shimmers while checking |
-    | goal met | solid | — |
-    | retry | hollow gray | — |
-
-  - **Answer:** a 2px `--fg` rule on the left; no tinted box.
-  - **Results table:** rows rise in a stagger. Sorting runs in a View Transition, so rows glide to
-    their new places. The best row has a 2px left rule.
-  - **Activity log:** a `<details>` whose height animates (`::details-content`). Its chevron rotates
-    on the swift curve.
-  - **Badges:** gray pills; the status colour is the text only.
+- **Command menu**
+  - Opened by the ✦ launcher (anchored above the button, no scrim) and by Alt+K (centred, page dimmed).
+  - It has a borderless search field and 32px ghost rows in sections: Selection, This page, Read,
+    Write, Translate, Images, Web, Tabs, Voice, More, Saved missions.
+  - Typing filters to the 9 best matches, with the matched letters underlined, followed by
+    "Ask: …", "Mission: …" and "Across my open tabs: …". ↑↓ move, ↵ runs.
+  - The footer shows the page title and keyboard hints.
+- **Selection toolbar:** one `--panel` surface: ✦ | saved tasks, actions, More ▸ | Ask…, with
+  hairlines between groups. Items are ghost and 28px high.
+- **Answer card:** `--panel`, header and form split by `--line`, result chips as `--chip` pills.
+  Working state is the 2px bar plus "Thinking…".
+- **Launcher button:** a 40px `--panel` circle with `--shadow-float`. Hover scales it to 1.06.
+- **Inputs:** a `--chip` fill with an inset a7 edge. Hover a8; focus shows a 1px blue ring.
+- **Mission control:** a `--page` base with `--card` sections. The step, round and table
+  behaviour is unchanged (see the plan, L).
 
 ## Rules for new UI
 
-- Use only `tokens.css` variables. Reuse a primitive or keyframe before writing a new one.
-- No new hues. If something needs emphasis, use weight, `--gray-1000` or a 1–2px rule.
-- Every appearing element gets an entrance:
-  - `hg-pop` for popovers;
-  - `hg-rise` for content;
-  - list items staggered by 15–40 ms, capped at about 120 ms.
-- Every interactive element has hover, press (.97 scale) and focus (`--focus-ring`) states.
-- Working state goes on the element that is working, never on the whole page.
-- No icon libraries: use Unicode glyphs (✦ ✓ ↑ ↓ ▸) or inline SVG. Emoji are greyscaled
-  (`filter: grayscale(1)`) where they sit in UI chrome.
+- Use only `tokens.css` variables. Anything that floats over a web page uses `--panel` +
+  `--shadow-float`.
+- Inside a panel, items are ghost rows or ghost buttons. Never a grid of bordered boxes.
+- More than about 6 actions? Put them in the command menu, not the toolbar.
+- No new hues. Emphasis comes from weight, `--fg`, or a 1–2px rule.
+- Every element that appears gets an entrance (`hg-pop` / `hg-rise`). Every interactive element has
+  hover, press and focus states.
+- No icon libraries. Use Unicode glyphs (✦ › ◎ ▤ ↵ ✓) in `--muted`.
