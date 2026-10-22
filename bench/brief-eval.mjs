@@ -35,6 +35,7 @@ const FRESH = [
   ['a 4-person tent lighter than 3 kg, not a pop-up', { subject: ['tent'], budget: null, must: ['4'], avoid: ['pop-up'], mustNot: ['3', '3kg', '3 kg'] }],
   ['top 10 longest-lasting AA rechargeable batteries', { subject: ['batter'], budget: null, list: true }],
   ['cheapest flight Berlin to Rome in June', { subject: ['flight'], budget: null, rank: ['price', 'asc'], list: false }],
+  ['noise-cancelling headphones under $200, not refurbished', { subject: ['headphone'], budget: ['<', 200], avoid: ['refurbished'] }],
   ['a USB-C hub with HDMI 2.1 and ethernet under 60 dollars', { subject: ['hub'], budget: ['<', 60], must: ['usb-c'], mustNot: ['60'] }],
 ];
 

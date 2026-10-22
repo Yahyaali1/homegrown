@@ -31,7 +31,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10665
+    "ms": 9833
   },
   {
     "goal": "Compare the best noise-cancelling headphones under $300",
@@ -49,9 +49,7 @@
         "noise-cancelling"
       ],
       "avoid": [],
-      "prefer": [
-        "quiet"
-      ],
+      "prefer": [],
       "budget": {
         "op": "<",
         "value": 300,
@@ -68,14 +66,13 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 6253
+    "ms": 7983
   },
   {
     "goal": "Which electric car has the longest range for the money?",
     "ok": false,
     "fails": [
-      "invented a budget <40000",
-      "want list"
+      "rank price asc"
     ],
     "brief": {
       "subject": "electric car",
@@ -90,25 +87,21 @@
       "must": [],
       "avoid": [],
       "prefer": [
-        "longest range for the money"
+        "longest range"
       ],
-      "budget": {
-        "op": "<",
-        "value": 40000,
-        "currency": "USD"
-      },
+      "budget": null,
       "rank": {
-        "by": "range_miles",
-        "order": "desc"
+        "by": "price",
+        "order": "asc"
       },
       "want": {
-        "kind": "list",
-        "n": 5
+        "kind": "one",
+        "n": 3
       },
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 7716
+    "ms": 8757
   },
   {
     "goal": "electric cars under 40k with the longest range",
@@ -124,12 +117,10 @@
         "vehicle",
         "vehicles"
       ],
-      "must": [
-        "ev"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
-        "longest range"
+        "electric"
       ],
       "budget": {
         "op": "<",
@@ -147,7 +138,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 7511
+    "ms": 8542
   },
   {
     "goal": "top 5 lightest laptops under 1.2 kg",
@@ -157,14 +148,14 @@
       "subject": "laptop",
       "subjectWords": [
         "laptop",
-        "laptops"
+        "laptops",
+        "notebook",
+        "notebooks"
       ],
-      "must": [
-        "weight_kg"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
-        "lightweight"
+        "lightest"
       ],
       "budget": null,
       "rank": {
@@ -178,19 +169,19 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 7770
+    "ms": 8419
   },
   {
     "goal": "cheapest 2TB NVMe SSD under £120",
     "ok": true,
     "fails": [],
     "brief": {
-      "subject": "nvme ssd",
+      "subject": "ssd",
       "subjectWords": [
-        "nvme ssd",
-        "nvme ssds",
         "ssd",
-        "ssds"
+        "ssds",
+        "storage",
+        "storages"
       ],
       "must": [
         "2tb",
@@ -214,7 +205,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9256
+    "ms": 10682
   },
   {
     "goal": "a quiet robot vacuum for pet hair under 400 euros",
@@ -225,17 +216,14 @@
       "subjectWords": [
         "robot vacuum",
         "robot vacuums",
-        "vacuum",
-        "vacuums",
-        "pet hair",
-        "pet hairs"
+        "vacuum cleaner",
+        "vacuum cleaners"
       ],
-      "must": [
-        "pet hair"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
-        "quiet"
+        "quiet",
+        "pet hair"
       ],
       "budget": {
         "op": "<",
@@ -253,32 +241,34 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10631
+    "ms": 10572
   },
   {
     "goal": "phones with at least 256GB storage under $600",
     "ok": true,
     "fails": [],
     "brief": {
-      "subject": "phones",
+      "subject": "phone",
       "subjectWords": [
-        "phones",
         "phone",
+        "phones",
         "smartphone",
         "smartphones"
       ],
       "must": [],
       "avoid": [],
       "prefer": [
-        "best camera",
-        "256gb"
+        "at least 256gb storage"
       ],
       "budget": {
         "op": "<",
         "value": 600,
         "currency": "USD"
       },
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "list",
         "n": 5
@@ -286,7 +276,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10135
+    "ms": 10426
   },
   {
     "goal": "best rated ramen in Tokyo near Shinjuku",
@@ -302,9 +292,7 @@
         "restaurant",
         "restaurants"
       ],
-      "must": [
-        "ramen"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
         "near shinjuku"
@@ -321,7 +309,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 7051
+    "ms": 10041
   },
   {
     "goal": "used mountain bike, not carbon, under $800",
@@ -331,17 +319,16 @@
       "subject": "mountain bike",
       "subjectWords": [
         "mountain bike",
-        "mountain bikes"
+        "mountain bikes",
+        "mtb",
+        "mtbs"
       ],
-      "must": [
-        "used",
-        "not carbon"
-      ],
+      "must": [],
       "avoid": [
         "carbon"
       ],
       "prefer": [
-        "mountain bike"
+        "used"
       ],
       "budget": {
         "op": "<",
@@ -354,35 +341,37 @@
       },
       "want": {
         "kind": "list",
-        "n": 5
+        "n": 3
       },
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9242
+    "ms": 16772
   },
   {
     "goal": "3 good espresso machines for a beginner, not too expensive",
     "ok": false,
     "fails": [
-      "invented a budget <300"
+      "invented a budget <500"
     ],
     "brief": {
       "subject": "espresso machine",
       "subjectWords": [
         "espresso machine",
-        "espresso machines"
+        "espresso machines",
+        "coffee maker",
+        "coffee makers"
       ],
-      "must": [
-        "beginner-friendly"
+      "must": [],
+      "avoid": [
+        "expensive"
       ],
-      "avoid": [],
       "prefer": [
-        "not too expensive"
+        "beginner friendly"
       ],
       "budget": {
         "op": "<",
-        "value": 300,
+        "value": 500,
         "currency": "USD"
       },
       "rank": {
@@ -396,27 +385,26 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8182
+    "ms": 18843
   },
   {
     "goal": "wireless gaming mouse lighter than 60 grams",
-    "ok": true,
-    "fails": [],
+    "ok": false,
+    "fails": [
+      "must lacks wireless"
+    ],
     "brief": {
-      "subject": "gaming mouse",
+      "subject": "mouse",
       "subjectWords": [
-        "gaming mouse",
-        "gaming mouses",
         "mouse",
         "mouses",
-        "wireless",
-        "wirelesss"
+        "gaming mouse",
+        "gaming mouses"
       ],
-      "must": [
-        "wireless"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
+        "wireless",
         "lighter than 60 grams"
       ],
       "budget": null,
@@ -431,7 +419,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 6927
+    "ms": 9989
   },
   {
     "goal": "flights from London to Lisbon in May, cheapest",
@@ -441,12 +429,11 @@
       "subject": "flights",
       "subjectWords": [
         "flights",
-        "flight"
+        "flight",
+        "airfare",
+        "airfares"
       ],
-      "must": [
-        "london",
-        "lisbon"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
         "may"
@@ -463,7 +450,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 6811
+    "ms": 10384
   },
   {
     "goal": "the most popular open-source password manager",
@@ -474,18 +461,21 @@
       "subjectWords": [
         "password manager",
         "password managers",
-        "open-source",
-        "open-sources"
+        "vault",
+        "vaults",
+        "manager",
+        "managers"
       ],
-      "must": [
-        "open-source"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
-        "most popular"
+        "open-source"
       ],
       "budget": null,
-      "rank": null,
+      "rank": {
+        "by": "popularity",
+        "order": "desc"
+      },
       "want": {
         "kind": "one",
         "n": 3
@@ -493,7 +483,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 6197
+    "ms": 11112
   },
   {
     "goal": "standing desk under 500 dollars with memory presets",
@@ -510,8 +500,7 @@
       "must": [],
       "avoid": [],
       "prefer": [
-        "memory presets",
-        "under $500"
+        "memory presets"
       ],
       "budget": {
         "op": "<",
@@ -524,35 +513,31 @@
       },
       "want": {
         "kind": "list",
-        "n": 5
+        "n": 3
       },
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 14489
+    "ms": 11073
   },
   {
     "goal": "which 65 inch OLED TV has the best picture under 2000",
     "ok": true,
     "fails": [],
     "brief": {
-      "subject": "oled tv",
+      "subject": "tv",
       "subjectWords": [
-        "oled tv",
-        "oled tvs",
-        "65 inch",
-        "65 inchs",
-        "oled",
-        "oleds"
+        "tv",
+        "tvs",
+        "television",
+        "televisions"
       ],
       "must": [
         "65 inch",
         "oled"
       ],
       "avoid": [],
-      "prefer": [
-        "best picture"
-      ],
+      "prefer": [],
       "budget": {
         "op": "<",
         "value": 2000,
@@ -563,12 +548,12 @@
         "order": "desc"
       },
       "want": {
-        "kind": "one",
+        "kind": "list",
         "n": 3
       },
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10323
+    "ms": 11908
   }
 ]

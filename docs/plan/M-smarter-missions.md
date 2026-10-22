@@ -104,7 +104,8 @@ regex can't know what someone means.
 | + narrow verification of budget, one-vs-list, numbered must-haves | 10/16 (budget and one/list questions made it worse) | n/a |
 | + numbered must-haves verification only (shipped) | 14/16 | 5/8 |
 | Constrained decoding: plan as a LiteRT tool call with a JSON schema | 7/16 | 3/8 |
-| Shipped prompt, after removing an example that taught invented exclusions | 14/16 | 5/8 |
+| After removing an example that taught invented exclusions | 14/16 | 5/8 |
+| **+ critic: a negated wish ("not refurbished") belongs in avoid** (shipped; held-out set now 9) | 13/16 | **9/9** |
 | **Same prompt on Gemma 4 E4B** (2.97 GB) | 13/16 | **8/8** |
 
 - **Constrained decoding:** the JSON always parses, but Gemma leaves optional fields out (budget, rank, must). It was
@@ -115,6 +116,19 @@ regex can't know what someone means.
 - **Other open models with LiteRT builds** (Qwen3-4B-Instruct, Qwen3.5-4B, Ministral-3-3B, SmolLM3, Phi-4-mini) have no
   official *web* build, so they weren't benchmarked. Gemma 4 E4B is the only bigger model the browser engine is
   known to run. NuExtract3 (a 4B JSON-extraction fine-tune of Qwen3.5) would be the next to try if a web build appears.
+
+**Live web run** ("noise-cancelling headphones under $200, not refurbished", E2B, 144 s):
+- Brief: headphones, avoid refurbished, under 200 USD, best rated first.
+- Set aside: 5 rows that weren't headphones, 1 review article ("The 5 Best … Under $100", whose price came from its
+  own title), and 17 over budget.
+- Result: five distinct real headphones under $200 (KVIDIO $25, Sony ULT WEAR $129.95 and $147, Sony WH-CH720N $179.99,
+  Nothing Headphone (a) $199).
+- The answer says plainly that no listing showed a rating.
+
+Two fixes came from this run:
+- **Ranking:** rows without the ranking field now follow the ranked ones instead of vanishing. A rating ranking had
+  dropped every shop listing.
+- **De-duplication:** it now runs on all rows, ranked or not.
 
 **Extraction** (`bench/extract-eval.mjs`, real pages, 38 questions over four sets): **38/38** after all of the above,
 the same as before.

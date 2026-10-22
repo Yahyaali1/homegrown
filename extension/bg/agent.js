@@ -109,6 +109,11 @@ function briefProblems(form) {
       p.push(`"must" contains "${m}", which is a budget or a comparison: move a money limit to "budget" and a comparison to "prefer"`);
     }
   }
+  for (const w of form.prefer || []) {
+    if (/^(not|no|non|without|never|avoid|exclude|except)\b/i.test(String(w).trim())) {
+      p.push(`"prefer" contains "${w}", which is an exclusion: put the excluded thing in "avoid" (e.g. "not refurbished" → "refurbished") and remove it from "prefer"`);
+    }
+  }
   if (form.rank?.by && /price|cost/.test(form.rank.by) && !(form.fields || []).some((f) => /price|cost/.test(f))) p.push('"rank" uses price but "fields" has no price column');
   if (!form.subject) p.push('"subject" is empty: name the kind of thing the user wants');
   return p;
@@ -682,7 +687,7 @@ export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.
         rows.forEach((r) => delete r._text);
         if (ctx) rows = mergeRows(ctx.carry, rows, step.fields); // earlier rounds' rows, filled in by this round's
         const why = [need.length && found - rows.length - dropped.subject - dropped.accessory > 0 && `${found - rows.length - dropped.subject - dropped.accessory} lacked ${need.join(', ')}`,
-          dropped.subject && `${dropped.subject} weren't a ${brief.subject}`, dropped.accessory && `${dropped.accessory} accessories`].filter(Boolean);
+          dropped.subject && `${dropped.subject} weren't a ${brief.subject}`, dropped.avoid && `${dropped.avoid} excluded`, dropped.accessory && `${dropped.accessory} accessories`, dropped.article && `${dropped.article} articles, not products`].filter(Boolean);
         say(runId, { step: i, status: 'done', detail: `${rows.length} rows from ${pages.length} pages${why.length ? ` · set aside: ${why.join(', ')}` : ''}`, rows });
       } else if (step.type === 'filter') {
         const before = rows.length;
@@ -690,7 +695,10 @@ export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.
         say(runId, { step: i, status: 'done', detail: step.field && step.value !== '' ? `${rows.length} of ${before} kept` : 'off', rows });
       } else if (step.type === 'rank') {
         pool = rows; // everything found, before ranking trims it — carried into the next round
-        rows = rows.filter((r) => r[step.by] != null && r[step.by] !== '');
+        // Rows that have the ranking field are ranked; the rest follow rather than vanish (shops often show no rating).
+        const has = (r) => r[step.by] != null && r[step.by] !== '';
+        const unranked = rows.filter((r) => !has(r));
+        rows = rows.filter(has);
         // Summary rows ("World", "Total") aren't items: they would always rank first.
         const nameKey = Object.keys(rows[0] || {}).find((k) => !k.startsWith('_') && typeof rows[0][k] === 'string');
         rows = rows.filter((r) => !/^(world|total|sum|all|overall|average|grand total|world total)\b/i.test(String(r[nameKey] ?? '').trim()));
@@ -721,7 +729,12 @@ export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.
           if (median) rows = rows.filter((r) => typeof r[step.by] !== 'number' || r[step.by] >= median / 10);
         }
         rows.sort((a, b) => compare(a[step.by], b[step.by]) * (step.order === 'desc' ? -1 : 1));
-        rows = rows.slice(0, step.keep || 5);
+        // The same listing is often on several pages: one row per name + price, rated or not.
+        const once = new Set();
+        rows = [...rows, ...unranked].filter((r) => {
+          const k = Object.entries(r).filter(([key]) => !key.startsWith('_')).map(([, v]) => String(v ?? '').toLowerCase().slice(0, 40)).join('|');
+          return !once.has(k) && once.add(k);
+        }).slice(0, step.keep || 5);
         say(runId, { step: i, status: 'done', detail: `top ${rows.length} by ${step.by}${aside ? ` · ${aside} in other currencies set aside` : ''}`, rows });
       } else if (step.type === 'answer') {
         if (!pool.length) pool = rows;

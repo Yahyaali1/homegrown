@@ -41,6 +41,8 @@ export function normalizeBrief(b) {
 // ---- enforcing it on rows ----
 
 const ACCESSORY = /\b(case|cover|sleeve|skin|cable|adapter|charger|mount|stand|strap|band|protector|replacement|parts?|bag|pouch|holder|remote|bracket|ear ?pads?|cushions?|tips|refill|filter|kit|accessor(?:y|ies)|decal|sticker)\b/i;
+// Review articles and buying guides list products but aren't one ("The 5 Best Headphones Under $100").
+const ARTICLE = /^(the\s+)?(\d+|top\s+\d+)\s+best\b|\bbest\b.*\b(of|for)\s+(19|20)\d\d\b|\b(buying guide|review(s|ed)?|vs\.?|versus|compared|we tested|how to)\b/i;
 const nameOf = (r) => String(Object.entries(r).find(([k, v]) => !k.startsWith('_') && typeof v === 'string')?.[1] ?? '');
 const textOf = (r) => `${r._text || ''} ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([, v]) => v).join(' ')}`.toLowerCase();
 const word = (w) => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z]|$)`);
@@ -49,7 +51,7 @@ const word = (w) => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\
 // for it ("Stand for 27-inch monitor") unless the subject is itself an accessory.
 // Returns { rows, dropped: { subject, avoid, accessory } }.
 export function enforceSubject(rows, brief) {
-  const dropped = { subject: 0, avoid: 0, accessory: 0 };
+  const dropped = { subject: 0, avoid: 0, accessory: 0, article: 0 };
   const words = brief?.subjectWords?.length ? brief.subjectWords : forms(brief?.subject);
   if (!words.length) return { rows, dropped };
   const isThing = rows.filter((r) => words.some((w) => word(w).test(textOf(r))));
@@ -71,6 +73,9 @@ export function enforceSubject(rows, brief) {
       return !(/\b(for|compatible with|fits|replacement)\b/.test(name) || at === Infinity || name.search(ACCESSORY) < at);
     });
     dropped.accessory = before - kept.length;
+    const n = kept.length;
+    kept = kept.filter((r) => !ARTICLE.test(nameOf(r)));
+    dropped.article = n - kept.length;
   }
   return { rows: kept, dropped };
 }

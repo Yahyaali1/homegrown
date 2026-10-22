@@ -23,10 +23,11 @@ const rows = [
   { product: 'LG 27UP850 27" 4K UHD Monitor with USB-C and Stand', price: 349 },
   { product: 'Gaming chair, ergonomic', price: 199 },
   { product: 'Refurbished Samsung 27" 4K Monitor', price: 189 },
+  { product: 'The 5 Best 4K Monitors Under $300', price: 300 },
 ];
 const r = enforceSubject(rows, { ...brief, avoid: ['refurbished'] });
 eq(r.rows.map((x) => x.price), [279, 349], 'kept the two real, new monitors');
-eq(r.dropped, { subject: 1, avoid: 1, accessory: 2 }, 'what was set aside');
+eq(r.dropped, { subject: 1, avoid: 1, accessory: 2, article: 1 }, 'what was set aside');
 
 eq(productKey({ product: 'Dell 27 Plus 4K USB-C Monitor S2725QC' }), 'model:s2725qc', 'model number');
 eq(productKey({ product: 'Sony WH-1000XM5 Wireless Headphones' }), 'model:wh1000xm5', 'hyphenated model');

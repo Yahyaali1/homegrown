@@ -8,10 +8,8 @@
       "subjectWords": [
         "microsd card",
         "microsd cards",
-        "microsd",
-        "microsds",
-        "brand",
-        "brands"
+        "memory card",
+        "memory cards"
       ],
       "must": [
         "1tb"
@@ -32,7 +30,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 13453
+    "ms": 16765
   },
   {
     "goal": "compare three robot lawn mowers under 1500 euros",
@@ -43,22 +41,23 @@
       "subjectWords": [
         "robot lawn mower",
         "robot lawn mowers",
-        "lawn mower",
-        "lawn mowers"
+        "mower",
+        "mowers",
+        "grass cutter",
+        "grass cutters"
       ],
-      "must": [
-        "robot lawn mower"
-      ],
+      "must": [],
       "avoid": [],
-      "prefer": [
-        "comparison"
-      ],
+      "prefer": [],
       "budget": {
         "op": "<",
         "value": 1500,
         "currency": "EUR"
       },
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "list",
         "n": 3
@@ -66,23 +65,21 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 7106
+    "ms": 9937
   },
   {
     "goal": "which air fryer is the biggest under $150",
-    "ok": false,
-    "fails": [
-      "rank missing"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "air fryer",
       "subjectWords": [
         "air fryer",
-        "air fryers"
+        "air fryers",
+        "fryer",
+        "fryers"
       ],
-      "must": [
-        "biggest"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
         "biggest"
@@ -92,7 +89,10 @@
         "value": 150,
         "currency": "USD"
       },
-      "rank": null,
+      "rank": {
+        "by": "capacity",
+        "order": "desc"
+      },
       "want": {
         "kind": "one",
         "n": 3
@@ -100,28 +100,24 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 6563
+    "ms": 10810
   },
   {
     "goal": "best rated Thai restaurant in Brooklyn",
     "ok": true,
     "fails": [],
     "brief": {
-      "subject": "thai restaurant",
+      "subject": "restaurant",
       "subjectWords": [
-        "thai restaurant",
-        "thai restaurants",
-        "thai",
-        "thais",
         "restaurant",
-        "restaurants"
+        "restaurants",
+        "thai",
+        "thais"
       ],
-      "must": [
-        "thai"
-      ],
+      "must": [],
       "avoid": [],
       "prefer": [
-        "best"
+        "best rated"
       ],
       "budget": null,
       "rank": {
@@ -135,73 +131,64 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 6038
+    "ms": 8449
   },
   {
     "goal": "a 4-person tent lighter than 3 kg, not a pop-up",
-    "ok": false,
-    "fails": [
-      "must lacks 4"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "tent",
       "subjectWords": [
         "tent",
         "tents",
-        "camping gear",
-        "camping gears"
+        "camping tent",
+        "camping tents"
       ],
       "must": [
-        "not a pop-up"
+        "4-person"
       ],
       "avoid": [
         "pop-up"
       ],
-      "prefer": [
-        "durable",
-        "waterproof",
-        "4-person"
-      ],
+      "prefer": [],
       "budget": null,
       "rank": {
         "by": "weight_kg",
         "order": "asc"
       },
       "want": {
-        "kind": "one",
+        "kind": "list",
         "n": 3
       },
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 16847
+    "ms": 18386
   },
   {
     "goal": "top 10 longest-lasting AA rechargeable batteries",
     "ok": true,
     "fails": [],
     "brief": {
-      "subject": "aa batteries",
+      "subject": "batteries",
       "subjectWords": [
-        "aa batteries",
-        "aa battery",
-        "aa batterys",
-        "rechargeable",
-        "rechargeables",
-        "long-lasting",
-        "long-lastings"
+        "batteries",
+        "battery",
+        "batterys",
+        "aa rechargeable",
+        "aa rechargeables"
       ],
       "must": [
-        "aa",
-        "rechargeable"
+        "aa"
       ],
       "avoid": [],
       "prefer": [
-        "long-lasting"
+        "longest-lasting"
       ],
       "budget": null,
       "rank": {
-        "by": "rating",
+        "by": "life_span",
         "order": "desc"
       },
       "want": {
@@ -211,37 +198,75 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 6626
+    "ms": 10897
   },
   {
     "goal": "cheapest flight Berlin to Rome in June",
-    "ok": false,
-    "fails": [
-      "rank missing"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "flight",
       "subjectWords": [
         "flight",
-        "flights"
+        "flights",
+        "airfare",
+        "airfares"
       ],
-      "must": [
-        "berlin",
-        "rome",
+      "must": [],
+      "avoid": [],
+      "prefer": [
         "june"
       ],
-      "avoid": [],
-      "prefer": [],
       "budget": null,
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "one",
         "n": 3
       },
-      "shopping": false
+      "shopping": true
     },
     "planner": "gemma",
-    "ms": 4842
+    "ms": 9819
+  },
+  {
+    "goal": "noise-cancelling headphones under $200, not refurbished",
+    "ok": true,
+    "fails": [],
+    "brief": {
+      "subject": "headphones",
+      "subjectWords": [
+        "headphones",
+        "headphone",
+        "headset",
+        "headsets"
+      ],
+      "must": [],
+      "avoid": [
+        "refurbished"
+      ],
+      "prefer": [
+        "noise-cancelling"
+      ],
+      "budget": {
+        "op": "<",
+        "value": 200,
+        "currency": "USD"
+      },
+      "rank": {
+        "by": "rating",
+        "order": "desc"
+      },
+      "want": {
+        "kind": "list",
+        "n": 5
+      },
+      "shopping": true
+    },
+    "planner": "gemma",
+    "ms": 10233
   },
   {
     "goal": "a USB-C hub with HDMI 2.1 and ethernet under 60 dollars",
@@ -252,31 +277,34 @@
       "subjectWords": [
         "usb-c hub",
         "usb-c hubs",
-        "hub",
-        "hubs"
+        "adapter",
+        "adapters",
+        "dongle",
+        "dongles"
       ],
       "must": [
         "usb-c",
+        "hdmi 2.1",
         "ethernet"
       ],
       "avoid": [],
-      "prefer": [
-        "quiet",
-        "hdmi 2.1"
-      ],
+      "prefer": [],
       "budget": {
         "op": "<",
         "value": 60,
         "currency": "USD"
       },
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
-        "kind": "one",
+        "kind": "list",
         "n": 3
       },
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 6670
+    "ms": 11079
   }
 ]

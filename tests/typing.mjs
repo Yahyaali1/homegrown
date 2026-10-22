@@ -22,7 +22,8 @@ async function typeAll(p, label) {
     await b.click({ timeout: 3000 }).catch(() => {});
     await b.evaluate((x) => (x.value = ''));
     await p.keyboard.type(probe);
-    const v = await b.inputValue();
+    await p.waitForTimeout(50);
+    const v = await ((await p.$$(SEL))[k] || b).inputValue(); // read back from the live element (a re-render may have replaced b)
     if (!v.includes(probe)) bad.push(`${label} ${await b.evaluate((x) => x.id || x.getAttribute('aria-label') || x.placeholder)}: typed "${probe}", got "${v}"`);
   }
   return tried;
