@@ -153,15 +153,19 @@ function onRound(m) {
   let li = $(`#round-${m.round}`);
   if (m.phase === 'start') {
     for (const s of $('#steps').children) (s.className = 'step'), (s.querySelector('.detail').textContent = '');
+    // Each round shows the plant one stage further grown: a stem, then a leaf, then petals; a met goal blooms.
     li = el('li', { id: `round-${m.round}`, className: 'round running' },
+      hgFlower.el(20, 'thinking'),
       el('b', { textContent: `Round ${m.round}` }), el('span', { className: 'note', textContent: m.note }), el('span', { className: 'why' }));
     $('#rounds').append(li);
     log(`— round ${m.round}: ${m.note}`);
   } else if (m.phase === 'checking') {
     li.className = 'round checking';
+    li.querySelector('.flower').setAttribute('class', 'flower thinking');
     li.querySelector('.why').textContent = 'checking the results against the goal…';
   } else if (m.phase === 'verdict') {
     li.className = `round ${m.achieved ? 'good' : 'retry'}`;
+    li.querySelector('.flower').setAttribute('class', m.achieved ? 'flower sprout' : `flower stage-${Math.min(m.round, 3)}`);
     li.querySelector('.why').textContent = m.achieved ? `✓ ${m.why}` : `↻ ${m.why}`;
     log(`${m.achieved ? '✓' : '↻'} ${m.why}`);
   }
@@ -230,7 +234,7 @@ async function renderSaved() {
     el('span', { className: 'muted small', textContent: [m.every ? `every ${m.every}` : 'manual', m.lastBest && `best: ${m.lastBest}`].filter(Boolean).join(' · ') }),
     el('div', { className: 'acts' },
       el('button', { textContent: 'Open', onclick: () => load(m) }),
-      el('button', { textContent: 'Delete', onclick: async () => (await bg('missionDelete', { id: m.id }), renderSaved()) })))) : [el('li', { className: 'muted small', textContent: 'Saved missions appear here.' })]));
+      el('button', { textContent: 'Delete', onclick: async () => (await bg('missionDelete', { id: m.id }), renderSaved()) })))) : [el('li', { className: 'muted small empty' }, hgFlower.el(28, 'stage-0'), 'Saved missions grow here.')] /* an empty pot */));
 }
 function load(m) {
   workflow = structuredClone(m);

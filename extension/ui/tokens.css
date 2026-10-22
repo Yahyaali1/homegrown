@@ -79,7 +79,7 @@
   --enter-scale: .97;
   /* growth: a petal settling, a small overshoot. For the flower and for moments of success only. */
   --ease-grow: cubic-bezier(.34, 1.36, .64, 1);
-  --d-bloom: .5s; --d-pulse: 1.4s;
+  --d-bloom: .5s; --d-pulse: 1.4s; --d-grow-loop: 2.6s;
 
   /* older names still used by some surfaces */
   --text: var(--fg); --border: var(--line); --surface: var(--chip); --glass: var(--panel);
@@ -114,18 +114,27 @@
 /* sprout (potted mark): the pot settles, the stem rises out of it, the leaf unfolds, then it blooms */
 .flower.sprout .pot { transform-origin: 50% 100%; animation: hg-pot .4s var(--ease-out) both; }
 .flower.sprout .stem { stroke-dasharray: 30; animation: hg-stem .5s var(--ease-out) .25s both; }
-.flower.sprout .leaf { transform-origin: 100% 50%; animation: hg-seed .4s var(--ease-grow) .55s both; }
+.flower.sprout .leaf { transform-origin: 0% 50%; animation: hg-seed .4s var(--ease-grow) .55s both; }
 .flower.sprout .petal { animation-delay: calc(.7s + var(--i) * 30ms); }
 .flower.sprout .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) 1.05s both; }
-/* thinking: light ripples round the ten petals; the seed breathes — the model is working */
-.flower.thinking .petal { animation: hg-petal-pulse var(--d-pulse) ease-in-out infinite; animation-delay: calc(var(--i) * var(--d-pulse) / 10); }
-.flower.thinking .seed { animation: hg-breathe var(--d-pulse) ease-in-out infinite; }
+/* thinking: the plant grows, lets go, and grows again — for as long as the model works. The pot stays. */
+.flower.thinking .stem { stroke-dasharray: 30; animation: hg-loop-stem var(--d-grow-loop) var(--ease-out) infinite; }
+.flower.thinking .leaf { transform-origin: 0% 50%; animation: hg-loop-leaf var(--d-grow-loop) var(--ease-grow) infinite; }
+.flower.thinking .petal { animation: hg-loop-petal var(--d-grow-loop) var(--ease-grow) infinite; animation-delay: calc(var(--i) * 25ms); }
+.flower.thinking .seed { animation: hg-loop-seed var(--d-grow-loop) var(--ease-grow) infinite; }
+/* stages: the plant held part-grown — 0 an empty pot, 1 a stem, 2 stem and leaf, 3 everything but the seed */
+.flower.stage-0 :is(.stem, .leaf, .petals, .seed), .flower.stage-1 :is(.leaf, .petals, .seed),
+.flower.stage-2 :is(.petals, .seed), .flower.stage-3 .seed { opacity: 0; }
+.flower[class*=stage-] * { transition: opacity var(--d-overlay) var(--ease-out); }
 /* turning toward you: hover turns the head by one petal */
 :hover > .flower .petals, .flower.turn .petals { transform: rotate(36deg); }
 
 @keyframes hg-petal-open { from { opacity: 0; transform: scale(.2); } }
 @keyframes hg-seed { from { opacity: 0; transform: scale(0); } }
-@keyframes hg-petal-pulse { 0%, 50%, 100% { opacity: .3; } 12% { opacity: 1; } }
+@keyframes hg-loop-stem { 0% { stroke-dashoffset: 30; opacity: 1; } 24%, 76% { stroke-dashoffset: 0; opacity: 1; } 90%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes hg-loop-leaf { 0%, 18% { transform: scale(0); opacity: 1; } 34%, 76% { transform: scale(1); opacity: 1; } 90%, 100% { transform: scale(1); opacity: 0; } }
+@keyframes hg-loop-petal { 0%, 30% { transform: scale(.2); opacity: 0; } 50%, 76% { transform: scale(1); opacity: 1; } 90%, 100% { transform: scale(1); opacity: 0; } }
+@keyframes hg-loop-seed { 0%, 46% { transform: scale(0); opacity: 1; } 58%, 76% { transform: scale(1); opacity: 1; } 90%, 100% { transform: scale(1); opacity: 0; } }
 @keyframes hg-pot { from { opacity: 0; transform: translateY(3px); } }
 @keyframes hg-stem { from { stroke-dashoffset: 30; } }
 

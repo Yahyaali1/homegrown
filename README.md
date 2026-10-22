@@ -124,7 +124,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 
 <img src="extension/ui/flower.svg" width="48" alt="">
 
-**Grown, not built.** Homegrown's mark is a daisy leaning out of a pot:
+**Grown, not built.** Homegrown's mark is a daisy leaning left out of a pot:
 - the pot is your machine;
 - the stem grows toward the light;
 - the ten petals are what it does for you;
@@ -136,7 +136,8 @@ The same potted daisy is used everywhere, from the 16px icon to page headers.
 - **Motion:** every animation comes from the flower.
   - The potted daisy **grows** in when a page opens.
   - The daisy **blooms** when something arrives or a goal is met.
-  - Light **ripples** round its ten petals while the model thinks.
+  - While the model thinks, the plant **grows in a loop** (stem, leaf, petals, seed, let go, again).
+  - Mission rounds show it one growth stage further each time, and empty lists show an empty pot.
   - It **turns** toward your pointer.
   - Panels **unfurl** from whatever opened them.
 - **Floating UI:** in dark mode it is lighter than the page, so it stands out on dark websites.

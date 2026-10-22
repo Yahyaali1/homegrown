@@ -17,6 +17,15 @@ let llm = null;
 let loaded = null; // { name, maxTokens, loadMs, image }
 let current = null; // conversation being generated, for cancel
 const downloads = new Map(); // name -> { ctrl, done, total }
+// LiteRT writes all its native logging to stderr, which Emscripten sends to console.error — so INFO lines and
+// harmless warnings ("NPU accelerator could not be loaded", "profile summary not implemented") filled the
+// extension's Errors page. Keep real errors as errors; log the rest at debug level.
+self.Module = {
+  printErr: (line) => (/^(INFO|WARNING):|^[IW]\d{4} /.test(line) ? console.debug(line) : console.error(line)),
+};
+// Its abseil log lines ("W1022 … profile summary not implemented", "mel_filterbank … Missing 10 bands") go through a
+// global dbg() when one exists, else console.warn.
+self.dbg = (line) => (/^[EF]\d{4} /.test(line) ? console.error(line) : console.debug(line));
 const runtimeReady = loadLiteRtLm(chrome.runtime.getURL('vendor/wasm/'));
 
 export const broadcast = (msg) => chrome.runtime.sendMessage({ source: 'engine', ...msg }).catch(() => {});
