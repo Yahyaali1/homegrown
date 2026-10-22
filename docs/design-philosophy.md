@@ -78,6 +78,7 @@ interface is one of them.
 | **Petals** | + the ten petals, seed dark | Nearly there | Mission round 3+ | `.stage-3` |
 | **Growing (loop)** | The plant grows (stem → leaf → petals → seed), lets go, and grows again, while the pot stays | **Working.** The model is thinking, for as long as it takes | Answer card header while streaming; a mission round being checked | `.thinking` |
 | **Full bloom** | Grows once and stays in bloom | Arrived / done | Page headers on open, a met goal | `.sprout` |
+| **Wilted** | The plant droops from the rim, half the petals fall, the seed turns gray; the pot stays upright | **Something failed** | Answer card on an error; the mission round that broke | `.wilt` |
 
 **Smaller motions built on it**
 
@@ -100,8 +101,12 @@ in the loop; it is the machine, and the machine is steady.
   shimmer ("Thinking…"); a 2px bar can travel. Circular spinners and progress rings don't belong here.
 - **Stages, not percentages.** Long jobs show how far they have grown: each mission round is
   one growth stage further (stem, leaf, petals) and a met goal ends in full bloom.
-- **Nothing wilts.** A failed or partial result keeps the stage it reached; Homegrown never shows
-  a drooping, wilted or greyed plant. Words say what went wrong.
+- **Errors wilt; partial results don't.**
+  - When something fails (an answer errors, a mission run breaks), the plant wilts: it droops from
+    the rim, every other petal falls, and the seed loses its colour.
+  - The pot stays upright: the machine is fine, this attempt wasn't.
+  - A partial result ("best effort") is not an error, so it keeps the stage it reached.
+  - Words always say what went wrong.
 - **Stillness is the default.** At rest nothing moves: no idle animation, no breathing launcher.
   The garden is calm until you touch it.
 - **Reduce Motion means a still flower.** Bloom, the grow loop and turn all collapse to one frame: the plant shows still, in full bloom. State
@@ -118,7 +123,8 @@ in the loop; it is the machine, and the machine is steady.
 | A mission round that needs another | Held at its stage: stem, then leaf, then petals |
 | Done (answer finished, goal met) | Blooms / grows once and stays |
 | Nothing yet (empty list) | An empty pot |
-| Off on this site | Hidden. Never wilted or greyed |
+| Failed (error) | Wilts: droops, drops petals, seed goes gray |
+| Off on this site | Hidden (turning it off is a choice, not a failure) |
 
 **Next places for the same language:**
 - Model downloads could grow from empty pot to bloom by quarters.
@@ -132,7 +138,7 @@ No exclamation marks, no "magic", no sparkles.
 ## Checklist for anything new
 
 - Does it use only Radix grays plus `--pollen` in the seed?
-- Is its state one of the growth stages (empty pot, stem, leaf, petals, growing loop, bloom), and its motion one of bloom, turn or unfurl? Is overshoot used only for the flower and success?
+- Is its state one of the growth stages (empty pot, stem, leaf, petals, growing loop, bloom, wilt), and its motion one of bloom, turn or unfurl? Is overshoot used only for the flower and success?
 - Does its working state grow rather than spin?
 - Does it open from its source?
 - Does it work, and still read, with Reduce Motion on?

@@ -138,6 +138,7 @@ The same potted daisy is used everywhere, from the 16px icon to page headers.
   - The daisy **blooms** when something arrives or a goal is met.
   - While the model thinks, the plant **grows in a loop** (stem, leaf, petals, seed, let go, again).
   - Mission rounds show it one growth stage further each time, and empty lists show an empty pot.
+  - When something fails, it **wilts**.
   - It **turns** toward your pointer.
   - Panels **unfurl** from whatever opened them.
 - **Floating UI:** in dark mode it is lighter than the page, so it stands out on dark websites.

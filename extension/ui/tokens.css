@@ -126,6 +126,13 @@
 .flower.stage-0 :is(.stem, .leaf, .petals, .seed), .flower.stage-1 :is(.leaf, .petals, .seed),
 .flower.stage-2 :is(.petals, .seed), .flower.stage-3 .seed { opacity: 0; }
 .flower[class*=stage-] * { transition: opacity var(--d-overlay) var(--ease-out); }
+/* wilt: something went wrong. The plant droops from the rim, every other petal falls, the seed loses its colour.
+   The pot stays upright: the machine is fine, this attempt wasn't. */
+.flower .plant { transform-box: view-box; transform-origin: 24px 31px; transition: transform .6s var(--ease-out); }
+.flower.wilt .plant { transform: rotate(-38deg); }
+.flower.wilt .petal { transition: transform .7s ease-in, opacity .7s ease-in; transition-delay: calc(.25s + var(--i) * 40ms); }
+.flower.wilt g:nth-child(odd) > .petal { transform: translateY(9px) rotate(40deg); opacity: 0; }
+.flower.wilt .seed { fill: var(--faint); transition: fill .6s .3s; }
 /* turning toward you: hover turns the head by one petal */
 :hover > .flower .petals, .flower.turn .petals { transform: rotate(36deg); }
 

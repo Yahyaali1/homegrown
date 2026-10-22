@@ -121,6 +121,7 @@ $('#run').onclick = async () => {
     $('#name').value ||= workflow.goal.slice(0, 48);
     $('#alert-field').replaceChildren(el('option', { value: '', textContent: 'the best result changes' }), ...Object.keys(rows[0] || {}).filter((k) => !k.startsWith('_')).map((k) => el('option', { value: k, textContent: k })));
   } catch (e) {
+    $('#rounds .round:last-child .flower')?.setAttribute('class', 'flower wilt'); // the round that failed wilts
     log(`⚠ ${e.message}`);
     $('#answer').textContent = e.message;
     const current = $('#steps .running');

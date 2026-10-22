@@ -327,7 +327,7 @@
         answerEl.className = '';
         $('.stop').hidden = true;
         card.classList.remove('live');
-        $('.card header .flower').setAttribute('class', 'flower bloom');
+        $('.card header .flower').setAttribute('class', m.type === 'error' ? 'flower wilt' : 'flower bloom');
         if (m.type === 'error') {
           answerEl.replaceChildren(Object.assign(document.createElement('span'), { className: 'err', textContent: m.message }));
           if (m.code === 'no-model') offerDownload(m.model, req, answerEl);

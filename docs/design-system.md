@@ -67,7 +67,7 @@ follows Apple's Human Interface Guidelines.
 | Shape | `--r-xs` 4 · `--r-sm` 6 · `--r-md` 12 · `--r-lg` 16 · `--r-pill` | menu rows, kbd · controls · panels, cards · large · chips |
 | Space | `--s1` 4 … `--s6` 32 | 4px grid |
 | Elevation | `--shadow-small`, `--shadow-menu`, `--shadow-modal`, `--shadow-float` | Radix shadow-2 · shadow-5 · shadow-6 · shadow-5 plus the lit top edge, for UI over web pages |
-| Flower | `--pollen` (#ffc53d, the only brand colour, seed only), `--ease-grow`, `--d-bloom` .5s, `--d-pulse` 1.4s, `--d-grow-loop` 2.6s, `--seed-ring` | `ui/flower.js`: the potted daisy `hgFlower()` with `.sprout` (grow once), `.thinking` (grow loop), `.bloom`, `.turn`, `.stage-0`…`.stage-3` |
+| Flower | `--pollen` (#ffc53d, the only brand colour, seed only), `--ease-grow`, `--d-bloom` .5s, `--d-pulse` 1.4s, `--d-grow-loop` 2.6s, `--seed-ring` | `ui/flower.js`: the potted daisy `hgFlower()` with `.sprout` (grow once), `.thinking` (grow loop), `.bloom`, `.turn`, `.stage-0`…`.stage-3`, `.wilt` (errors) |
 | Motion | `--ease-out`; `--d-fast` .12s · `--d-popover` .16s · `--d-overlay` .24s; `--enter-scale` .97 | hover/press · popovers · cards and content |
 
 Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--user`,
