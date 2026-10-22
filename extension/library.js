@@ -13,10 +13,11 @@ async function bg(cmd, args = {}) {
   return r.result;
 }
 
-for (const b of document.querySelectorAll('[role=tab]')) {
+// Scoped to .lib-tabs / .lib-panel: this file also runs inside the side panel, which has tabs of its own.
+for (const b of document.querySelectorAll('.lib-tabs [role=tab]')) {
   b.onclick = () => {
-    for (const x of document.querySelectorAll('[role=tab]')) x.setAttribute('aria-selected', x === b);
-    for (const s of document.querySelectorAll('[role=tabpanel]')) s.hidden = s.id !== b.dataset.tab;
+    for (const x of document.querySelectorAll('.lib-tabs [role=tab]')) x.setAttribute('aria-selected', x === b);
+    for (const s of document.querySelectorAll('.lib-panel')) s.hidden = s.id !== b.dataset.tab;
   };
 }
 const when = (t) => new Date(t).toLocaleString();
@@ -24,7 +25,7 @@ const link = (url, text) => el('a', { href: url, textContent: text || url, targe
 
 // ---- savings ----
 bg('memSavings').then((s) => {
-  $('#savings').textContent = `${s.answers} answers on this device · ${(s.inTokens + s.outTokens).toLocaleString()} tokens · about $${s.usd.toFixed(2)} of cloud API cost avoided (estimate at $${s.rate.inPerM}/$${s.rate.outPerM} per million input/output tokens) · ${(s.bytes / 1e6).toFixed(2)} MB of text kept off servers`;
+  $('#lib-savings').textContent = `${s.answers} answers on this device · ${(s.inTokens + s.outTokens).toLocaleString()} tokens · about $${s.usd.toFixed(2)} of cloud API cost avoided (estimate at $${s.rate.inPerM}/$${s.rate.outPerM} per million input/output tokens) · ${(s.bytes / 1e6).toFixed(2)} MB of text kept off servers`;
 });
 
 // ---- history ----

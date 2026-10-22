@@ -1,4 +1,5 @@
-// Side panel: Chat, Ask Image, Prompt Lab, Models, the stats bar, and running right-click actions.
+// Side panel, the home for everything: Chat (with image attachments and Prompt Lab templates), Missions, Library
+// (library.js), Tasks, Settings (settings.js plus Models), the stats bar, and running right-click actions.
 import { MODELS, byName } from './models.js';
 import { PROMPT_LAB, DEFAULT_TASKS, KINDS, getTasks } from './actions.js';
 
@@ -37,8 +38,9 @@ async function refresh() {
 
 function setLoaded(loaded) {
   state.loaded = loaded;
-  $('#model-line').textContent = loaded ? `${loaded.name} · loaded in ${(loaded.loadMs / 1000).toFixed(1)} s` : 'No model loaded';
-  $('#image-unsupported').hidden = !!loaded?.image;
+  $('#model-line').textContent = loaded ? loaded.name : 'No model loaded';
+  $('#model-line').title = loaded ? `${loaded.name}, loaded in ${(loaded.loadMs / 1000).toFixed(1)} s, running on this device` : 'Pick one in Settings';
+  renderModels();
 }
 
 // Load the first downloaded model if none is loaded yet.
@@ -75,21 +77,29 @@ function showStats(s) {
 // ---- tabs ----
 
 function showTab(name) {
-  for (const b of document.querySelectorAll('[role=tab]')) b.setAttribute('aria-selected', b.dataset.tab === name);
-  for (const s of document.querySelectorAll('[role=tabpanel]')) s.hidden = s.id !== name;
+  for (const b of document.querySelectorAll('.tabs [role=tab]')) b.setAttribute('aria-selected', b.dataset.tab === name);
+  for (const s of document.querySelectorAll('main > [role=tabpanel]')) s.hidden = s.id !== name;
+  try { localStorage.tab = name; } catch {}
 }
-for (const b of document.querySelectorAll('[role=tab]')) b.onclick = () => showTab(b.dataset.tab);
+for (const b of document.querySelectorAll('.tabs [role=tab]')) b.onclick = () => showTab(b.dataset.tab);
+try { if (localStorage.tab && document.getElementById(localStorage.tab)) showTab(localStorage.tab); } catch {}
 
 // ---- chat ----
 
+// Model replies carry the flower: it grows in a loop while the model works, blooms when done, wilts on an error.
 function addMessage(role, text) {
   const li = document.createElement('li');
   li.className = role;
-  li.textContent = text;
+  const body = Object.assign(document.createElement('div'), { className: 'text', textContent: text });
+  if (role === 'model') li.append(hgFlower.el(22, 'thinking'));
+  li.append(body);
+  li.body = body;
   $('#messages').append(li);
+  $('#empty').hidden = true;
   li.scrollIntoView({ block: 'end' });
   return li;
 }
+const settle = (li, state) => li.querySelector('.flower')?.setAttribute('class', `flower ${state}`);
 
 function setBusy(busy) {
   $('#chat-send').disabled = busy;
@@ -97,17 +107,18 @@ function setBusy(busy) {
 }
 
 // Sends `turn` after the current history and streams the answer into the chat.
-async function chat(turn, label) {
+async function chat(turn, label, config = {}) {
   showTab('chat');
   addMessage('user', label);
   const li = addMessage('model', '');
   setBusy(true);
   try {
     await ensureModel();
-    const r = await generate([...turns, turn], {}, (t) => {
-      li.textContent += t;
+    const r = await generate([...turns, turn], config, (t) => {
+      li.body.textContent += t;
       li.scrollIntoView({ block: 'end' });
     });
+    settle(li, 'bloom');
     turns.push(turn, { role: 'model', text: r.text });
     if (r.stats.truncated) {
       const warn = document.createElement('span');
@@ -116,8 +127,9 @@ async function chat(turn, label) {
       li.append(warn);
     }
   } catch (e) {
-    li.className = 'error';
-    li.textContent = e.message;
+    li.className = 'model error';
+    li.body.textContent = e.message;
+    settle(li, 'wilt');
   } finally {
     setBusy(false);
   }
@@ -130,15 +142,19 @@ function attach(text) {
 }
 $('#attached-clear').onclick = () => attach(null);
 
+// A Prompt Lab template (chosen in the composer) wraps the typed text; an attached image or selection rides along.
 $('#chat-form').onsubmit = (e) => {
   e.preventDefault();
-  const text = $('#chat-input').value.trim();
-  if (!text) return;
+  const typed = $('#chat-input').value.trim();
+  const tpl = lab.template();
+  if (!typed && !imageData) return;
   $('#chat-input').value = '';
-  const turn = attached === null ? { role: 'user', text } : { role: 'user', text, selection: attached };
-  const label = attached === null ? text : `${text}\n“${excerpt(attached)}”`;
+  const text = tpl ? tpl.build(typed, $('#lab-option').value) : typed || 'Describe this image.';
+  const turn = { role: 'user', text, ...(attached !== null && { selection: attached }), ...(imageData && { image: imageData }) };
+  const label = [tpl ? `${tpl.title}: ${typed}` : typed || 'Describe this image.', attached !== null ? `“${excerpt(attached)}”` : '', imageData ? '(image)' : ''].filter(Boolean).join('\n');
   attach(null);
-  chat(turn, label);
+  setImage(null);
+  chat(turn, label, { temperature: +$('#lab-temp').value, topK: +$('#lab-topk').value });
 };
 $('#chat-input').onkeydown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) $('#chat-form').requestSubmit(), e.preventDefault();
@@ -147,6 +163,7 @@ $('#chat-stop').onclick = () => call('cancel');
 $('#chat-clear').onclick = () => {
   turns = [];
   $('#messages').replaceChildren();
+  $('#empty').hidden = false;
 };
 
 const excerpt = (t, n = 140) => (t.length > n ? `${t.slice(0, n)}…` : t);
@@ -179,6 +196,7 @@ async function fetchImage(srcUrl) {
 async function runAction(a) {
   turns = [];
   $('#messages').replaceChildren();
+  $('#empty').hidden = true;
   if (a.kind === 'text') {
     if (!a.prompt) {
       // Custom prompt: keep the selection and ask the user what to do with it.
@@ -196,9 +214,8 @@ async function runAction(a) {
     li.textContent += ` (${Math.round((image.length * 3) / 4 / 1024)} KB image)`;
     await ensureModel();
     if (!a.prompt) {
-      showTab('image');
       setImage(image);
-      $('#image-question').focus();
+      $('#chat-input').focus();
       return;
     }
     await chat({ role: 'user', text: a.prompt, image }, a.title);
@@ -215,41 +232,30 @@ async function checkPending() {
 }
 chrome.storage.session.onChanged.addListener((c) => c.pending?.newValue && checkPending());
 
-// ---- Ask Image ----
+// ---- image attachment (was the Ask Image tab) ----
 
 let imageData = null;
 function setImage(dataUrl) {
   imageData = dataUrl;
   $('#image-preview').src = dataUrl || '';
-  $('#image-preview').hidden = !dataUrl;
+  $('#attached-image').hidden = !dataUrl;
+  $('#image-file').value = '';
 }
 $('#image-file').onchange = async (e) => setImage(e.target.files[0] ? await blobToDataUrl(e.target.files[0]) : null);
-$('#image-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const out = $('#image-output');
-  out.textContent = '';
-  try {
-    if (!imageData) throw new Error('Choose an image first.');
-    await ensureModel();
-    const text = $('#image-question').value.trim() || 'Describe this image.';
-    await generate([{ role: 'user', text, image: imageData }], {}, (t) => (out.textContent += t));
-  } catch (err) {
-    out.textContent = err.message;
-  }
-};
+$('#image-clear').onclick = () => setImage(null);
 
-// ---- Prompt Lab ----
+// ---- Prompt Lab templates (a picker in the composer) and sampling ----
 
 const lab = {
   template: () => PROMPT_LAB.find((t) => t.id === $('#lab-template').value),
 };
-$('#lab-template').append(...PROMPT_LAB.map((t) => new Option(t.title, t.id)));
+$('#lab-template').append(new Option('Chat', ''), ...PROMPT_LAB.map((t) => new Option(t.title, t.id)));
 function renderLabOptions() {
   const t = lab.template();
-  $('#lab-option-label').hidden = !t.options;
-  $('#lab-option-label span').textContent = t.option || '';
-  $('#lab-option').replaceChildren(...(t.options || []).map((o) => new Option(o)));
-  $('#lab-input').placeholder = t.id === 'code' ? 'e.g. print the numbers from 1 to 5' : 'Enter text…';
+  $('#lab-option').hidden = !t?.options;
+  $('#lab-option').replaceChildren(...(t?.options || []).map((o) => new Option(o)));
+  $('#lab-option').title = t?.option || '';
+  $('#chat-input').placeholder = !t ? 'Message Gemma…' : t.id === 'code' ? 'e.g. print the numbers from 1 to 5' : `${t.title}: enter text…`;
 }
 $('#lab-template').onchange = renderLabOptions;
 renderLabOptions();
@@ -258,26 +264,6 @@ for (const id of ['#lab-temp', '#lab-topk']) {
   $(id).oninput = show;
   show();
 }
-$('#lab-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const out = $('#lab-output');
-  out.textContent = '';
-  try {
-    await ensureModel();
-    const text = lab.template().build($('#lab-input').value.trim(), $('#lab-option').value);
-    const config = { temperature: +$('#lab-temp').value, topK: +$('#lab-topk').value };
-    await generate([{ role: 'user', text }], config, (t) => (out.textContent += t));
-  } catch (err) {
-    out.textContent = err.message;
-  }
-};
-
-$('#lab-save').onclick = async () => {
-  const prompt = $('#lab-input').value.trim();
-  if (!prompt) return $('#lab-input').focus();
-  await saveTasks([...(await getTasks()), { id: crypto.randomUUID().slice(0, 8), kind: 'text', title: excerpt(prompt, 40), prompt }]);
-  showTab('tasks');
-};
 
 // ---- Tasks (shown in the in-page toolbar and the right-click menu) ----
 
@@ -305,16 +291,20 @@ async function renderTasks() {
   // "This page" chips in Chat run a page task in the active tab's in-page card.
   $('#page-tasks').replaceChildren(
     ...tasks.filter((t) => t.kind === 'page').map((t) =>
-      button(t.title, async () => {
-        const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-        chrome.tabs.sendMessage(tab.id, { type: 'menu', task: t }).catch(() =>
-          addMessage('error', "This page can't run tasks (browser pages, the PDF viewer and the Web Store block extensions)."));
-      }, 'secondary'),
+      button(t.title, () => toPage({ type: 'menu', task: t }), 'chip'),
     ),
   );
   $('#sched-task').replaceChildren(...tasks.filter((t) => t.kind === 'page').map((t) => new Option(t.title, t.id)));
   renderVars(tasks);
 }
+
+// Messages for the active tab's in-page UI (content/core.js).
+async function toPage(msg) {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  chrome.tabs.sendMessage(tab.id, msg).catch(() =>
+    addMessage('error', "This page can't run Homegrown (browser pages, the PDF viewer and the Web Store block extensions)."));
+}
+$('#page-actions').onclick = () => toPage({ type: 'launcher' });
 
 // One task row: title and instruction, with up/down, edit and delete.
 function taskItem(t, move) {
@@ -438,7 +428,8 @@ async function renderSchedules() {
       return li;
     }),
   );
-  if (!monitors.length) return ($('#mon-list').innerHTML = '<li class="muted">None yet. Use ❀ → Watch this page on any page.</li>');
+  if (!schedules.length) $('#sched-list').replaceChildren(emptyPot('Nothing scheduled yet.'));
+  if (!monitors.length) return $('#mon-list').replaceChildren(emptyPot('None yet. Use ❀ → Watch this page on any page.'));
   $('#mon-list').replaceChildren(
     ...monitors.map((m) => {
       const li = document.createElement('li');
@@ -461,11 +452,40 @@ $('#task-form').onsubmit = async (e) => {
   $('#task-form').reset();
 };
 $('#task-reset').onclick = () => saveTasks(DEFAULT_TASKS);
-chrome.storage.sync.get({ toolbar: true, fab: true }).then((s) => (($('#toolbar-on').checked = s.toolbar), ($('#fab-on').checked = s.fab)));
-$('#toolbar-on').onchange = (e) => chrome.storage.sync.set({ toolbar: e.target.checked });
-$('#fab-on').onchange = (e) => chrome.storage.sync.set({ fab: e.target.checked });
 chrome.storage.sync.onChanged.addListener((c) => (c.tasks || c.taskVars) && renderTasks());
 renderTasks();
+
+// ---- Missions (bg/agent.js); they run in Mission control ----
+
+$('#mission-form').onsubmit = (e) => {
+  e.preventDefault();
+  const goal = $('#mission-goal').value.trim();
+  if (!goal) return $('#mission-goal').focus();
+  bg('agentOpen', { goal, run: true, tabs: $('#mission-tabs').checked });
+  $('#mission-goal').value = '';
+};
+$('#mission-goal').onkeydown = (e) => e.key === 'Enter' && !e.shiftKey && ($('#mission-form').requestSubmit(), e.preventDefault());
+
+async function renderMissions() {
+  const list = await bg('missionsList').catch(() => []);
+  $('#mission-list').replaceChildren(...(list.length ? list.map((m) => {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="t"><b></b><span class="p"></span></span>';
+    li.querySelector('b').textContent = m.name;
+    li.querySelector('.p').textContent = [m.every ? `every ${m.every}` : 'manual', m.lastRun ? `last run ${when(m.lastRun)}` : '', m.lastBest ? `best: ${m.lastBest}` : ''].filter(Boolean).join(' · ');
+    li.append(button('Run', () => bg('agentOpen', { goal: m.goal, run: true }), 'secondary'), button('×', async () => (await bg('missionDelete', { id: m.id }), renderMissions()), 'ghost'));
+    return li;
+  }) : [emptyPot('Saved missions grow here. Save one from Mission control.')]));
+}
+chrome.storage.local.onChanged.addListener((c) => c.missions && renderMissions());
+renderMissions();
+
+// An empty list shows an empty pot (docs/design-philosophy.md).
+function emptyPot(text) {
+  const li = Object.assign(document.createElement('li'), { className: 'empty-row' });
+  li.append(hgFlower.el(26, 'stage-0'), Object.assign(document.createElement('span'), { className: 'muted', textContent: text }));
+  return li;
+}
 
 // ---- Models ----
 

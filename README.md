@@ -19,7 +19,7 @@ npm run vendor     # bundles the model runtimes and libraries into extension/ven
 
 Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose `extension/`.
 The first request offers to download Gemma 4 E2B (2 GB) right in the page; or open the side panel →
-**Models**. Helper models download the first time a feature needs them.
+**Settings** → Models. Helper models download the first time a feature needs them.
 
 Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chrome 155 and Chromium 156.
 
@@ -35,7 +35,7 @@ Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chro
 | **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDF links and pages |
 | **PDFs** | Chrome's PDF viewer keeps the text away from extensions, so on a PDF tab the launcher offers **Read this PDF with Homegrown**, which reopens it in the reader in the same tab — where selection, tasks, translation and missions all work |
 | **Shortcuts** | Alt+Shift+A launcher · Alt+Shift+S summarize page · Alt+Shift+L live captions · Alt+K palette |
-| **Side panel / Settings / Library** | Models, tasks, toggles; history, highlights, flashcards, Ask your library |
+| **Side panel** (the home for everything) | **Chat**: attach an image, pick a Prompt Lab template, tune sampling, run page tasks or open every page action. **Missions**: start one (web or your open tabs), saved missions, watched pages, scheduled page tasks. **Library**: history, highlights, Ask your library, flashcards. **Tasks**: your toolbar and right-click tasks, variables, sharing. **Settings**: models, theme, on-page features, translation language, sites turned off, shortcuts, savings |
 
 You only need the extension's own pages to pick a model or change settings; everything else happens on
 the page you're reading.

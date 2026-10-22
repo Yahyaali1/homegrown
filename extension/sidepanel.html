@@ -8,75 +8,128 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <header>
-    <nav role="tablist">
-      <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
-      <button role="tab" data-tab="image">Ask Image</button>
-      <button role="tab" data-tab="lab">Prompt Lab</button>
-      <button role="tab" data-tab="tasks">Tasks</button>
-      <button role="tab" data-tab="models">Models</button>
-    </nav>
-    <div id="model-line" class="muted">No model loaded</div>
+  <header class="top">
+    <i class="hg-mark" data-size="26"></i>
+    <b class="name">Homegrown</b>
+    <span id="model-line" class="pill" title="The model running on this device">No model loaded</span>
+    <span class="grow"></span>
+    <div class="theme-switch"></div>
   </header>
+  <nav role="tablist" class="tabs">
+    <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
+    <button role="tab" data-tab="missions">Missions</button>
+    <button role="tab" data-tab="library">Library</button>
+    <button role="tab" data-tab="tasks">Tasks</button>
+    <button role="tab" data-tab="settings">Settings</button>
+  </nav>
 
   <main>
+    <!-- Chat: the old Ask Image and Prompt Lab live here as an image attachment and a template picker -->
     <section id="chat" role="tabpanel">
-      <p class="muted">You don't need this panel to use Homegrown: select text, point at an image or press Alt+Shift+A on any page. Use it for models and settings.</p>
-      <div id="page-tasks" class="row" aria-label="Run on this page"></div>
+      <div class="on-page">
+        <span class="label">On this page</span>
+        <div id="page-tasks" class="chips" aria-label="Run on this page"></div>
+        <button id="page-actions" class="chip" type="button" title="Open every action in the page's ❀ menu">All actions…</button>
+      </div>
       <ol id="messages" aria-live="polite"></ol>
-      <div id="attached" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" aria-label="Remove selected text">×</button></div>
-      <form id="chat-form" class="composer">
-        <textarea id="chat-input" rows="2" placeholder="Message Gemma…" aria-label="Message"></textarea>
-        <button id="chat-send">Send</button>
-        <button id="chat-stop" type="button" hidden>Stop</button>
-      </form>
-      <button id="chat-clear" class="link">New chat</button>
+      <div id="empty" class="empty">
+        <i class="hg-mark" data-size="56"></i>
+        <p><b>Ask anything.</b><br><span class="muted">It runs on this device: nothing you type leaves it.</span></p>
+      </div>
+      <div class="dock">
+        <div id="attached" class="attachment" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" type="button" aria-label="Remove selected text">×</button></div>
+        <div id="attached-image" class="attachment" hidden><img id="image-preview" alt="Attached image"><span class="muted">Image attached</span> <button id="image-clear" type="button" aria-label="Remove image">×</button></div>
+        <form id="chat-form" class="composer">
+          <textarea id="chat-input" rows="2" placeholder="Message Gemma…" aria-label="Message"></textarea>
+          <div class="composer-bar">
+            <label class="icon-btn" title="Attach an image">＋<input id="image-file" type="file" accept="image/*" aria-label="Attach an image" hidden></label>
+            <select id="lab-template" aria-label="Template" title="Prompt templates"></select>
+            <select id="lab-option" aria-label="Template option" hidden></select>
+            <details class="sampling">
+              <summary title="Sampling">Tune</summary>
+              <div class="pop">
+                <label>Temperature <input id="lab-temp" type="range" min="0" max="2" step="0.05" value="1"><output for="lab-temp"></output></label>
+                <label>Top K <input id="lab-topk" type="range" min="1" max="100" step="1" value="64"><output for="lab-topk"></output></label>
+              </div>
+            </details>
+            <span class="grow"></span>
+            <button id="chat-clear" class="ghost" type="button">New chat</button>
+            <button id="chat-stop" class="secondary" type="button" hidden>Stop</button>
+            <button id="chat-send" class="primary">Send</button>
+          </div>
+        </form>
+      </div>
     </section>
 
-    <section id="image" role="tabpanel" hidden>
-      <p id="image-unsupported" class="muted">Gemma can't see pixels in the browser, so a small image reader (Florence-2, about 300 MB, downloaded the first time) describes the image on this device and Gemma answers from that.</p>
-      <form id="image-form" class="stack">
-        <input id="image-file" type="file" accept="image/*" aria-label="Image">
-        <img id="image-preview" alt="" hidden>
-        <textarea id="image-question" rows="2" placeholder="Ask about the image…" aria-label="Question"></textarea>
-        <button>Ask</button>
+    <section id="missions" role="tabpanel" hidden>
+      <form id="mission-form" class="card stack">
+        <label for="mission-goal" class="lead">What should I find out?</label>
+        <textarea id="mission-goal" rows="2" placeholder="e.g. Find the cheapest 27-inch 4K monitor with USB-C"></textarea>
+        <div class="row">
+          <label class="check"><input id="mission-tabs" type="checkbox"> Use my open tabs instead of searching</label>
+          <span class="grow"></span>
+          <button class="primary">Start mission</button>
+        </div>
+        <p class="muted small">Opens Mission control: it searches, reads pages, checks the results against your goal and tries again until it's met.</p>
       </form>
-      <div id="image-output" class="output"></div>
+      <h3>Saved missions</h3>
+      <ul id="mission-list" class="list"></ul>
+      <h3>Watched pages</h3>
+      <ul id="mon-list" class="list"></ul>
+      <h3>Scheduled page tasks</h3>
+      <form id="sched-form" class="stack">
+        <div class="row"><select id="sched-task" aria-label="Page task"></select><select id="sched-interval" aria-label="How often"><option value="daily">Every day</option><option value="hourly">Every hour</option></select></div>
+        <div class="row"><input id="sched-url" type="url" placeholder="https://example.com/page" aria-label="Page URL" required><button class="secondary">Schedule</button></div>
+      </form>
+      <ul id="sched-list" class="list"></ul>
     </section>
 
-    <section id="lab" role="tabpanel" hidden>
-      <form id="lab-form" class="stack">
-        <div class="row">
-          <label>Template <select id="lab-template"></select></label>
-          <label id="lab-option-label"><span></span> <select id="lab-option"></select></label>
+    <section id="library" role="tabpanel" hidden>
+      <nav role="tablist" class="segmented lib-tabs">
+        <button role="tab" data-tab="history" aria-selected="true">History</button>
+        <button role="tab" data-tab="highlights">Highlights</button>
+        <button role="tab" data-tab="ask">Ask</button>
+        <button role="tab" data-tab="cards">Flashcards</button>
+      </nav>
+      <section id="history" class="lib-panel">
+        <div class="row"><input id="history-q" type="search" placeholder="Search your questions and answers" aria-label="Search history"><button id="history-clear" class="secondary">Clear</button></div>
+        <ul id="history-list" class="items"></ul>
+      </section>
+      <section id="highlights" class="lib-panel" hidden><div id="highlight-groups"></div></section>
+      <section id="ask" class="lib-panel" hidden>
+        <p class="muted small">Answers come only from pages you ran tasks on and highlights you saved, all on this device.</p>
+        <form id="ask-form" class="row"><input id="ask-q" placeholder="What did I read about…" aria-label="Question"><button class="primary">Ask</button></form>
+        <div id="ask-answer" class="answer" hidden></div>
+        <ol id="ask-sources"></ol>
+      </section>
+      <section id="cards" class="lib-panel" hidden>
+        <p id="cards-count" class="muted"></p>
+        <div id="card" class="card" hidden>
+          <div id="card-q" class="q"></div>
+          <div id="card-a" hidden></div>
+          <p id="card-src" class="muted"></p>
+          <div class="row" id="card-show"><button id="show" class="primary">Show answer</button></div>
+          <div class="row" id="card-grade" hidden>
+            <button data-grade="again" class="secondary">Again</button>
+            <button data-grade="good" class="primary">Good</button>
+            <button data-grade="easy" class="secondary">Easy</button>
+          </div>
         </div>
-        <textarea id="lab-input" rows="5" aria-label="Input"></textarea>
-        <details>
-          <summary>Sampling</summary>
-          <label>Temperature <input id="lab-temp" type="range" min="0" max="2" step="0.05" value="1"><output for="lab-temp"></output></label>
-          <label>Top K <input id="lab-topk" type="range" min="1" max="100" step="1" value="64"><output for="lab-topk"></output></label>
-        </details>
-        <div class="row">
-          <button>Run</button>
-          <button id="lab-save" type="button" class="secondary">Save as task</button>
-        </div>
-      </form>
-      <div id="lab-output" class="output"></div>
+      </section>
+      <p id="lib-savings" class="muted small"></p>
     </section>
 
     <section id="tasks" role="tabpanel" hidden>
-      <label class="row"><input id="toolbar-on" type="checkbox"> Show the toolbar when I select text or point at an image</label>
-      <label class="row"><input id="fab-on" type="checkbox"> Show the ❀ button on pages (ask about the page)</label>
-      <p class="muted">Tasks appear in the in-page toolbar, the ❀ launcher and the right-click menu. Shortcuts: Alt+Shift+A opens the launcher, Alt+Shift+S runs your first page task.</p>
+      <p class="muted small">Tasks appear in the in-page toolbar, the ❀ menu and the right-click menu. Alt+Shift+S runs your first page task.</p>
       <div id="task-groups"></div>
-      <form id="task-form" class="stack">
+      <form id="task-form" class="card stack">
         <h3>Add a task</h3>
         <div class="row">
           <input id="task-title" placeholder="Name, e.g. Tweet it" aria-label="Task name" required>
           <select id="task-kind" aria-label="Runs on"></select>
         </div>
         <textarea id="task-prompt" rows="3" placeholder="Instruction, e.g. Turn the following into a short tweet:" aria-label="Instruction" required></textarea>
-        <div class="row"><button>Add task</button><button id="task-reset" type="button" class="secondary">Reset to defaults</button></div>
+        <div class="row"><button class="primary">Add task</button><button id="task-reset" type="button" class="ghost">Reset to defaults</button></div>
       </form>
       <div id="task-vars" class="stack"></div>
       <h3>Share tasks</h3>
@@ -87,29 +140,52 @@
         <button id="task-copy" type="button" class="secondary">Copy as text</button>
       </div>
       <div class="row"><textarea id="task-paste" rows="2" placeholder="Paste shared tasks here" aria-label="Shared tasks"></textarea><button id="task-paste-go" type="button" class="secondary">Import</button></div>
-      <h3>Scheduled tasks</h3>
-      <form id="sched-form" class="stack">
-        <div class="row"><select id="sched-task" aria-label="Page task"></select><select id="sched-interval" aria-label="How often"><option value="daily">Every day</option><option value="hourly">Every hour</option></select></div>
-        <div class="row"><input id="sched-url" type="url" placeholder="https://example.com/page" aria-label="Page URL" required><button>Schedule</button></div>
-      </form>
-      <ul id="sched-list" class="task-list"></ul>
-      <h3>Watched pages</h3>
-      <ul id="mon-list" class="task-list"><li class="muted">None yet. Use ❀ → Watch this page on any page.</li></ul>
     </section>
 
-    <section id="models" role="tabpanel" hidden>
-      <ul id="model-list"></ul>
-      <p class="muted">Models are stored in this browser and run on your GPU. After download, everything works offline.</p>
+    <section id="settings" role="tabpanel" hidden>
+      <h3>Models</h3>
+      <ul id="model-list" class="list"></ul>
+      <p class="muted small">Models are stored in this browser and run on your GPU. After download, everything works offline.</p>
+
+      <h3>Appearance</h3>
+      <div class="row">Theme <div class="theme-switch"></div><span class="muted small">match system · light · dark</span></div>
+
+      <h3>On pages</h3>
+      <label class="toggle"><input type="checkbox" data-key="toolbar" data-default="true"><span>Toolbar when I select text or point at an image</span></label>
+      <label class="toggle"><input type="checkbox" data-key="fab" data-default="true"><span>❀ button on pages</span></label>
+      <label class="toggle"><input type="checkbox" data-key="ghostText" data-default="false"><span>Ghost text: grey suggestions as I type, accepted with Tab</span></label>
+      <label class="toggle"><input type="checkbox" data-key="gistMargins" data-default="false"><span>Gist margins beside long articles</span></label>
+      <label class="toggle"><input type="checkbox" data-key="autoAltText" data-default="false"><span>Describe images that have no alt text</span></label>
+      <label class="toggle"><input type="checkbox" data-key="searchAnswers" data-default="true"><span>Answer beside search results</span></label>
+      <label class="toggle"><input type="checkbox" data-key="linkPreview" data-default="true"><span>Link preview when you hold a link</span></label>
+      <label class="toggle"><input type="checkbox" data-key="useVoice" data-default="true"><span>Voice: Speak… and Read aloud</span></label>
+      <label class="toggle"><input type="checkbox" data-key="replyButtons" data-default="true"><span>Reply button in email and chat boxes</span></label>
+      <label class="row">Translate into <input id="translateTo" aria-label="Translate into language"></label>
+
+      <h3>Turned off on these sites</h3>
+      <ul id="sites" class="items"></ul>
+      <form id="site-form" class="row"><input id="site" placeholder="example.com" aria-label="Site to turn off"><button class="secondary">Add</button></form>
+
+      <h3>Shortcuts</h3>
+      <ul class="keys">
+        <li><kbd>Alt</kbd><kbd>Shift</kbd><kbd>A</kbd> open the ❀ menu on a page</li>
+        <li><kbd>Alt</kbd><kbd>K</kbd> search every action</li>
+        <li><kbd>Alt</kbd><kbd>Shift</kbd><kbd>S</kbd> run your first page task</li>
+        <li><kbd>eg</kbd> <kbd>space</kbd> in the address bar: start a mission</li>
+      </ul>
+      <p id="savings" class="muted small"></p>
     </section>
   </main>
 
   <footer id="stats" aria-label="Performance stats" hidden>
     <span><b id="s-ttft">–</b> first token</span>
-    <span><b id="s-prefill">–</b> prefill tok/s</span>
-    <span><b id="s-decode">–</b> decode tok/s</span>
+    <span><b id="s-decode">–</b> tok/s</span>
     <span><b id="s-latency">–</b> total</span>
     <span><b id="s-tokens">–</b> tokens</span>
+    <span hidden><b id="s-prefill">–</b></span>
   </footer>
   <script type="module" src="sidepanel.js"></script>
+  <script type="module" src="settings.js"></script>
+  <script type="module" src="library.js"></script>
 </body>
 </html>
