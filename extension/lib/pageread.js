@@ -66,6 +66,8 @@
           reviews: o.aggregateRating?.reviewCount ?? o.aggregateRating?.ratingCount ?? null,
           brand: clean(o.brand?.name || o.brand),
           sku: clean(o.sku || o.mpn || o.gtin13 || ''),
+          gtin: clean(o.gtin13 || o.gtin12 || o.gtin14 || o.gtin8 || o.gtin || ''),
+          mpn: clean(o.mpn || ''),
           url: abs(o.url || location.href),
           image: abs([].concat(o.image || [])[0]?.url || [].concat(o.image || [])[0] || ''),
           via: 'structured',

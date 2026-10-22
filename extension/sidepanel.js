@@ -2,6 +2,7 @@
 // (library.js), Tasks, Settings (settings.js plus Models), the stats bar, and running right-click actions.
 import { MODELS, byName } from './models.js';
 import { PROMPT_LAB, DEFAULT_TASKS, KINDS, getTasks } from './actions.js';
+import { TASKS } from './bg/engine.js';
 
 const $ = (s) => document.querySelector(s);
 let state = { loaded: null, models: [] };
@@ -34,6 +35,7 @@ async function refresh() {
   state = await call('status');
   setLoaded(state.loaded);
   renderModels();
+  renderTaskModels();
 }
 
 function setLoaded(loaded) {
@@ -57,7 +59,8 @@ async function generate(reqTurns, config, onToken) {
   const id = crypto.randomUUID();
   streams.set(id, onToken);
   try {
-    const r = await call('generate', { id, turns: reqTurns, config });
+    const { taskModels = {} } = await chrome.storage.sync.get('taskModels');
+    const r = await call('generate', { id, turns: reqTurns, config, model: taskModels.chat || '' });
     showStats(r.stats);
     return r;
   } finally {
@@ -143,12 +146,14 @@ function attach(text) {
 $('#attached-clear').onclick = () => attach(null);
 
 // A Prompt Lab template (chosen in the composer) wraps the typed text; an attached image or selection rides along.
-$('#chat-form').onsubmit = (e) => {
+$('#chat-form').onsubmit = async (e) => {
   e.preventDefault();
   const typed = $('#chat-input').value.trim();
   const tpl = lab.template();
   if (!typed && !imageData) return;
   $('#chat-input').value = '';
+  // A plain short message may be a settings request ("use E4B for missions"): Gemma decides, you confirm.
+  if (!tpl && !imageData && attached === null && typed.length < 240 && (await proposeSetting(typed))) return;
   const text = tpl ? tpl.build(typed, $('#lab-option').value) : typed || 'Describe this image.';
   const turn = { role: 'user', text, ...(attached !== null && { selection: attached }), ...(imageData && { image: imageData }) };
   const label = [tpl ? `${tpl.title}: ${typed}` : typed || 'Describe this image.', attached !== null ? `“${excerpt(attached)}”` : '', imageData ? '(image)' : ''].filter(Boolean).join('\n');
@@ -458,9 +463,29 @@ $('#mission-form').onsubmit = (e) => {
   e.preventDefault();
   const goal = $('#mission-goal').value.trim();
   if (!goal) return $('#mission-goal').focus();
-  bg('agentOpen', { goal, run: true, tabs: $('#mission-tabs').checked });
+  // In the background, no tab: it shows up under Running and recent, and nudges you when it's done.
+  bg('agentOpen', { goal, run: true, tabs: $('#mission-tabs').checked, open: false }).then(renderLive);
   $('#mission-goal').value = '';
 };
+
+// Each mission's plant: growing while it works, in bloom when the goal is met, part-grown for a best effort,
+// wilted when it failed.
+const PLANT = { planning: 'thinking', running: 'thinking', failed: 'wilt', stopped: 'stage-1' };
+async function renderLive() {
+  const list = await bg('missionsLive').catch(() => []);
+  $('#live-list').replaceChildren(...(list.length ? list.map((m) => {
+    const li = Object.assign(document.createElement('li'), { className: 'live' });
+    li.append(hgFlower.el(26, PLANT[m.status] || (m.achieved ? 'sprout' : 'stage-3')));
+    const t = Object.assign(document.createElement('span'), { className: 't' });
+    t.innerHTML = '<b></b><span class="p"></span>';
+    t.querySelector('b').textContent = m.goal;
+    t.querySelector('.p').textContent = m.status === 'done' ? m.answer || m.best : m.status === 'failed' ? m.error : m.status === 'stopped' ? 'Stopped.' : m.round ? `Round ${m.round} · ${m.phase === 'checking' ? 'checking the results' : 'reading pages'}` : 'Reading your goal…';
+    li.append(t, button('Open', () => bg('missionOpen', { id: m.id }), 'secondary'));
+    return li;
+  }) : [emptyPot('Missions you start show up here while they run.')]));
+}
+chrome.storage.session.onChanged.addListener((c) => c.liveMissions && renderLive());
+renderLive();
 $('#mission-goal').onkeydown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) $('#mission-form').requestSubmit(), e.preventDefault();
 };
@@ -484,6 +509,68 @@ function emptyPot(text) {
   const li = Object.assign(document.createElement('li'), { className: 'empty-row' });
   li.append(hgFlower.el(26, 'stage-0'), Object.assign(document.createElement('span'), { className: 'muted', textContent: text }));
   return li;
+}
+
+// ---- which model does what (settings.taskModels), and changing settings by asking in Chat ----
+
+const downloadedModels = () => state.models.filter((s) => s.downloaded).map((s) => s.name);
+async function renderTaskModels() {
+  const { taskModels = {} } = await chrome.storage.sync.get('taskModels');
+  $('#task-models').replaceChildren(...Object.entries(TASKS).map(([task, label]) => {
+    const sel = document.createElement('select');
+    sel.ariaLabel = `Model for ${label}`;
+    sel.append(new Option('Automatic (the loaded model)', ''), ...downloadedModels().map((n) => new Option(n, n)));
+    sel.value = taskModels[task] || '';
+    sel.onchange = async () => chrome.storage.sync.set({ taskModels: { ...(await chrome.storage.sync.get('taskModels')).taskModels, [task]: sel.value } });
+    const row = Object.assign(document.createElement('label'), { className: 'row' });
+    row.append(Object.assign(document.createElement('span'), { className: 'grow', textContent: label }), sel);
+    return row;
+  }));
+}
+chrome.storage.sync.onChanged.addListener((c) => c.taskModels && renderTaskModels());
+
+// Everything Chat can change: id → { label, values (null = free text), current(), set(value) }.
+async function settingsCatalogue() {
+  const sync = await chrome.storage.sync.get(null);
+  const cat = {
+    theme: { label: 'Theme', values: ['system', 'light', 'dark'], current: sync.theme || 'system', set: (v) => chrome.storage.sync.set({ theme: v }) },
+    translateTo: { label: 'Translate into', values: null, current: sync.translateTo || '', set: (v) => chrome.storage.sync.set({ translateTo: v }) },
+  };
+  for (const [task, label] of Object.entries(TASKS)) {
+    cat[`model.${task}`] = { label: `Model for ${label.toLowerCase()}`, values: ['automatic', ...downloadedModels()], current: sync.taskModels?.[task] || 'automatic',
+      set: (v) => chrome.storage.sync.set({ taskModels: { ...sync.taskModels, [task]: v === 'automatic' ? '' : v } }) };
+  }
+  for (const box of document.querySelectorAll('#settings [data-key]')) {
+    const key = box.dataset.key;
+    cat[key] = { label: box.closest('label').textContent.trim().split(':')[0], values: ['on', 'off'], current: (sync[key] ?? box.dataset.default === 'true') ? 'on' : 'off',
+      set: (v) => chrome.storage.sync.set({ [key]: v === 'on' }) };
+  }
+  return cat;
+}
+
+// Gemma reads the message against the list of settings; code only checks the answer names a real setting and an
+// allowed value. A match becomes a card you confirm: nothing changes until you press Apply.
+async function proposeSetting(text) {
+  const cat = await settingsCatalogue();
+  const list = Object.entries(cat).map(([id, s]) => `- ${id}: ${s.label} (${s.values ? s.values.join(', ') : 'any language'}; now ${s.current})`).join('\n');
+  let pick = null;
+  try {
+    const r = await call('generate', { id: crypto.randomUUID(), turns: [{ role: 'user', text: `You route messages for the Homegrown browser extension. If the message asks to change one of these settings, reply {"setting": "<id>", "value": "<one allowed value>"}. If it is anything else (a question, a request, chat), reply {"setting": null}. JSON only.\nSettings:\n${list}\nModels: E2B is Gemma-4-E2B-it (smaller, faster), E4B is Gemma-4-E4B-it (bigger, reads goals better).\nMessage: "${text}"` }], config: { temperature: 0 } });
+    pick = JSON.parse(/\{[\s\S]*\}/.exec(r.text)?.[0] || 'null');
+  } catch {}
+  const s = pick?.setting && cat[pick.setting];
+  if (!s) return false;
+  const value = s.values ? s.values.find((v) => v.toLowerCase() === String(pick.value).toLowerCase()) : String(pick.value || '').trim();
+  if (!value) return false;
+  addMessage('user', text);
+  const li = addMessage('model', '');
+  settle(li, 'stage-3');
+  li.body.replaceChildren(`Change ${s.label.toLowerCase()} from ${s.current || 'not set'} to ${value}?`, Object.assign(document.createElement('div'), { className: 'confirm' }));
+  const done = (msg, state) => ((li.body.textContent = msg), settle(li, state));
+  li.body.lastChild.append(
+    button('Apply', async () => (await s.set(value), done(`Done: ${s.label.toLowerCase()} is now ${value}.`, 'bloom')), 'primary'),
+    button('Not now', () => done('Left as it was.', 'stage-3'), 'ghost'));
+  return true;
 }
 
 // ---- Models ----

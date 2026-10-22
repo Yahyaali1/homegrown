@@ -2,7 +2,8 @@
 // port, owns the right-click menu, and hands PDF/browser-page actions to the side panel.
 import { DEFAULT_TASKS, getTasks } from './actions.js';
 import { MODELS } from './models.js';
-import { ensureEngine, engine } from './bg/engine.js';
+import { ensureEngine, engine, modelFor } from './bg/engine.js';
+import { toTab, injectInto } from './bg/pagesend.js';
 // Feature modules: each exports `handlers` (EG.bg commands), and may export `init()` and
 // `onAnswer(req, result, sender)` (called after every answer).
 import * as reader from './bg/reader.js';
@@ -83,7 +84,7 @@ function onRunPort(port) {
       const turn = buildTurn(req);
       const turns = [...(req.history || []), turn];
       const loaded = await engine('ensureLoaded');
-      const r = await engine('generate', { id, turns, config: req.config || {}, priority: req.quiet ? 'background' : 'user' });
+      const r = await engine('generate', { id, turns, config: req.config || {}, model: await modelFor(req.quiet ? 'background' : 'page'), priority: req.quiet ? 'background' : 'user' });
       const kept = turn.selection ? `${r.userText}\n\n${turn.selection.slice(0, PAGE_TEXT_IN_HISTORY)}` : r.userText;
       for (const m of modules) m.onAnswer?.(req, r, port.sender);
       port.postMessage({ type: 'done', text: r.text, stats: r.stats, model: loaded.name, history: [...(req.history || []), { role: 'user', text: kept }, { role: 'model', text: r.text }] });
@@ -127,31 +128,6 @@ const inPage = (info) =>
 
 // The reader is an extension page: tabs.sendMessage doesn't reach it, so it gets a runtime message
 // addressed to its tab (content/core.js checks toTab).
-async function toTab(tabId, msg, opts) {
-  const tab = await chrome.tabs.get(tabId);
-  if (tab.url?.startsWith(READER)) return chrome.runtime.sendMessage({ ...msg, toTab: tabId });
-  try {
-    return await chrome.tabs.sendMessage(tabId, msg, opts);
-  } catch {
-    // Nobody answered: usually a tab opened before the extension was (re)loaded. Give it the page scripts, retry once.
-    await injectInto(tab);
-    return chrome.tabs.sendMessage(tabId, msg, opts);
-  }
-}
-
-const CANT_RUN = "This page can't run Homegrown: browser pages, the PDF viewer and the Chrome Web Store block extensions.";
-// The manifest's content scripts, in order, into one tab.
-async function injectInto(tab) {
-  if (!/^(https?|file):/.test(tab.url || '')) throw new Error(CANT_RUN);
-  try {
-    for (const cs of chrome.runtime.getManifest().content_scripts) {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: !!cs.all_frames }, files: cs.js });
-    }
-  } catch {
-    throw new Error(CANT_RUN); // e.g. the PDF viewer, or a page the browser protects
-  }
-}
-
 // After an install or reload, existing tabs get the page scripts too (the ❀ button appears without a page reload).
 chrome.runtime.onInstalled.addListener(async () => {
   for (const tab of await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'], discarded: false })) injectInto(tab).catch(() => {});
@@ -211,4 +187,4 @@ for (const m of modules) m.init?.();
 chrome.storage.sync.onChanged.addListener((c) => c.tasks && buildMenus());
 
 // For tests that drive the worker directly (Playwright can't click native context menus).
-Object.assign(self, { ensureEngine, handleMenuClick, seedTasks });
+Object.assign(self, { ensureEngine, handleMenuClick, seedTasks, bgHandlers: handlers });

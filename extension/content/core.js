@@ -72,6 +72,15 @@
   .actions button:nth-child(2) { animation-delay: 30ms } .actions button:nth-child(3) { animation-delay: 60ms } .actions button:nth-child(n+4) { animation-delay: 90ms }
   .cursor::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--fg); vertical-align: middle;
     animation: hg-breathe 1s ease-in-out infinite; }
+  .nudge { position: fixed; right: 18px; bottom: 70px; z-index: 3; width: 340px; max-width: calc(100vw - 36px); display: grid; grid-template-columns: auto 1fr;
+    gap: 4px 12px; align-items: start; padding: 12px 12px 10px 14px; border-radius: var(--r-md); background: var(--panel); color: var(--fg); box-shadow: var(--shadow-float);
+    animation: hg-pop var(--d-overlay) var(--ease-out) both; transform-origin: 100% 100%; --seed-ring: var(--panel); }
+  .nudge.out { opacity: 0; transform: translateY(4px) scale(.98); transition: opacity var(--d-popover), transform var(--d-popover); }
+  .nudge .nt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .nudge .ng { color: var(--muted); font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nudge .nx { font-size: var(--t-sm); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .nudge .na { grid-column: 2; display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+  .nudge .x { color: var(--muted); }
   .thinking::after { display: none; }
   .thinking::before { content: 'Thinking…'; display: block; width: max-content; font-weight: 500;
     background: linear-gradient(90deg, var(--faint) 35%, var(--fg) 50%, var(--faint) 65%) 0 0/300% 100%; -webkit-background-clip: text; background-clip: text;
@@ -455,7 +464,29 @@
     }
     onMenu(msg);
   });
+  // A mission finished while you were elsewhere (bg/agent.js nudge): one small toast above the ❀ button, top frame only.
+  function nudge({ id, title, goal, text, state, href }) {
+    if (window !== top) return;
+    mount();
+    root.querySelector('.nudge')?.remove();
+    const n = document.createElement('div');
+    n.className = 'nudge';
+    n.setAttribute('role', 'status');
+    n.innerHTML = `${hgFlower(30, state)}<div class="nt"><b></b><span class="ng"></span><span class="nx"></span></div><div class="na"><button class="primary">Open</button><button class="x" aria-label="Dismiss">✕</button></div>`;
+    n.querySelector('b').textContent = title;
+    n.querySelector('.ng').textContent = goal;
+    n.querySelector('.nx').textContent = text || '';
+    const close = () => (n.classList.add('out'), setTimeout(() => n.remove(), 200));
+    n.querySelector('.primary').onclick = () => (href ? window.open(href, '_blank') : bg('missionOpen', { id }), close());
+    n.querySelector('.x').onclick = close;
+    let timer = setTimeout(close, 15000);
+    n.onmouseenter = () => clearTimeout(timer);
+    n.onmouseleave = () => (timer = setTimeout(close, 6000));
+    root.append(n);
+  }
+
   function onMenu(msg) {
+    if (msg.type === 'nudge') return nudge(msg);
     if (msg.type === 'launcher') return window === top && showLauncher();
     if (msg.type !== 'menu') return;
     const kind = msg.task?.kind ?? msg.ask;

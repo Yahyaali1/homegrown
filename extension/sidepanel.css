@@ -141,3 +141,8 @@ blockquote { margin: 0; border-left: 2px solid var(--pollen); padding-left: 8px;
 /* stats */
 footer { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 12px; font-size: var(--t-xs); color: var(--faint); border-top: 1px solid var(--line); background: var(--card); }
 footer b { color: var(--muted); font-weight: 600; }
+#live-list li { align-items: center; }
+#live-list li > .flower { flex: none; }
+#messages .confirm { display: flex; gap: 6px; margin-top: 8px; }
+#task-models .row > span { color: var(--fg); }
+#task-models select { max-width: 60%; }

@@ -1,15 +1,34 @@
 // Missions: a goal becomes a visible workflow (search → open → extract → filter/rank → answer) run with
 // read-only tools. Gemma only fills a small plan form and reads pages; filtering and ranking are plain JS.
 // Progress goes to extension pages (agent.html) as runtime messages {type:'agent-progress', runId, …}.
-import { ask } from './engine.js';
+import { ask as engineAsk } from './engine.js';
+// Every model call in a mission uses the Missions model (settings → Models → Use for).
+const ask = (prompt, selection, config = {}) => engineAsk(prompt, selection, { task: 'missions', ...config });
 import { handlers as web } from './web.js';
+import { normalizeBrief, enforceSubject, describe, productKey } from './brief.js';
+import { toTab } from './pagesend.js';
 
-const PLAN = `Turn the user's goal into a plan for a web research workflow. Reply with JSON only, no prose:
-{"query": "<web search query>", "fields": ["<column>", ...], "rankBy": "<one of the fields, or empty>", "order": "asc" or "desc", "keep": <rows to keep>, "question": "<what the final answer must tell the user>"}
-Use a "price" field whenever cost matters. Examples:
-Goal: cheapest 27 inch 4k monitor → {"query":"27 inch 4K monitor price","fields":["product","price","store"],"rankBy":"price","order":"asc","keep":5,"question":"Which is the cheapest and is it a good deal?"}
-Goal: electric cars with the longest range under 40k → {"query":"electric car longest range under $40,000","fields":["model","range_miles","price"],"rankBy":"range_miles","order":"desc","keep":5,"question":"Which car gives the most range for the money?"}
-Goal: best rated pizza in Lisbon → {"query":"best pizza Lisbon reviews","fields":["name","rating","area"],"rankBy":"rating","order":"desc","keep":5,"question":"Which place should I try first?"}`;
+// Gemma reads the goal into a brief (what the user wants: the thing, must-haves, budget, how to rank, how many)
+// and a search plan. Examples teach the distinctions a small model gets wrong: must vs prefer, budget vs spec.
+const PLAN = `Read the user's goal and plan a web research task. Reply with JSON only, no prose:
+{"subject": "<the kind of thing wanted, one or two words>", "subject_words": ["<other names for it>"],
+ "budget": {"op": "<" or ">", "value": <number>, "currency": "<USD, EUR, GBP…>"} or null,
+ "rank": {"by": "<field to sort by>", "order": "asc" or "desc"} or null,
+ "how_many": <1 when the user asks which/what/the best one; more when they ask to compare, list or for "top N">,
+ "must": ["<exact words every matching listing must show>"], "prefer": ["<wishes the user stated that are not exact words>"], "avoid": ["<things the user excluded>"],
+ "query": "<web search query>", "fields": ["<column>", ...], "question": "<what the final answer must tell the user>"}
+Rules:
+- Money limits ("under $300", "below 40k", "max 500 dollars") go ONLY in "budget"; "40k" means 40000. Never in "must".
+- "cheapest", "lowest price", "best deal" mean rank by price ascending; "best", "top rated" mean rank by rating descending.
+- "must" holds only exact words a listing has to show: sizes, standards, model names ("27", "4k", "usb-c", "oled").
+- Comparisons ("at least 256GB", "lighter than 60 grams") and vague wishes ("quiet") go in "prefer". Never invent wishes the user did not state.
+- Use a "price" field whenever cost matters.
+Examples:
+Goal: cheapest 27 inch 4k monitor with usb-c → {"subject":"monitor","subject_words":["display"],"must":["27","4k","usb-c"],"prefer":[],"avoid":[],"budget":null,"rank":{"by":"price","order":"asc"},"how_many":1,"query":"27 inch 4K USB-C monitor price","fields":["product","price","store"],"question":"Which is the cheapest that meets every requirement, and where?"}
+Goal: compare the best noise-cancelling headphones under $300 → {"subject":"headphones","subject_words":["headset"],"must":["noise-cancelling"],"prefer":[],"avoid":[],"budget":{"op":"<","value":300,"currency":"USD"},"rank":{"by":"rating","order":"desc"},"how_many":5,"query":"best noise cancelling headphones under 300","fields":["product","price","rating"],"question":"How do the top options compare, and which is the best buy?"}
+Goal: electric cars under 40k with the longest range → {"subject":"car","subject_words":["ev","vehicle"],"must":[],"prefer":["electric"],"avoid":[],"budget":{"op":"<","value":40000,"currency":"USD"},"rank":{"by":"range_miles","order":"desc"},"how_many":5,"query":"electric car longest range under $40,000","fields":["model","range_miles","price"],"question":"Which car gives the most range within budget?"}
+Goal: a laptop for travel with at least 16GB RAM, not refurbished → {"subject":"laptop","subject_words":["notebook"],"must":[],"prefer":["at least 16GB RAM","lightweight"],"avoid":["refurbished"],"budget":null,"rank":{"by":"weight_kg","order":"asc"},"how_many":3,"query":"lightweight laptop 16GB RAM","fields":["model","weight_kg","ram","price"],"question":"Which laptops suit travel best and why?"}
+Goal: best rated ramen in Tokyo near Shinjuku → {"subject":"ramen shop","subject_words":["ramen","restaurant"],"must":[],"prefer":["near Shinjuku"],"avoid":[],"budget":null,"rank":{"by":"rating","order":"desc"},"how_many":3,"query":"best ramen Shinjuku Tokyo","fields":["name","rating","area"],"question":"Which place should I try first?"}`;
 
 const slug = (f) => String(f).toLowerCase().trim().replace(/\W+/g, '_').replace(/^_|_$/g, '');
 const parseJson = (text) => {
@@ -60,25 +79,70 @@ function mentions(text, term) {
   return (SYNONYMS[term] || [term]).some((w) => (/^\d+$/.test(w) ? new RegExp(`(^|[^\\d.])${w}(?![\\d])`).test(t) : t.includes(w)));
 }
 
-export function buildSteps(form) {
-  const fields = [...new Set((form.fields?.length ? form.fields : ['title']).map(slug).filter(Boolean))].slice(0, 6);
-  const by = slug(form.rankBy || '');
+// The brief (bg/brief.js) decides the must-haves, the budget filter, the ranking and how many to keep; the
+// planner's form supplies the query and columns. Without a brief (old saved missions), the form alone.
+export function buildSteps(form, brief = null) {
+  let fields = [...new Set((form.fields?.length ? form.fields : ['title']).map(slug).filter(Boolean))].slice(0, 6);
+  const priceField = () => fields.find((f) => /price|cost/.test(f));
+  if ((brief?.budget || brief?.rank?.by === 'price') && !priceField()) fields = [...fields.slice(0, 5), 'price'];
+  const byBrief = brief?.rank && (fields.find((f) => f.includes(slug(brief.rank.by))) || (brief.rank.by === 'price' && priceField()));
+  const by = byBrief || slug(form.rankBy || '');
+  const order = byBrief ? brief.rank.order : form.order === 'desc' ? 'desc' : 'asc';
+  const keep = brief?.want?.kind === 'list' ? brief.want.n : brief ? 3 : +form.keep || 5;
   const steps = [
     { type: 'search', query: form.query, n: 8 },
     { type: 'open', limit: 6 },
-    { type: 'extract', fields, require: requiredTerms(form.query || '') },
-    { type: 'filter', field: '', op: '<', value: '' }, // off until the user fills it in
+    { type: 'extract', fields, require: brief ? brief.must : requiredTerms(form.query || '') },
+    brief?.budget ? { type: 'filter', field: priceField(), op: brief.budget.op, value: String(brief.budget.value) } : { type: 'filter', field: '', op: '<', value: '' },
   ];
-  if (by && fields.includes(by)) steps.push({ type: 'rank', by, order: form.order === 'desc' ? 'desc' : 'asc', keep: Math.min(Math.max(+form.keep || 5, 1), 20) });
+  if (by && fields.includes(by)) steps.push({ type: 'rank', by, order, keep: Math.min(Math.max(keep, 1), 20) });
   steps.push({ type: 'answer', question: form.question || 'Summarize the findings.' });
   return steps;
 }
 
+// Problems in a brief that the brief itself shows: a money limit or a comparison sitting in "must", a price ranking
+// with no price column. Checks on Gemma's output, never on the user's words; Gemma does the fixing.
+function briefProblems(form) {
+  const p = [];
+  for (const m of form.must || []) {
+    if (/[$£€]|\b(under|below|over|above|less|more|than|at least|at most|max|min|budget|cheap|dollars?|euros?|pounds?)\b/i.test(m)) {
+      p.push(`"must" contains "${m}", which is a budget or a comparison: move a money limit to "budget" and a comparison to "prefer"`);
+    }
+  }
+  if (form.rank?.by && /price|cost/.test(form.rank.by) && !(form.fields || []).some((f) => /price|cost/.test(f))) p.push('"rank" uses price but "fields" has no price column');
+  if (!form.subject) p.push('"subject" is empty: name the kind of thing the user wants');
+  return p;
+}
+
+// Verification (chain-of-verification): a short, narrow question about each numbered must-have, the part the
+// benchmark showed Gemma gets wrong. (Narrow questions about the budget or one-vs-list made it worse: 10/16.)
+async function verifyBrief(goal, form) {
+  const short = async (q) => String(await ask(`Goal: "${goal}"\n${q}`, '', EXTRACT)).trim().toLowerCase();
+  // A must-have with a number: exact, or a minimum/maximum? ("256GB" in "at least 256GB storage" is a minimum.)
+  for (const m of [...(form.must || [])].filter((m) => /\d/.test(m))) {
+    const a = await short(`In this goal, is "${m}" an exact requirement every listing must show, or a minimum, maximum or limit? Answer with one word: exact or limit.`);
+    if (/limit|min|max/.test(a)) (form.must = form.must.filter((x) => x !== m)), (form.prefer = [...(form.prefer || []), m]);
+  }
+  return form;
+}
+
 async function agentPlan({ goal, context }) {
-  const text = await ask(`${PLAN}\n\nGoal: ${goal}${context ? `\n(The user started from this page: ${context})` : ''} →`);
-  const form = parseJson(text);
-  const ok = form?.query && Array.isArray(form.fields);
-  return { goal, steps: buildSteps(ok ? form : templateForm(goal)), planner: ok ? 'gemma' : 'template' };
+  const prompt = `${PLAN}\n\nGoal: ${goal}${context ? `\n(The user started from this page: ${context})` : ''} →`;
+  // Temperature 0: the same goal reads the same way every time. One retry if the JSON doesn't come back whole.
+  // (Constrained decoding via a LiteRT tool call was tried: always-valid JSON, but Gemma then left optional fields
+  // out and read 7/16 goals instead of 14/16. docs/plan/M-smarter-missions.md.)
+  let form = parseJson(await ask(prompt, '', EXTRACT));
+  if (!form?.query) form = parseJson(await ask(`${prompt}\nReply with the JSON object only.`, '', EXTRACT));
+  // Critic pass: if the brief contradicts itself, Gemma gets one targeted request to fix it.
+  const problems = form?.query ? briefProblems(form) : [];
+  if (problems.length) {
+    const fixed = parseJson(await ask(`Goal: ${goal}\nYour plan:\n${JSON.stringify(form)}\nFix these problems and reply with the corrected JSON only:\n- ${problems.join('\n- ')}`, '', EXTRACT));
+    if (fixed?.query && Array.isArray(fixed.fields)) form = fixed;
+  }
+  const ok = !!(form?.query && Array.isArray(form.fields));
+  if (ok) form = await verifyBrief(goal, form);
+  const brief = ok ? normalizeBrief(form) : null;
+  return { goal, brief, steps: buildSteps(ok ? form : templateForm(goal), brief), planner: ok ? 'gemma' : 'template' };
 }
 
 // ---- tools ----
@@ -195,7 +259,7 @@ function fromRecord(rec, field, page) {
   return rec[field];
 }
 const asRow = (rec, fields, page) => {
-  const row = { _source: page.title, _url: rec.url || page.url, _via: rec.via, _text: rec.text || rec.title || '', ...(rec.currency && { _currency: rec.currency }) };
+  const row = { _source: page.title, _url: rec.url || page.url, _via: rec.via, _text: rec.text || rec.title || '', ...(rec.currency && { _currency: rec.currency }), ...(rec.sku && { _sku: rec.sku }), ...(rec.gtin && { _gtin: rec.gtin }), ...(rec.mpn && { _mpn: rec.mpn }) };
   for (const f of fields) row[f] = fromRecord(rec, f, page) ?? null;
   // The first column names the thing ("story", "recipe", "repo"…): when nothing matched it, use the block's title.
   if (row[fields[0]] == null && rec.title) row[fields[0]] = rec.title;
@@ -400,10 +464,165 @@ function applyFilter(rows, { field, op, value }) {
 // ---- runner ----
 
 const runs = new Map(); // runId -> { cancelled, group }
-const say = (runId, data) => chrome.runtime.sendMessage({ type: 'agent-progress', runId, ...data }).catch(() => {});
+const say = (runId, data) => {
+  track(runId, data);
+  return chrome.runtime.sendMessage({ type: 'agent-progress', runId, ...data }).catch(() => {});
+};
+
+// ---- missions running in the background: several at once, each attachable, with a nudge when one ends ----
+
+// id -> { id, goal, status: planning|running|done|failed|stopped, workflow, steps[], log[], rounds[], rows, answer, … }
+const live = new Map();
+const unseen = new Set(); // finished while nobody was watching: the toolbar badge count
+let persistTimer = 0;
+const summary = (m) => ({ id: m.id, goal: m.goal, status: m.status, round: m.round, phase: m.phase, achieved: m.achieved, error: m.error,
+  best: m.rows?.[0] ? Object.entries(m.rows[0]).filter(([k]) => !k.startsWith('_')).map(([, v]) => v).slice(0, 2).join(' · ') : '',
+  answer: (m.answer || '').replace(/\s*\[\d+\]/g, '').slice(0, 200), startedAt: m.startedAt, endedAt: m.endedAt });
+// Kept in session storage too, so the side panel's list and Mission control survive a service-worker restart.
+function persist() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => chrome.storage.session.set({ liveMissions: [...live.values()].map(summary) }).catch(() => {}), 300);
+}
+const badge = () => chrome.action.setBadgeText({ text: unseen.size ? String(unseen.size) : '' }).catch(() => {});
+
+// Every progress message also updates the mission's stored state.
+function track(runId, d) {
+  const m = live.get(runId);
+  if (!m) return;
+  if (d.step !== undefined) m.steps[d.step] = { status: d.status, detail: d.detail ?? m.steps[d.step]?.detail ?? '' };
+  if (d.log) (m.log.push(...d.log), m.log.splice(0, Math.max(0, m.log.length - 150)));
+  if (d.rows) m.rows = d.rows;
+  if (d.answer) m.answer = d.answer;
+  if (d.round) {
+    m.round = d.round;
+    m.phase = d.phase;
+    const r = (m.rounds[d.round - 1] ||= { round: d.round });
+    if (d.note) r.note = d.note;
+    if (d.phase === 'verdict') Object.assign(r, { why: d.why, achieved: d.achieved });
+    r.phase = d.phase;
+  }
+  persist();
+}
+
+function missionStart({ goal, workflow = null, context = '', urls = [], onDone = nudge }) {
+  const id = crypto.randomUUID().slice(0, 8);
+  const m = { id, goal, status: 'planning', startedAt: Date.now(), workflow, steps: [], log: [], rounds: [], rows: [], answer: '' };
+  live.set(id, m);
+  persist();
+  (async () => {
+    try {
+      if (!m.workflow) {
+        m.workflow = await agentPlan({ goal, context });
+        // Started from "my open tabs": read those pages instead of searching.
+        if (urls.length) Object.assign(m.workflow.steps[0], { urls, query: `${urls.length} open tabs` }), Object.assign(m.workflow.steps[1], { limit: urls.length });
+      }
+      m.status = 'running';
+      say(id, { type: 'planned', workflow: m.workflow });
+      const r = await runMission(m.workflow, id);
+      Object.assign(m, { status: 'done', rows: r.rows, answer: r.answer, achieved: r.achieved });
+    } catch (e) {
+      Object.assign(m, { status: /Stopped/.test(e.message) ? 'stopped' : 'failed', error: e.message });
+    }
+    m.endedAt = Date.now();
+    persist();
+    chrome.runtime.sendMessage({ type: 'agent-done', runId: id, mission: m }).catch(() => {});
+    onDone(m);
+  })();
+  return { id };
+}
+
+// A small nudge when a mission ends and its Mission control isn't the tab you're looking at: on the page you're
+// on (content/core.js), else a system notification (another app, or a browser page). Plus the badge count.
+async function nudge(m) {
+  if (m.status === 'stopped') return;
+  const win = await chrome.windows.getLastFocused().catch(() => null);
+  const [tab] = win ? await chrome.tabs.query({ active: true, windowId: win.id }) : [];
+  if (win?.focused && tab?.url?.startsWith(chrome.runtime.getURL('agent.html')) && tab.url.includes(`run=${m.id}`)) return; // watching it
+  unseen.add(m.id);
+  badge();
+  const done = m.status === 'done';
+  const title = done ? (m.achieved ? 'Mission done' : 'Mission done, best effort') : 'Mission failed';
+  const text = done ? summary(m).answer || 'Results are ready.' : m.error;
+  const msg = { type: 'nudge', id: m.id, title, goal: m.goal, text, state: done ? (m.achieved ? 'sprout' : 'stage-3') : 'wilt' };
+  const onPage = win?.focused && /^https?:/.test(tab?.url || '') && (await toTab(tab.id, msg).then(() => true, () => false));
+  if (!onPage) chrome.notifications.create(`live:${m.id}`, { type: 'basic', iconUrl: 'icon128.png', title: `${title}: ${m.goal.slice(0, 60)}`, message: text || '', priority: 1 });
+}
+
+// ---- shopping sense: a local price memory, and a same-product check across stores ----
+
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+// The same product, wherever it's sold: GTIN / MPN / SKU, else the model number. Name-only products get a key
+// too (for the memory), but never count as "the same item" elsewhere.
+const keyOf = (p) => productKey({ product: p.name, _gtin: p.gtin, _mpn: p.mpn, _sku: p.sku }) || `name:${String(p.name).toLowerCase().replace(/\W+/g, ' ').trim().slice(0, 80)}`;
+const book = async () => (await chrome.storage.local.get({ priceBook: {} })).priceBook;
+async function saveBook(b) {
+  const keys = Object.keys(b).sort((x, y) => (b[y].seen.at(-1)?.at || 0) - (b[x].seen.at(-1)?.at || 0));
+  for (const k of keys.slice(300)) delete b[k]; // ponytail: newest 300 products, plenty for a price memory
+  await chrome.storage.local.set({ priceBook: b });
+}
+
+// A product page was viewed: remember the price, and say what's worth knowing about it.
+async function priceSeen({ product }) {
+  const b = await book();
+  const key = keyOf(product);
+  const e = (b[key] ||= { name: product.name, seen: [] });
+  const before = e.seen.filter((x) => x.currency === product.currency && Number.isFinite(x.price));
+  if (Number.isFinite(product.price)) e.seen = [...e.seen, { price: product.price, currency: product.currency, host: hostOf(product.url), url: product.url, at: Date.now() }].slice(-30);
+  await saveBook(b);
+  const here = hostOf(product.url);
+  return {
+    key,
+    lowest: before.filter((x) => x.price < product.price && x.host !== here).sort((x, y) => x.price - y.price)[0] || null,
+    lastHere: [...before].reverse().find((x) => x.host === here && x.at < Date.now() - 36e5) || null, // an earlier visit, not this one
+    cheaper: e.cheaper && e.cheaper.at > Date.now() - 864e5 ? e.cheaper : null,
+    checkedAt: e.checkedAt || 0,
+  };
+}
+
+// Opt-in (settings.shoppingSense): a quiet mission looks for this exact item elsewhere, once a day per product.
+// Only a confirmed same product, at least 3% cheaper, earns a nudge.
+// `urls` replaces the web search (tests only).
+async function shopCheck({ product, urls }, sender) {
+  const key = keyOf(product);
+  if (key.startsWith('name:')) return { skipped: 'no product id or model number to match on' };
+  const b = await book();
+  const e = (b[key] ||= { name: product.name, seen: [] });
+  if (e.checkedAt > Date.now() - 864e5) return { skipped: 'checked today' };
+  e.checkedAt = Date.now();
+  await saveBook(b);
+  const workflow = {
+    goal: `Find ${product.name} cheaper`, planner: 'shopping sense',
+    brief: { subject: '', subjectWords: [], must: [], avoid: [], prefer: [], budget: null, rank: { by: 'price', order: 'asc' }, want: { kind: 'list', n: 10 }, shopping: true },
+    steps: [{ type: 'search', query: `${product.name} price`, n: 8, ...(urls && { urls }) }, { type: 'open', limit: urls?.length || 6 }, { type: 'extract', fields: ['product', 'price', 'store'], require: [] },
+      { type: 'filter', field: '', op: '<', value: '' }, { type: 'rank', by: 'price', order: 'asc', keep: 10 }, { type: 'answer', question: 'Which store sells this exact product cheapest?' }],
+  };
+  const tabId = sender?.tab?.id;
+  return missionStart({ goal: workflow.goal, workflow, onDone: (m) => shopDone(m, product, key, tabId) });
+}
+
+async function shopDone(m, product, key, tabId) {
+  const here = hostOf(product.url);
+  const deal = (m.rows || [])
+    .filter((r) => productKey(r) === key && hostOf(r._url) !== here && (!r._currency || !product.currency || r._currency === product.currency))
+    .map((r) => ({ price: num(r.price), host: hostOf(r._url), url: r._url }))
+    .filter((r) => r.price > 0 && r.price <= product.price * 0.97)
+    .sort((x, y) => x.price - y.price)[0];
+  const b = await book();
+  if (b[key]) (b[key].cheaper = deal ? { ...deal, currency: product.currency, at: Date.now() } : null), await saveBook(b);
+  if (!deal || tabId == null) return; // nothing better: stay quiet
+  const money = (n) => `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}${product.currency ? ` ${product.currency}` : ''}`;
+  toTab(tabId, { type: 'nudge', id: m.id, href: deal.url, state: 'sprout', title: `Same item, ${money(product.price - deal.price)} less`,
+    goal: product.name, text: `${deal.host}: ${money(deal.price)} (here: ${money(product.price)})` }).catch(() => {});
+}
+
+const openMission = (id) => {
+  unseen.delete(id);
+  badge();
+  return chrome.tabs.create({ url: chrome.runtime.getURL(`agent.html?run=${id}`) });
+};
 
 // ctx (missions): { seen: Set of URLs already read, carry: rows from earlier rounds, run } — shared across rounds.
-export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID(), ctx = null) {
+export async function runWorkflow({ goal, steps, brief = null }, runId = crypto.randomUUID(), ctx = null) {
   const run = ctx?.run || { cancelled: false, group: null };
   runs.set(runId, run);
   let pool = [];
@@ -457,9 +676,14 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID(), 
         // When no row mentions them (a year that labels the whole section), keep all — but not on a mission's
         // later rounds, whose wider searches bring in unrelated pages.
         if (matching.length || ctx?.round > 1) rows = matching;
+        // The right kind of thing: a "monitor" mission keeps monitors, not stands, cables or chairs.
+        const { rows: things, dropped } = enforceSubject(rows, brief);
+        rows = things;
         rows.forEach((r) => delete r._text);
         if (ctx) rows = mergeRows(ctx.carry, rows, step.fields); // earlier rounds' rows, filled in by this round's
-        say(runId, { step: i, status: 'done', detail: `${rows.length} rows from ${pages.length} pages${need.length && found > rows.length ? ` · ${found - rows.length} didn't mention ${need.join(', ')}` : ''}`, rows });
+        const why = [need.length && found - rows.length - dropped.subject - dropped.accessory > 0 && `${found - rows.length - dropped.subject - dropped.accessory} lacked ${need.join(', ')}`,
+          dropped.subject && `${dropped.subject} weren't a ${brief.subject}`, dropped.accessory && `${dropped.accessory} accessories`].filter(Boolean);
+        say(runId, { step: i, status: 'done', detail: `${rows.length} rows from ${pages.length} pages${why.length ? ` · set aside: ${why.join(', ')}` : ''}`, rows });
       } else if (step.type === 'filter') {
         const before = rows.length;
         rows = applyFilter(rows, step);
@@ -508,7 +732,7 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID(), 
         // Prices go in with their currency attached, so the answer can't turn kronor into dollars.
         const val = (k, v, r) => (/price|cost/.test(k) && typeof v === 'number' && r._currency ? `${v} ${r._currency}` : v);
         const table = rows.map((r, n) => `[${n + 1}] ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([k, v]) => `${k}: ${val(k, v, r)}`).join('; ')} (source: ${r._source}, ${r._url})`).join('\n');
-        answer = await ask(`Goal: ${goal}\n${step.question}\nUse only the numbered rows below and cite them like [1]. Quote prices with the currency shown in the row. Two to four sentences.`, table);
+        answer = await ask(`Goal: ${goal}\n${step.question}${brief ? ` The user wants ${describe(brief)}.` : ''}\nUse only the numbered rows below and cite them like [1]. Quote prices with the currency shown in the row. If no row fully meets what the user wants, say which part is missing. Two to four sentences.`, table);
         say(runId, { step: i, status: 'done', detail: 'written', answer });
       }
     }
@@ -554,7 +778,7 @@ async function check(goal, wf, r, seen) {
   }
   const table = r.rows.slice(0, 6).map((x, i) => `[${i + 1}] ${fields.map((f) => `${f}: ${x[f]}`).join('; ')}`).join('\n');
   const v = parseJson(await ask(
-    `Goal: ${goal}\nAnswer so far: ${r.answer}\n` +
+    `Goal: ${goal}\n${wf.brief ? `What the user wants: ${describe(wf.brief)}\n` : ''}Answer so far: ${r.answer}\n` +
       'Do these results contain what the goal asks for? Say achieved: true when the answer is supported by the rows, even if more sources ' +
       'could exist or the wording could be better. Say false only when a value the goal needs is missing, or the answer is wrong or off-topic. Reply with JSON only: ' +
       '{"achieved": true or false, "missing": "<what is missing or wrong, short>", "better_query": "<a better web search query, or empty>"}',
@@ -658,12 +882,30 @@ export const handlers = {
     return true;
   },
   // tabs: true → the mission reads the current window's open web tabs instead of searching.
-  agentOpen: async ({ goal = '', run = false, context = '', tabs = false }, sender) => {
+  // run: start it in the background and open Mission control on it; otherwise open Mission control to plan it.
+  agentOpen: async ({ goal = '', run = false, context = '', tabs = false, open = true }, sender) => {
     const urls = tabs ? (await chrome.tabs.query({ windowId: sender?.tab?.windowId ?? chrome.windows.WINDOW_ID_CURRENT })).map((t) => t.url).filter((u) => /^https?:/.test(u)) : [];
-    const q = new URLSearchParams({ goal, run: run ? 1 : 0, context, urls: urls.join('\n') });
+    if (run) {
+      const { id } = missionStart({ goal, context, urls });
+      if (open) await openMission(id);
+      return { id };
+    }
+    const q = new URLSearchParams({ goal, context, urls: urls.join('\n') });
     await chrome.tabs.create({ url: chrome.runtime.getURL(`agent.html?${q}`) });
     return true;
   },
+  missionStart: ({ goal, workflow }) => missionStart({ goal, workflow }),
+  // Attaching marks it seen. Full state for Mission control; summaries for lists.
+  missionState: ({ id }) => {
+    unseen.delete(id);
+    badge();
+    return live.get(id) || null;
+  },
+  missionsLive: () => [...live.values()].map(summary).reverse(),
+  missionOpen: ({ id }) => openMission(id).then(() => true),
+  priceSeen,
+  shopCheck,
+  missionForget: ({ id }) => (live.delete(id), unseen.delete(id), badge(), persist(), true),
   missionsList: getMissions,
   missionSave: async ({ mission }) => {
     const list = (await getMissions()).filter((m) => m.id !== mission.id);
@@ -683,6 +925,11 @@ export function init() {
   chrome.alarms.onAlarm.addListener((a) => a.name.startsWith('mission:') && scheduled(a.name.slice(8)).catch((e) => console.warn('mission failed', e)));
   chrome.notifications.onClicked.addListener((id) => {
     if (id.startsWith('mission:')) chrome.tabs.create({ url: id.split(':').slice(2).join(':') });
+    if (id.startsWith('live:')) openMission(id.slice(5));
+  });
+  // A restarted service worker can't resume a run: list what was running as interrupted.
+  chrome.storage.session.get('liveMissions').then(({ liveMissions = [] }) => {
+    for (const m of liveMissions) if (!live.has(m.id)) live.set(m.id, { ...m, steps: [], log: [], rounds: [], rows: [], ...(['planning', 'running'].includes(m.status) && { status: 'failed', error: 'Interrupted: the browser stopped the background worker.' }) });
   });
   // Address bar: type "eg", a space, then the goal.
   chrome.omnibox.setDefaultSuggestion({ description: 'Run a mission on this device: %s' });

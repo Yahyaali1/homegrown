@@ -43,9 +43,7 @@ async function plan() {
     // Started from "my open tabs": read those pages instead of searching.
     const urls = (params.get('urls') || '').split('\n').filter(Boolean);
     if (urls.length) Object.assign(workflow.steps[0], { urls, query: `${urls.length} open tabs` }), Object.assign(workflow.steps[1], { limit: urls.length });
-    $('#planner').textContent = workflow.planner === 'gemma' ? 'planned by Gemma' : 'from a template';
-    renderSteps();
-    $('#workflow').hidden = false;
+    showWorkflow(workflow);
     $('#results').hidden = $('#save').hidden = true;
   } catch (e) {
     alert(e.message);
@@ -58,6 +56,53 @@ $('#plan').onclick = plan;
 $('#goal').onkeydown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(), plan();
 };
+
+// "Understood as": the brief Gemma read from the goal, shown so a wrong reading can be fixed before running.
+// Edits rewrite the steps that enforce it (must-haves, budget filter, ranking, how many).
+const split = (v) => v.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+function renderBrief() {
+  const b = workflow.brief;
+  $('#brief').hidden = !b;
+  if (!b) return;
+  const fields = workflow.steps.find((st) => st.type === 'extract')?.fields || [];
+  const set = (fn) => (e) => (fn(e.target.value.trim()), applyBrief(), refreshKeepingFocus());
+  const box = (label, value, fn, props = {}) => el('label', { className: 'bf' }, el('span', { textContent: label }), el('input', { value, onchange: set(fn), ...props }));
+  const pick = (value, options, fn, aria) => {
+    const s = el('select', { onchange: set(fn), ariaLabel: aria }, ...options.map(([v, t]) => el('option', { value: v, textContent: t })));
+    s.value = value;
+    return s;
+  };
+  $('#brief').replaceChildren(
+    el('div', { className: 'brief-head' }, el('b', { textContent: 'Understood as' }), el('span', { className: 'muted small', textContent: 'Fix anything I read wrong, then run.' })),
+    el('div', { className: 'brief-grid' },
+      box('Looking for', b.subject, (v) => ((b.subject = v.toLowerCase()), (b.subjectWords = [...new Set([b.subject, `${b.subject}s`, b.subject.replace(/s$/, '')])].filter(Boolean))), { placeholder: 'what kind of thing?' }),
+      box('Must have', b.must.join(', '), (v) => (b.must = split(v)), { placeholder: 'exact words, e.g. 4k, usb-c' }),
+      box('Not', b.avoid.join(', '), (v) => (b.avoid = split(v)), { placeholder: 'e.g. refurbished' }),
+      box('Ideally', b.prefer.join(', '), (v) => (b.prefer = split(v)), { placeholder: 'wishes' }),
+      el('label', { className: 'bf' }, el('span', { textContent: 'Budget' }), el('div', { className: 'row2' },
+        pick(b.budget?.op || '<', [['<', 'under'], ['>', 'over']], (v) => b.budget && (b.budget.op = v), 'Budget direction'),
+        el('input', { value: b.budget?.value ?? '', placeholder: 'none', inputMode: 'decimal', ariaLabel: 'Budget amount', onchange: set((v) => (b.budget = v ? { op: b.budget?.op || '<', value: +v.replace(/[^\d.]/g, ''), currency: b.budget?.currency || '' } : null)) }),
+        el('input', { value: b.budget?.currency ?? '', placeholder: 'USD', size: 4, ariaLabel: 'Currency', onchange: set((v) => b.budget && (b.budget.currency = v.toUpperCase())) }))),
+      el('label', { className: 'bf' }, el('span', { textContent: 'Best means' }), el('div', { className: 'row2' },
+        pick(b.rank?.by && fields.includes(b.rank.by) ? b.rank.by : fields.find((f) => f.includes(b.rank?.by || '\0')) || '', [['', 'no order'], ...fields.map((f) => [f, f.replace(/_/g, ' ')])], (v) => (b.rank = v ? { by: v, order: b.rank?.order || 'asc' } : null), 'Rank by'),
+        pick(b.rank?.order || 'asc', [['asc', 'lowest first'], ['desc', 'highest first']], (v) => b.rank && (b.rank.order = v), 'Order'))),
+      box('How many', b.want.kind === 'list' ? b.want.n : 1, (v) => (b.want = +v > 1 ? { kind: 'list', n: Math.min(+v, 20) } : { kind: 'one', n: 3 }), { type: 'number', min: 1, max: 20 }),
+    ),
+  );
+}
+function applyBrief() {
+  const b = workflow.brief;
+  const steps = workflow.steps;
+  const ex = steps.find((st) => st.type === 'extract');
+  ex.require = b.must;
+  const price = ex.fields.find((f) => /price|cost/.test(f));
+  Object.assign(steps.find((st) => st.type === 'filter'), b.budget && price ? { field: price, op: b.budget.op, value: String(b.budget.value) } : { field: '', value: '' });
+  let rank = steps.find((st) => st.type === 'rank');
+  const by = b.rank && (ex.fields.includes(b.rank.by) ? b.rank.by : ex.fields.find((f) => f.includes(b.rank.by)));
+  if (by && !rank) steps.splice(steps.findIndex((st) => st.type === 'answer'), 0, (rank = { type: 'rank' }));
+  if (rank && !by) steps.splice(steps.indexOf(rank), 1);
+  else if (rank) Object.assign(rank, { by, order: b.rank.order, keep: b.want.kind === 'list' ? b.want.n : 3 });
+}
 
 // One card per step; each card's inputs write straight back into workflow.steps.
 function renderSteps() {
@@ -72,16 +117,16 @@ function renderSteps() {
   $('#steps').replaceChildren(
     ...workflow.steps.map((step) => {
       const body = {
-        search: () => step.urls?.length ? [el('span', { className: 'muted small', textContent: `${step.urls.length} open tabs (no web search)` })] : [input(step, 'query', { 'aria-label': 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, 'aria-label': 'Results' }))],
-        open: () => [el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'top' }), input(step, 'limit', { type: 'number', min: 1, max: 12, 'aria-label': 'Pages to read' }))],
+        search: () => step.urls?.length ? [el('span', { className: 'muted small', textContent: `${step.urls.length} open tabs (no web search)` })] : [input(step, 'query', { ariaLabel: 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, ariaLabel: 'Results' }))],
+        open: () => [el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'top' }), input(step, 'limit', { type: 'number', min: 1, max: 12, ariaLabel: 'Pages to read' }))],
         extract: () => [
-          el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => (step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), onchange: refreshKeepingFocus }),
+          el('input', { value: step.fields.join(', '), ariaLabel: 'Fields', title: 'Comma-separated columns', oninput: (e) => (step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), onchange: refreshKeepingFocus }),
           el('span', { className: 'muted small', textContent: 'must mention' }),
-          el('input', { value: (step.require || []).join(', '), placeholder: 'e.g. 4k, usb-c', 'aria-label': 'Each row must mention', oninput: (e) => (step.require = e.target.value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)) }),
+          el('input', { value: (step.require || []).join(', '), placeholder: 'e.g. 4k, usb-c', ariaLabel: 'Each row must mention', oninput: (e) => (step.require = e.target.value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)) }),
         ],
-        filter: () => [el('div', { className: 'row2' }, select(step, 'field', [['', 'off'], ...fieldsOf().map((f) => [f, f])]), select(step, 'op', [['<', '<'], ['>', '>'], ['contains', 'has']])), input(step, 'value', { placeholder: 'value', 'aria-label': 'Filter value' })],
-        rank: () => [el('div', { className: 'row2' }, select(step, 'by', fieldsOf().map((f) => [f, f])), select(step, 'order', [['asc', 'lowest first'], ['desc', 'highest first']])), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'keep' }), input(step, 'keep', { type: 'number', min: 1, max: 20, 'aria-label': 'Rows to keep' }))],
-        answer: () => [input(step, 'question', { 'aria-label': 'What the answer should say' })],
+        filter: () => [el('div', { className: 'row2' }, select(step, 'field', [['', 'off'], ...fieldsOf().map((f) => [f, f])]), select(step, 'op', [['<', '<'], ['>', '>'], ['contains', 'has']])), input(step, 'value', { placeholder: 'value', ariaLabel: 'Filter value' })],
+        rank: () => [el('div', { className: 'row2' }, select(step, 'by', fieldsOf().map((f) => [f, f])), select(step, 'order', [['asc', 'lowest first'], ['desc', 'highest first']])), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'keep' }), input(step, 'keep', { type: 'number', min: 1, max: 20, ariaLabel: 'Rows to keep' }))],
+        answer: () => [input(step, 'question', { ariaLabel: 'What the answer should say' })],
       }[step.type]();
       return el('li', { className: 'step', dataset: { type: step.type } },
         el('header', {}, el('span', { className: 'icon', textContent: ICONS[step.type] }), el('span', { textContent: NAMES[step.type] })),
@@ -104,8 +149,9 @@ function refreshKeepingFocus() {
 
 // ---- run ----
 
-$('#run').onclick = async () => {
-  runId = crypto.randomUUID();
+// Missions run in the background (bg/agent.js missionStart): Run starts one and attaches; ?run=<id> attaches to one
+// already going or finished. Several can run at once; each ends with a nudge if you're not watching.
+function resetRun() {
   rows = [];
   sort = null;
   $('#log').replaceChildren();
@@ -115,46 +161,86 @@ $('#run').onclick = async () => {
   $('#rounds').replaceChildren();
   $('#loop').hidden = true;
   $('#verdict').hidden = true;
+  $('#save').hidden = true;
   for (const li of $('#steps').children) li.className = 'step';
-  $('#run').hidden = true;
-  $('#stop').hidden = false;
-  try {
-    const r = await bg('agentRun', { workflow, runId });
-    rows = r.rows;
-    renderTable(true);
-    renderAnswer(r.answer || (r.achieved ? '' : 'No answer yet: the pages read so far did not have what the goal needs.'));
-    if (r.rounds) {
-      const v = $('#verdict');
-      v.hidden = false;
-      v.className = `badge ${r.achieved ? 'good' : 'warn'}`;
-      v.textContent = r.achieved ? `Goal met · ${r.rounds.length} round${r.rounds.length > 1 ? 's' : ''}` : `Best effort after ${r.rounds.length} rounds`;
-      if (r.achieved) v.prepend(hgFlower.el(16, 'bloom'), ' '); // the flower opens when the goal is met
-    }
-    $('#save').hidden = false;
-    $('#name').value ||= workflow.goal.slice(0, 48);
-    $('#alert-field').replaceChildren(el('option', { value: '', textContent: 'the best result changes' }), ...Object.keys(rows[0] || {}).filter((k) => !k.startsWith('_')).map((k) => el('option', { value: k, textContent: k })));
-  } catch (e) {
-    $('#rounds .round:last-child .flower')?.setAttribute('class', 'flower wilt'); // the round that failed wilts
-    log(`⚠ ${e.message}`);
-    $('#answer').textContent = e.message;
-    const current = $('#steps .running');
-    if (current) current.className = 'step failed';
-  } finally {
-    $('#run').hidden = false;
-    $('#stop').hidden = true;
-    runId = null;
-  }
+}
+$('#run').onclick = async () => {
+  resetRun();
+  const { id } = await bg('missionStart', { goal: workflow.goal, workflow });
+  attach(id);
 };
 $('#stop').onclick = () => runId && bg('agentCancel', { runId });
 
-const log = (text) => $('#log').append(el('li', { textContent: text }));
-chrome.runtime.onMessage.addListener((m) => {
-  if (m.type !== 'agent-progress' || m.runId !== runId) return;
-  const li = $('#steps').children[m.step];
-  if (li) {
-    li.className = `step ${m.status}`;
-    if (m.detail) li.querySelector('.detail').textContent = m.detail;
+async function attach(id) {
+  runId = id;
+  history.replaceState(null, '', `?run=${id}`);
+  const m = await bg('missionState', { id });
+  if (!m) return void ($('#answer').textContent = 'This mission is no longer here: missions are kept until the browser closes.');
+  $('#goal').value = m.goal;
+  $('#results').hidden = false;
+  if (m.workflow) showWorkflow(m.workflow);
+  else $('#answer').textContent = 'Reading your goal…';
+  m.steps.forEach((st, i) => st && progress({ step: i, ...st }));
+  m.log.forEach(log);
+  m.rounds.forEach((r) => {
+    onRound({ round: r.round, phase: 'start', note: r.note });
+    if (r.phase === 'checking') onRound({ round: r.round, phase: 'checking' });
+    if (r.why) onRound({ round: r.round, phase: 'verdict', achieved: r.achieved, why: r.why });
+  });
+  if (m.rows?.length) (rows = m.rows), renderTable();
+  if (m.answer) renderAnswer(m.answer);
+  const going = ['planning', 'running'].includes(m.status);
+  $('#run').hidden = going;
+  $('#stop').hidden = !going;
+  if (!going) finish(m);
+}
+
+function showWorkflow(wf) {
+  workflow = wf;
+  $('#planner').textContent = wf.planner === 'gemma' ? 'planned by Gemma' : wf.planner ? 'from a template' : '';
+  renderBrief();
+  renderSteps();
+  $('#workflow').hidden = false;
+}
+
+function finish(m) {
+  $('#run').hidden = false;
+  $('#stop').hidden = true;
+  if (m.status !== 'done') {
+    $('#rounds .round:last-child .flower')?.setAttribute('class', 'flower wilt'); // the round that failed wilts
+    log(`⚠ ${m.error}`);
+    $('#answer').textContent = m.error || 'Stopped.';
+    const current = $('#steps .running');
+    if (current) current.className = 'step failed';
+    return;
   }
+  rows = m.rows;
+  renderTable(true);
+  renderAnswer(m.answer || (m.achieved ? '' : 'No answer yet: the pages read so far did not have what the goal needs.'));
+  const n = m.rounds.length;
+  const v = $('#verdict');
+  v.hidden = false;
+  v.className = `badge ${m.achieved ? 'good' : 'warn'}`;
+  v.textContent = m.achieved ? `Goal met · ${n} round${n > 1 ? 's' : ''}` : `Best effort after ${n} rounds`;
+  if (m.achieved) v.prepend(hgFlower.el(16, 'bloom'), ' '); // the flower opens when the goal is met
+  $('#save').hidden = false;
+  $('#name').value ||= m.goal.slice(0, 48);
+  $('#alert-field').replaceChildren(el('option', { value: '', textContent: 'the best result changes' }), ...Object.keys(rows[0] || {}).filter((k) => !k.startsWith('_')).map((k) => el('option', { value: k, textContent: k })));
+}
+
+const log = (text) => $('#log').append(el('li', { textContent: text }));
+function progress(m) {
+  const li = $('#steps').children[m.step];
+  if (!li) return;
+  li.className = `step ${m.status}`;
+  if (m.detail) li.querySelector('.detail').textContent = m.detail;
+}
+chrome.runtime.onMessage.addListener((m) => {
+  if (m.runId !== runId) return;
+  if (m.type === 'agent-done') return finish(m.mission);
+  if (m.type !== 'agent-progress') return;
+  if (m.workflow) return showWorkflow(m.workflow);
+  if (m.step !== undefined) progress(m);
   if (m.round) onRound(m);
   for (const line of m.log || []) log(line);
   if (m.rows) (rows = m.rows), renderTable();
@@ -272,7 +358,8 @@ $('#new').onclick = () => {
 const params = new URLSearchParams(location.search);
 if (params.get('context')) ($('#context').hidden = false), ($('#context').textContent = `Started from: ${params.get('context')}`);
 renderSaved();
-if (params.get('goal')) {
+if (params.get('run') && params.get('run') !== '1') attach(params.get('run'));
+else if (params.get('goal')) {
   $('#goal').value = params.get('goal');
   plan().then(() => params.get('run') === '1' && workflow && $('#run').click());
 } else $('#goal').focus();

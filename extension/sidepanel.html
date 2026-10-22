@@ -70,8 +70,10 @@
           <span class="grow"></span>
           <button class="primary">Start mission</button>
         </div>
-        <p class="muted small">Opens Mission control: it searches, reads pages, checks the results against your goal and tries again until it's met.</p>
+        <p class="muted small">Runs in the background: it searches, reads pages, checks the results against your goal and tries again until it's met. Start as many as you like; you'll get a nudge when each one is done.</p>
       </form>
+      <h3>Running and recent</h3>
+      <ul id="live-list" class="list"></ul>
       <h3>Saved missions</h3>
       <ul id="mission-list" class="list"></ul>
       <h3>Watched pages</h3>
@@ -146,6 +148,9 @@
       <h3>Models</h3>
       <ul id="model-list" class="list"></ul>
       <p class="muted small">Models are stored in this browser and run on your GPU. After download, everything works offline.</p>
+      <h3>Which model does what</h3>
+      <div id="task-models" class="stack"></div>
+      <p class="muted small">One model is in memory at a time, so switching between tasks that use different models loads the other one first (a few seconds). You can also just ask in Chat, e.g. "use E4B for missions".</p>
 
       <h3>Appearance</h3>
       <div class="row">Theme <div class="theme-switch"></div><span class="muted small">match system · light · dark</span></div>
@@ -160,6 +165,7 @@
       <label class="toggle"><input type="checkbox" data-key="linkPreview" data-default="true"><span>Link preview when you hold a link</span></label>
       <label class="toggle"><input type="checkbox" data-key="useVoice" data-default="true"><span>Voice: Speak… and Read aloud</span></label>
       <label class="toggle"><input type="checkbox" data-key="replyButtons" data-default="true"><span>Reply button in email and chat boxes</span></label>
+      <label class="toggle"><input type="checkbox" data-key="shoppingSense" data-default="false"><span>Shopping sense: when I stay on a product page, quietly check other stores for the same item and nudge me if it's cheaper (searches the product name on Bing)</span></label>
       <label class="row">Translate into <input id="translateTo" aria-label="Translate into language"></label>
 
       <h3>Turned off on these sites</h3>

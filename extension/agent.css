@@ -116,3 +116,12 @@ td a { color: var(--link); text-decoration: none; }
 .theme-switch button { height: 26px; width: 30px; padding: 0; box-shadow: none; background: transparent; color: var(--muted); }
 .theme-switch button[aria-pressed=true] { background: var(--chip-hover); color: var(--fg); }
 #saved li.empty { flex-direction: row; align-items: center; gap: 10px; box-shadow: none; outline: 1px dashed var(--line-strong); outline-offset: -1px; --seed-ring: var(--card); }
+
+/* "Understood as": the mission brief, editable */
+.brief { border-radius: var(--r-md); padding: var(--s4); margin-bottom: var(--s4); background: var(--chip); animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+.brief-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: var(--s3); flex-wrap: wrap; }
+.brief-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; }
+.bf { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-sm); color: var(--muted); }
+.bf input, .bf select { width: 100%; font-size: var(--t-md); color: var(--fg); background: var(--card); }
+.bf .row2 { display: flex; gap: 6px; }
+.bf .row2 > :first-child { flex: none; width: auto; }

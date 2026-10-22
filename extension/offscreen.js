@@ -226,8 +226,17 @@ async function drain() {
   }
 }
 
-async function generateNow({ id, turns, config = {} }) {
-  await ensureLoaded();
+// The model chosen for this request's task (settings → Models → Use for). Swapping happens here, inside the queue,
+// so it never interrupts another request. Not downloaded (or none chosen): whichever model is loaded.
+async function useModel(name) {
+  const m = name && byName(name);
+  if (!m || loaded?.name === name) return ensureLoaded();
+  if ((await fileSize(m.modelFile)) !== m.sizeInBytes) return ensureLoaded();
+  return load(name);
+}
+
+async function generateNow({ id, turns, config = {}, model }) {
+  await useModel(model);
   let imageReader = null;
   if (turns.at(-1).image && !loaded.image) {
     turns = [...turns.slice(0, -1), await describeForModel(id, turns.at(-1))];

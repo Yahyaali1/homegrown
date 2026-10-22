@@ -1,0 +1,598 @@
+{
+ "date": "2026-10-22T12:41:56.580Z",
+ "set": "all",
+ "passed": 38,
+ "total": 38,
+ "results": [
+  {
+   "case": "books.toscrape: cheapest book on the page (product grid)",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Starving Hearts (Triangular Trade Trilogy, #1)",
+    "value": 13.99
+   },
+   "got": {
+    "title": "Starving Hearts (Triangular Trade Trilogy, #1)",
+    "price": 13.99
+   }
+  },
+  {
+   "case": "books.toscrape: price of one book (product page)",
+   "pass": true,
+   "secs": "3",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "A Light in the Attic",
+    "value": 51.77
+   },
+   "got": {
+    "title": "A Light in the Attic",
+    "price": 51.77
+   }
+  },
+  {
+   "case": "webscraper.io: cheapest laptop (product grid)",
+   "pass": true,
+   "secs": "4",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Asus VivoBook X441NA-GA190",
+    "value": 295.99
+   },
+   "got": {
+    "product": "Asus VivoBook X441NA-GA190",
+    "price": 295.99
+   }
+  },
+  {
+   "case": "scrapethissite: hockey team with most wins in 1990 (table)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Chicago Blackhawks",
+    "value": 49
+   },
+   "got": {
+    "team": "Chicago Blackhawks",
+    "wins": 49
+   }
+  },
+  {
+   "case": "scrapethissite: largest country by area (250-item list)",
+   "pass": true,
+   "secs": "6",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Russia",
+    "value": 17100000
+   },
+   "got": {
+    "country": "Russia",
+    "area": 17100000
+   }
+  },
+  {
+   "case": "Wikipedia: tallest building and its height (table)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Burj Khalifa",
+    "value": 828
+   },
+   "got": {
+    "building": "Burj Khalifa",
+    "height_m": 828
+   }
+  },
+  {
+   "case": "Wikipedia: height of the Eiffel Tower (infobox)",
+   "pass": true,
+   "secs": "4",
+   "via": "table+model",
+   "rows": 1,
+   "expected": {
+    "name": "Eiffel Tower",
+    "value": [
+     300,
+     330
+    ]
+   },
+   "got": {
+    "structure": "Eiffel Tower",
+    "height_m": 330
+   }
+  },
+  {
+   "case": "Hacker News: story with the most points (title and points in separate rows)",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Today's PHP security release, and how we're strengthening security",
+    "value": 759
+   },
+   "got": {
+    "story": "Today's PHP security release, and how we're strengthening security",
+    "points": 759
+   }
+  },
+  {
+   "case": "Wikipedia: population of Iceland (infobox, footnoted number)",
+   "pass": true,
+   "secs": "4",
+   "via": "table+model",
+   "rows": 1,
+   "expected": {
+    "name": "Iceland",
+    "range": [
+     370000,
+     420000
+    ]
+   },
+   "got": {
+    "country": "Iceland",
+    "population": 394324
+   }
+  },
+  {
+   "case": "quotes.toscrape: who said the first quote on the page (repeated blocks)",
+   "pass": true,
+   "secs": "11",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "Albert Einstein",
+    "field": "author"
+   },
+   "got": {
+    "quote": "“The world as we have created it is a process of our thinking. It cannot be changed without changing our thinking.”",
+    "author": "Albert Einstein"
+   }
+  },
+  {
+   "case": "books.toscrape: most expensive travel book (category page)",
+   "pass": true,
+   "secs": "4",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "A Year in Provence (Provence #1)",
+    "value": 56.88
+   },
+   "got": {
+    "title": "A Year in Provence (Provence #1)",
+    "price": 56.88
+   }
+  },
+  {
+   "case": "webscraper.io: cheapest touch phone (microdata grid)",
+   "pass": true,
+   "secs": "5",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Nokia 123",
+    "value": 24.99
+   },
+   "got": {
+    "phone": "Nokia 123",
+    "price": 24.99
+   }
+  },
+  {
+   "case": "Wikipedia: elevation of Mount Everest (infobox)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Mount Everest",
+    "value": 8849
+   },
+   "got": {
+    "mountain": "Mount Everest",
+    "elevation_m": 8848.86
+   }
+  },
+  {
+   "case": "quotes.toscrape: author of the first \"love\" quote (tag page)",
+   "pass": true,
+   "secs": "20",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "André Gide"
+   },
+   "got": {
+    "quote": "“It is better to be hated for what you are than to be loved for what you are not.”",
+    "author": "André Gide"
+   }
+  },
+  {
+   "case": "scrapethissite: Boston Bruins best season by wins (filtered table)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "2008",
+    "value": 53
+   },
+   "got": {
+    "year": 2008,
+    "wins": 53
+   }
+  },
+  {
+   "case": "Wikipedia: year Python first appeared (infobox date)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Python",
+    "text": "1991"
+   },
+   "got": {
+    "language": "Python (programming language)",
+    "first_appeared": "20 February 1991; 35 years ago"
+   }
+  },
+  {
+   "case": "Wikipedia: most populous city (large table)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": [
+     "Jakarta",
+     "Tokyo",
+     "Dhaka"
+    ]
+   },
+   "got": {
+    "city": "Jakarta",
+    "population": 41913860
+   }
+  },
+  {
+   "case": "scrapethissite: 2015 film with the most Oscars (loads after a click)",
+   "pass": true,
+   "secs": "8",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Mad Max: Fury Road",
+    "value": 6
+   },
+   "got": {
+    "film": "Mad Max: Fury Road",
+    "awards": 6
+   }
+  },
+  {
+   "case": "Local: cheapest headphones in shadow-DOM product cards",
+   "pass": true,
+   "secs": "11",
+   "via": "model",
+   "rows": 4,
+   "expected": {
+    "name": "CalmWave Lite",
+    "value": 149
+   },
+   "got": {
+    "product": "CalmWave Lite",
+    "price": 149
+   }
+  },
+  {
+   "case": "quotes.toscrape page 2: first author",
+   "pass": true,
+   "secs": "31",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "Marilyn Monroe"
+   },
+   "got": {
+    "quote": "“This life is what you make it. No matter what, you're going to mess up sometimes, it's a universal truth. But the good part is you get to decide how you're going to mess it up. Girls will be your friends - they'll act like it anyway. But just remember, some come, some go. The ones that stay with you through everything - they're your true best friends. Don't let go of them. Also remember, sisters make the best friends in the world. As for lovers, well, they'll come and go too. And baby, I hate t",
+    "author": "Marilyn Monroe"
+   }
+  },
+  {
+   "case": "books.toscrape: cheapest poetry book",
+   "pass": true,
+   "secs": "6",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Poems That Make Grown Women Cry",
+    "value": 14.19
+   },
+   "got": {
+    "title": "Poems That Make Grown Women Cry",
+    "price": 14.19
+   }
+  },
+  {
+   "case": "webscraper.io: most expensive tablet",
+   "pass": true,
+   "secs": "7",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Apple iPad Air",
+    "value": 603.99
+   },
+   "got": {
+    "tablet": "Apple iPad Air",
+    "price": 603.99
+   }
+  },
+  {
+   "case": "scrapethissite: New York team-season with most losses",
+   "pass": true,
+   "secs": "8",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "New York Islanders",
+    "value": 51
+   },
+   "got": {
+    "team": "New York Islanders",
+    "losses": 51
+   }
+  },
+  {
+   "case": "Wikipedia: mean radius of the Moon (infobox)",
+   "pass": true,
+   "secs": "7",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Moon",
+    "value": 1737.4
+   },
+   "got": {
+    "body": "Moon",
+    "mean_radius_km": 1737.4
+   }
+  },
+  {
+   "case": "Wikipedia: number of floors of Burj Khalifa (infobox)",
+   "pass": true,
+   "secs": "10",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Burj Khalifa",
+    "value": [
+     163,
+     154,
+     160
+    ]
+   },
+   "got": {
+    "building": "Burj Khalifa",
+    "floors": 154
+   }
+  },
+  {
+   "case": "Wikipedia: year JavaScript first appeared (infobox date)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "JavaScript",
+    "text": "1995"
+   },
+   "got": {
+    "language": "JavaScript",
+    "first_appeared": "4 December 1995; 30 years ago"
+   }
+  },
+  {
+   "case": "Hacker News Ask: post with the most comments",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Ask HN: How to deal with shipping AI-written code you don't understand?",
+    "value": 742
+   },
+   "got": {
+    "post": "Ask HN: How to deal with shipping AI-written code you don't understand?",
+    "comments": 742
+   }
+  },
+  {
+   "case": "Wikipedia: largest lake by area (table)",
+   "pass": true,
+   "secs": "9",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "Caspian Sea",
+    "value": [
+     371000,
+     371795,
+     386400,
+     436000
+    ]
+   },
+   "got": {
+    "lake": "Caspian Sea",
+    "area_km2": 389000
+   }
+  },
+  {
+   "case": "quotes.toscrape humor tag: first author",
+   "pass": true,
+   "secs": "14",
+   "via": "list",
+   "rows": 10,
+   "expected": {
+    "name": "Jane Austen"
+   },
+   "got": {
+    "quote": "“The person, be it gentleman or lady, who has not pleasure in a good novel, must be intolerably stupid.”",
+    "author": "Jane Austen"
+   }
+  },
+  {
+   "case": "books.toscrape: cheapest mystery book",
+   "pass": true,
+   "secs": "4",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Tastes Like Fear (DI Marnie Rome #3)",
+    "value": 10.69
+   },
+   "got": {
+    "title": "Tastes Like Fear (DI Marnie Rome #3)",
+    "price": 10.69
+   }
+  },
+  {
+   "case": "webscraper.io static: cheapest touch phone",
+   "pass": true,
+   "secs": "4",
+   "via": "structured",
+   "rows": 5,
+   "expected": {
+    "name": "Nokia 123",
+    "value": 24.99
+   },
+   "got": {
+    "phone": "Nokia 123",
+    "price": 24.99
+   }
+  },
+  {
+   "case": "scrapethissite: Detroit season with most wins",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "1995",
+    "value": 62
+   },
+   "got": {
+    "year": 1995,
+    "wins": 62
+   }
+  },
+  {
+   "case": "Wikipedia: elevation of Kilimanjaro (infobox)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Kilimanjaro",
+    "value": 5895
+   },
+   "got": {
+    "mountain": "Mount Kilimanjaro",
+    "elevation_m": 5895
+   }
+  },
+  {
+   "case": "Wikipedia: length of the Amazon River (infobox)",
+   "pass": true,
+   "secs": "4",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Amazon",
+    "range": [
+     6400,
+     7100
+    ]
+   },
+   "got": {
+    "river": "Amazon River",
+    "length_km": 6575
+   }
+  },
+  {
+   "case": "Wikipedia: year Rust first appeared (infobox date)",
+   "pass": true,
+   "secs": "5",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Rust",
+    "text": "2012"
+   },
+   "got": {
+    "language": "Rust (programming language)",
+    "first_appeared": "January 20, 2012; 14 years ago"
+   }
+  },
+  {
+   "case": "Wikipedia: largest economy by nominal GDP (table)",
+   "pass": true,
+   "secs": "8",
+   "via": "table",
+   "rows": 5,
+   "expected": {
+    "name": "United States"
+   },
+   "got": {
+    "country": "United States",
+    "gdp": 32642373
+   }
+  },
+  {
+   "case": "Hacker News Show: post with the most points",
+   "pass": true,
+   "secs": "5",
+   "via": "list",
+   "rows": 5,
+   "expected": {
+    "name": "Show HN: SimCity, but with Permits",
+    "value": 919
+   },
+   "got": {
+    "post": "Show HN: SimCity, but with Permits",
+    "points": 919
+   }
+  },
+  {
+   "case": "Wikipedia: total length of the Golden Gate Bridge (infobox)",
+   "pass": true,
+   "secs": "8",
+   "via": "table",
+   "rows": 1,
+   "expected": {
+    "name": "Golden Gate",
+    "value": [
+     2737,
+     2737.4
+    ]
+   },
+   "got": {
+    "bridge": "Golden Gate Bridge",
+    "total_length_m": 2740
+   }
+  }
+ ]
+}
