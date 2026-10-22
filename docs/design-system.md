@@ -67,7 +67,7 @@ follows Apple's Human Interface Guidelines.
 | Shape | `--r-xs` 4 · `--r-sm` 6 · `--r-md` 12 · `--r-lg` 16 · `--r-pill` | menu rows, kbd · controls · panels, cards · large · chips |
 | Space | `--s1` 4 … `--s6` 32 | 4px grid |
 | Elevation | `--shadow-small`, `--shadow-menu`, `--shadow-modal`, `--shadow-float` | Radix shadow-2 · shadow-5 · shadow-6 · shadow-5 plus the lit top edge, for UI over web pages |
-| Flower | `--pollen` (#ffc53d, the only brand colour, seed only), `--ease-grow`, `--d-bloom` .5s, `--d-pulse` 1.4s, `--seed-ring` | `ui/flower.js`: head `hgFlower()` with `.bloom`, `.thinking`, `.turn`; potted daisy `hgFlower.full()` with `.sprout` |
+| Flower | `--pollen` (#ffc53d, the only brand colour, seed only), `--ease-grow`, `--d-bloom` .5s, `--d-pulse` 1.4s, `--seed-ring` | `ui/flower.js`: the potted daisy `hgFlower()` with `.sprout`, `.bloom`, `.thinking`, `.turn` |
 | Motion | `--ease-out`; `--d-fast` .12s · `--d-popover` .16s · `--d-overlay` .24s; `--enter-scale` .97 | hover/press · popovers · cards and content |
 
 Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--user`,
@@ -113,5 +113,5 @@ Older names (`--text`, `--border`, `--surface`, `--glass`, `--accent-text`, `--u
 - No new hues. Emphasis comes from weight, `--fg`, or a 1–2px rule.
 - Every element that appears gets an entrance (`hg-pop` / `hg-rise`). Every interactive element has
   hover, press and focus states.
-- The mark is the daisy head `hgFlower(size, 'bloom' | 'thinking' | 'turn')` under 28px, and the potted daisy `hgFlower.full(size, 'sprout')` above. Both come from `ui/flower.js`. In text-only places use ❀. Never ❀.
+- The mark is the potted daisy, `hgFlower(size, 'sprout' | 'bloom' | 'thinking' | 'turn')` from `ui/flower.js`, at every size (18px minimum). In text-only places use ❀. Never ❀.
 - No icon libraries. Use Unicode glyphs (› ◎ ▤ ↵ ✓) in `--muted`.

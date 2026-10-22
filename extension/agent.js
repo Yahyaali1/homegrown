@@ -115,7 +115,7 @@ $('#run').onclick = async () => {
       v.hidden = false;
       v.className = `badge ${r.achieved ? 'good' : 'warn'}`;
       v.textContent = r.achieved ? `Goal met · ${r.rounds.length} round${r.rounds.length > 1 ? 's' : ''}` : `Best effort after ${r.rounds.length} rounds`;
-      if (r.achieved) v.prepend(hgFlower.el(12, 'bloom'), ' '); // the flower opens when the goal is met
+      if (r.achieved) v.prepend(hgFlower.el(16, 'bloom'), ' '); // the flower opens when the goal is met
     }
     $('#save').hidden = false;
     $('#name').value ||= workflow.goal.slice(0, 48);

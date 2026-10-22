@@ -24,15 +24,10 @@ bend".
 | Petals | 10 slim ellipses (1.6 × 4.2) at 36° steps around the head | **What it does for you:** reading, writing, translating, seeing, searching… Many small things, one flower. |
 | Seed | Circle r 3.2 in `--pollen`, with a 1.4 ring in the surface colour | **The local model:** at the centre, the source, the only warm colour. |
 
-**Two forms**
-
-| Form | Use | Call |
-|---|---|---|
-| Potted daisy (full mark) | ≥ 28px: page headers, app icon at 32 px and up, docs | `hgFlower.full(size, 'sprout')` |
-| Daisy head (pot and stem dropped) | < 28px: the ❀ launcher, toolbar, answer card, menu rows, 16px icon | `hgFlower(size, 'bloom')` |
-
-The head keeps the ten petals and the large seed, so it reads at 16px where the pot and stem
-would turn to noise.
+**One form, everywhere.** The potted daisy is used at every size: the ❀ launcher, toolbar,
+answer card, menu rows, page headers and every app icon down to 16px. The pot and the leaning stem
+are what make it Homegrown, so they stay even when small. Small placements size it up a little
+instead (launcher 28px, toolbar and card 22px, menu rows 18px).
 
 **The five promises** stay as copy, not geometry:
 1. On your device.
@@ -75,7 +70,7 @@ The mark gives the interface five motions. Every animation in Homegrown is one o
 | Motion | What happens | Used for | Token |
 |---|---|---|---|
 | **Grow** | The pot settles, the stem draws up out of it with its lean, the leaf unfolds, the ten petals ripple open, the seed lights last (about 1.4 s) | The full mark arriving: page headers, first run | `.flower.sprout` |
-| **Bloom** | The ten petals ripple open (30 ms apart) from 20% size with a slight overshoot; the seed appears last | The head arriving, a finished answer, a mission that met its goal | `.flower.bloom`, `--ease-grow` (`cubic-bezier(.34, 1.36, .64, 1)`), `--d-bloom` .5s |
+| **Bloom** | The ten petals ripple open (30 ms apart) from 20% size with a slight overshoot; the seed appears last | The mark in the toolbar arriving, a finished answer, a mission that met its goal | `.flower.bloom`, `--ease-grow` (`cubic-bezier(.34, 1.36, .64, 1)`), `--d-bloom` .5s |
 | **Pulse** | Light ripples clockwise round the ten petals; the seed breathes | The model is thinking (answer card header, any "working" state) | `.flower.thinking`, `--d-pulse` 1.4s per lap |
 | **Turn** | The head turns one petal (36°) toward the pointer | Hovering the ❀ launcher or anything that holds the mark | `:hover > .flower`, `.flower.turn` |
 | **Unfurl** | Panels open from their source: fade, rise 4px, scale .97 → 1 | Toolbar, menu, card, palette | `hg-pop`, `--ease-out`, `--d-popover` 160 ms |
@@ -98,9 +93,9 @@ The mark gives the interface five motions. Every animation in Homegrown is one o
 
 | App state | The flower |
 |---|---|
-| Resting (launcher on a page) | The head, fully open, still |
+| Resting (launcher on a page) | The potted daisy, fully open, still |
 | A page opening (Mission control, Settings) | The potted daisy grows in once |
-| Pointer over it | The head turns one petal |
+| Pointer over it | The daisy turns one petal on its stem |
 | Working (generating, a mission round) | Light ripples round the ten petals |
 | Done (answer finished, goal met) | Blooms once |
 | Off on this site | Hidden; Homegrown never shows a wilted or greyed flower |

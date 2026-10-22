@@ -20,7 +20,7 @@
     .pal li[aria-selected=true] { background: var(--chip-hover); }
     .pal li.h { height: auto; padding: 10px 10px 4px; font-size: var(--t-xs); font-weight: 500; color: var(--faint); cursor: default; }
     .pal li .k { margin-left: auto; font-size: var(--t-xs); color: var(--faint); white-space: nowrap; }
-    .pal li .i { width: 16px; display: grid; place-items: center; color: var(--muted); filter: grayscale(1); } .pal li .i:has(.flower) { filter: none; color: var(--fg); --seed-ring: var(--panel); }
+    .pal li .i { width: 18px; display: grid; place-items: center; color: var(--muted); filter: grayscale(1); } .pal li .i:has(.flower) { filter: none; color: var(--fg); --seed-ring: var(--panel); }
     .pal li span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pal li mark { background: none; color: var(--fg); font-weight: 600; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
     .pal .ctx { padding: 6px 14px; font-size: var(--t-xs); color: var(--faint); border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; order: 3; }
@@ -97,7 +97,7 @@
         : [];
       shown = [...found.map((x) => ({ ...x.it, html: x.m.html })), ...free.map((f) => ({ ...f, html: esc(f.label) }))];
       at = Math.min(at, Math.max(shown.length - 1, 0));
-      ul.innerHTML = shown.map((it, i) => `${!q && it.group !== shown[i - 1]?.group ? `<li class="h" role="presentation">${esc(it.group || '')}</li>` : ''}<li role="option" aria-selected="${i === at}" data-i="${i}"><span class="i">${it.icon === 'flower' ? hgFlower(14) : esc(it.icon)}</span><span>${it.html}</span><span class="k">${esc(it.kind || '')}</span></li>`).join('');
+      ul.innerHTML = shown.map((it, i) => `${!q && it.group !== shown[i - 1]?.group ? `<li class="h" role="presentation">${esc(it.group || '')}</li>` : ''}<li role="option" aria-selected="${i === at}" data-i="${i}"><span class="i">${it.icon === 'flower' ? hgFlower(18) : esc(it.icon)}</span><span>${it.html}</span><span class="k">${esc(it.kind || '')}</span></li>`).join('');
       ul.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest' });
     };
     const go = (i) => {

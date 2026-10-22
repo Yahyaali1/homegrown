@@ -130,12 +130,12 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 - the ten petals are what it does for you;
 - the yellow seed is the local model.
 
-Small places show the daisy head alone.
+The same potted daisy is used everywhere, from the 16px icon to page headers.
 - **Colour:** the interface is a quiet gray garden (Radix Colors + Themes). The only brand colour
   is the pollen-yellow seed.
 - **Motion:** every animation comes from the flower.
   - The potted daisy **grows** in when a page opens.
-  - The head **blooms** when something arrives or a goal is met.
+  - The daisy **blooms** when something arrives or a goal is met.
   - Light **ripples** round its ten petals while the model thinks.
   - It **turns** toward your pointer.
   - Panels **unfurl** from whatever opened them.

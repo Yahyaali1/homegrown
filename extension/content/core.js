@@ -75,10 +75,10 @@
     color: transparent; animation: hg-shimmer 2s linear infinite; }
 </style>
 <div class="bar" role="toolbar" aria-label="Homegrown" hidden></div>
-<button class="fab" title="Homegrown: ask about this page (Alt+Shift+A)" aria-label="Open Homegrown" hidden>${hgFlower(20, 'bloom')}</button>
-<button class="imgbtn" title="Ask Homegrown about this image" aria-label="Ask Homegrown about this image" hidden>${hgFlower(15)}</button>
+<button class="fab" title="Homegrown: ask about this page (Alt+Shift+A)" aria-label="Open Homegrown" hidden>${hgFlower(28, 'sprout')}</button>
+<button class="imgbtn" title="Ask Homegrown about this image" aria-label="Ask Homegrown about this image" hidden>${hgFlower(20)}</button>
 <section class="card" role="dialog" aria-label="Homegrown answer" hidden>
-  <header>${hgFlower(16)}<span class="title"></span><button class="save" hidden>Save as task</button><button class="copy">Copy</button><button class="stop">Stop</button><button class="close" aria-label="Close">✕</button></header>
+  <header>${hgFlower(22)}<span class="title"></span><button class="save" hidden>Save as task</button><button class="copy">Copy</button><button class="stop">Stop</button><button class="close" aria-label="Close">✕</button></header>
   <div class="body" aria-live="polite"></div>
   <div class="meta"></div>
   <div class="actions"></div>
@@ -166,7 +166,7 @@
     const extra = actions[kind].filter((a) => !a.when || a.when(ctx)).map((a) => chip(a.label, () => ((bar.hidden = true), a.run({ ...payload(), ctx, rect }))));
     const ask = chip('Ask…', () => askMode(kind, rect, payload));
     const brand = Object.assign(document.createElement('span'), { className: 'brand', title: 'Homegrown (local model)' });
-    brand.append(hgFlower.el(16, 'bloom'));
+    brand.append(hgFlower.el(22, 'bloom'));
     // Saved tasks stay one click away; feature actions wait behind "More ▸" so the bar stays short.
     const more = chip('More ▸', () => (bar.replaceChildren(brand, ...extra, back), place(bar, rect)));
     const back = chip('‹', () => showBar(kind, rect, payload, ctx));
@@ -208,7 +208,7 @@
     if (isPdf) {
       const go = Object.assign(document.createElement('button'), { className: 'primary', textContent: 'Read this PDF with Homegrown', onclick: openPdf });
       const why = Object.assign(document.createElement('span'), { className: 'brand' });
-      why.append(hgFlower.el(16, 'bloom'));
+      why.append(hgFlower.el(22, 'bloom'));
       const note = Object.assign(document.createElement('span'), { className: 'note wide', textContent: "Chrome's PDF viewer keeps the text away from extensions. The reader shows it with selection, tasks, translation and missions." });
       bar.replaceChildren(why, go, note);
       return place(bar, fab.hidden ? { top: 60, bottom: 60, left: innerWidth - 440, right: innerWidth } : fab.getBoundingClientRect());
