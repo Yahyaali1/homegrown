@@ -3,8 +3,11 @@
 // Lives in a shadow root so page styles can't break it. Classic script: content scripts can't be modules,
 // so feature files (content/*.js, loaded after this one) plug in through the window.EG API at the bottom.
 (() => {
-  if (window.__edgeGallery) return;
-  window.__edgeGallery = true;
+  // Already running here? A copy left over from before the extension was reloaded is cut off from it
+  // (chrome.runtime.id is gone): take its place instead of bowing out, so the page works again.
+  if (typeof window.__edgeGallery === 'function' && window.__edgeGallery()) return;
+  document.querySelector('edge-gallery')?.remove();
+  window.__edgeGallery = () => !!chrome.runtime?.id;
 
   const host = document.createElement('edge-gallery');
   host.style.cssText = 'all: initial; position: absolute; top: 0; left: 0; z-index: 2147483647; color-scheme: light dark;';
@@ -538,7 +541,8 @@
     get settings() { return settings; },
     get lastSelection() { return lastSel; },
     onSettings: (cb) => (settingsListeners.push(cb), cb(settings)),
-    enabled: () => enabled,
+    // False once this copy is cut off by an extension reload, so its listeners stop swallowing keys the new copy needs.
+    enabled: () => enabled && !!chrome.runtime?.id,
     topRect,
     groupOf,
     style: (css) => root.prepend(Object.assign(document.createElement('style'), { textContent: css })),

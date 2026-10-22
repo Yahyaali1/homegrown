@@ -15,6 +15,13 @@ import * as livecaptions from './bg/livecaptions.js';
 import * as agent from './bg/agent.js';
 const modules = [reader, web, capture, tabs, monitors, memory, livecaptions, agent];
 const handlers = Object.assign({}, ...modules.map((m) => m.handlers || {}));
+// The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
+handlers.toPage = async ({ msg }) => {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (!tab) throw new Error('No tab is open.');
+  await toTab(tab.id, msg);
+  return true;
+};
 
 // ---- tasks ----
 
@@ -123,8 +130,32 @@ const inPage = (info) =>
 async function toTab(tabId, msg, opts) {
   const tab = await chrome.tabs.get(tabId);
   if (tab.url?.startsWith(READER)) return chrome.runtime.sendMessage({ ...msg, toTab: tabId });
-  return chrome.tabs.sendMessage(tabId, msg, opts);
+  try {
+    return await chrome.tabs.sendMessage(tabId, msg, opts);
+  } catch {
+    // Nobody answered: usually a tab opened before the extension was (re)loaded. Give it the page scripts, retry once.
+    await injectInto(tab);
+    return chrome.tabs.sendMessage(tabId, msg, opts);
+  }
 }
+
+const CANT_RUN = "This page can't run Homegrown: browser pages, the PDF viewer and the Chrome Web Store block extensions.";
+// The manifest's content scripts, in order, into one tab.
+async function injectInto(tab) {
+  if (!/^(https?|file):/.test(tab.url || '')) throw new Error(CANT_RUN);
+  try {
+    for (const cs of chrome.runtime.getManifest().content_scripts) {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: !!cs.all_frames }, files: cs.js });
+    }
+  } catch {
+    throw new Error(CANT_RUN); // e.g. the PDF viewer, or a page the browser protects
+  }
+}
+
+// After an install or reload, existing tabs get the page scripts too (the ❀ button appears without a page reload).
+chrome.runtime.onInstalled.addListener(async () => {
+  for (const tab of await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'], discarded: false })) injectInto(tab).catch(() => {});
+});
 
 async function handleMenuClick(info, tab) {
   const [type, id] = info.menuItemId.split(':');

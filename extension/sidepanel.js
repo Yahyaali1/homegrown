@@ -299,11 +299,8 @@ async function renderTasks() {
 }
 
 // Messages for the active tab's in-page UI (content/core.js).
-async function toPage(msg) {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  chrome.tabs.sendMessage(tab.id, msg).catch(() =>
-    addMessage('error', "This page can't run Homegrown (browser pages, the PDF viewer and the Web Store block extensions)."));
-}
+// The background re-injects the page scripts when a tab was opened before the extension loaded.
+const toPage = (msg) => bg('toPage', { msg }).catch((e) => addMessage('error', e.message));
 $('#page-actions').onclick = () => toPage({ type: 'launcher' });
 
 // One task row: title and instruction, with up/down, edit and delete.
