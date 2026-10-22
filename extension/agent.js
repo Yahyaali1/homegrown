@@ -55,7 +55,9 @@ async function plan() {
   }
 }
 $('#plan').onclick = plan;
-$('#goal').onkeydown = (e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), plan());
+$('#goal').onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(), plan();
+};
 
 // One card per step; each card's inputs write straight back into workflow.steps.
 function renderSteps() {
@@ -73,7 +75,7 @@ function renderSteps() {
         search: () => step.urls?.length ? [el('span', { className: 'muted small', textContent: `${step.urls.length} open tabs (no web search)` })] : [input(step, 'query', { 'aria-label': 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, 'aria-label': 'Results' }))],
         open: () => [el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'top' }), input(step, 'limit', { type: 'number', min: 1, max: 12, 'aria-label': 'Pages to read' }))],
         extract: () => [
-          el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => (step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), onchange: renderSteps }),
+          el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => (step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), onchange: refreshKeepingFocus }),
           el('span', { className: 'muted small', textContent: 'must mention' }),
           el('input', { value: (step.require || []).join(', '), placeholder: 'e.g. 4k, usb-c', 'aria-label': 'Each row must mention', oninput: (e) => (step.require = e.target.value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)) }),
         ],
@@ -87,6 +89,17 @@ function renderSteps() {
         el('div', { className: 'detail' }));
     }),
   );
+}
+
+// New fields change the Filter and Rank pickers, so the cards re-render — after the click that blurred the fields box
+// has landed, and with focus put back on whichever step box it landed in.
+function refreshKeepingFocus() {
+  requestAnimationFrame(() => {
+    const boxes = () => [...document.querySelectorAll('#steps input, #steps select')];
+    const i = boxes().indexOf(document.activeElement);
+    renderSteps();
+    if (i >= 0) boxes()[i]?.focus();
+  });
 }
 
 // ---- run ----

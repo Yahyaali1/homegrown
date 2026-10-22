@@ -461,7 +461,9 @@ $('#mission-form').onsubmit = (e) => {
   bg('agentOpen', { goal, run: true, tabs: $('#mission-tabs').checked });
   $('#mission-goal').value = '';
 };
-$('#mission-goal').onkeydown = (e) => e.key === 'Enter' && !e.shiftKey && ($('#mission-form').requestSubmit(), e.preventDefault());
+$('#mission-goal').onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) $('#mission-form').requestSubmit(), e.preventDefault();
+};
 
 async function renderMissions() {
   const list = await bg('missionsList').catch(() => []);

@@ -164,7 +164,9 @@
     const askBtn = btn('Ask', ask, 'Ask this question about the page', 'primary');
     askBtn.disabled = true;
     card.actions.replaceChildren(askBtn, btn('Re-record', () => listen({ page, rect }), 'Record again'), btn('Discard', () => EG.hideAll(), 'Discard'));
-    text.onkeydown = (e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), ask());
+    text.onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) e.preventDefault(), ask();
+    };
 
     const pcm = await (async () => {
       const ctx = new AudioContext({ sampleRate: 16000 }); // decodeAudioData resamples to 16 kHz

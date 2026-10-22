@@ -117,7 +117,9 @@
       const li = e.target.closest('li[data-i]');
       if (li) go(+li.dataset.i);
     };
-    back.onmousedown = (e) => e.target === back && close();
+    back.onmousedown = (e) => {
+      if (e.target === back) close();
+    };
     EG.root.append(back);
     open = back;
     render();
