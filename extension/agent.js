@@ -73,7 +73,7 @@ function renderSteps() {
         search: () => step.urls?.length ? [el('span', { className: 'muted small', textContent: `${step.urls.length} open tabs (no web search)` })] : [input(step, 'query', { 'aria-label': 'Search query' }), el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'results' }), input(step, 'n', { type: 'number', min: 1, max: 20, 'aria-label': 'Results' }))],
         open: () => [el('div', { className: 'row2' }, el('span', { className: 'muted small', textContent: 'top' }), input(step, 'limit', { type: 'number', min: 1, max: 12, 'aria-label': 'Pages to read' }))],
         extract: () => [
-          el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => ((step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), refreshFieldPickers()) }),
+          el('input', { value: step.fields.join(', '), 'aria-label': 'Fields', title: 'Comma-separated columns', oninput: (e) => (step.fields = e.target.value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), onchange: renderSteps }),
           el('span', { className: 'muted small', textContent: 'must mention' }),
           el('input', { value: (step.require || []).join(', '), placeholder: 'e.g. 4k, usb-c', 'aria-label': 'Each row must mention', oninput: (e) => (step.require = e.target.value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)) }),
         ],
@@ -88,11 +88,6 @@ function renderSteps() {
     }),
   );
 }
-function refreshFieldPickers() {
-  // ponytail: simplest correct refresh is a re-render; steps keep their values in workflow.steps
-  renderSteps();
-  $('#steps [data-type=extract] input').focus();
-}
 
 // ---- run ----
 
@@ -104,6 +99,9 @@ $('#run').onclick = async () => {
   $('#answer').textContent = '';
   $('#table').replaceChildren();
   $('#results').hidden = false;
+  $('#rounds').replaceChildren();
+  $('#loop').hidden = true;
+  $('#verdict').hidden = true;
   for (const li of $('#steps').children) li.className = 'step';
   $('#run').hidden = true;
   $('#stop').hidden = false;
@@ -111,7 +109,13 @@ $('#run').onclick = async () => {
     const r = await bg('agentRun', { workflow, runId });
     rows = r.rows;
     renderTable(true);
-    renderAnswer(r.answer);
+    renderAnswer(r.answer || (r.achieved ? '' : 'No answer yet: the pages read so far did not have what the goal needs.'));
+    if (r.rounds) {
+      const v = $('#verdict');
+      v.hidden = false;
+      v.className = `badge ${r.achieved ? 'good' : 'warn'}`;
+      v.textContent = r.achieved ? `Goal met · ${r.rounds.length} round${r.rounds.length > 1 ? 's' : ''}` : `Best effort after ${r.rounds.length} rounds`;
+    }
     $('#save').hidden = false;
     $('#name').value ||= workflow.goal.slice(0, 48);
     $('#alert-field').replaceChildren(el('option', { value: '', textContent: 'the best result changes' }), ...Object.keys(rows[0] || {}).filter((k) => !k.startsWith('_')).map((k) => el('option', { value: k, textContent: k })));
@@ -136,10 +140,31 @@ chrome.runtime.onMessage.addListener((m) => {
     li.className = `step ${m.status}`;
     if (m.detail) li.querySelector('.detail').textContent = m.detail;
   }
+  if (m.round) onRound(m);
   for (const line of m.log || []) log(line);
   if (m.rows) (rows = m.rows), renderTable();
   if (m.answer) renderAnswer(m.answer);
 });
+
+// Each round of the mission loop: what it tried, then the check's verdict.
+function onRound(m) {
+  $('#loop').hidden = false;
+  let li = $(`#round-${m.round}`);
+  if (m.phase === 'start') {
+    for (const s of $('#steps').children) (s.className = 'step'), (s.querySelector('.detail').textContent = '');
+    li = el('li', { id: `round-${m.round}`, className: 'round running' },
+      el('b', { textContent: `Round ${m.round}` }), el('span', { className: 'note', textContent: m.note }), el('span', { className: 'why' }));
+    $('#rounds').append(li);
+    log(`— round ${m.round}: ${m.note}`);
+  } else if (m.phase === 'checking') {
+    li.className = 'round checking';
+    li.querySelector('.why').textContent = 'checking the results against the goal…';
+  } else if (m.phase === 'verdict') {
+    li.className = `round ${m.achieved ? 'good' : 'retry'}`;
+    li.querySelector('.why').textContent = m.achieved ? `✓ ${m.why}` : `↻ ${m.why}`;
+    log(`${m.achieved ? '✓' : '↻'} ${m.why}`);
+  }
+}
 
 // ---- results ----
 
@@ -150,13 +175,15 @@ function renderTable(final = false) {
   const keys = cols();
   if (sort) rows = [...rows].sort((a, b) => cmp(a[sort.key], b[sort.key]) * sort.dir);
   const head = el('tr', {}, el('th', { textContent: '#' }), ...keys.map((k) =>
-    el('th', { textContent: k.replace(/_/g, ' '), ariaSort: sort?.key === k ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none', onclick: () => ((sort = { key: k, dir: sort?.key === k ? -sort.dir : 1 }), renderTable()) })), el('th', { textContent: 'source' }));
-  const body = rows.map((r, i) => el('tr', { className: final && i === 0 ? 'best' : 'flash', id: `row-${i + 1}` },
+    el('th', { textContent: k.replace(/_/g, ' '), ariaSort: sort?.key === k ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none', onclick: () => { sort = { key: k, dir: sort?.key === k ? -sort.dir : 1 }; document.startViewTransition ? document.startViewTransition(renderTable) : renderTable(); } })), el('th', { textContent: 'source' }));
+  const body = rows.map((r, i) => el('tr', { className: final && i === 0 ? 'best' : 'flash', id: `row-${i + 1}`, style: `view-transition-name: r${rowKey(r)}` },
     el('td', { textContent: i + 1 }),
     ...keys.map((k) => el('td', { textContent: fmt(r[k], /price|cost/.test(k) ? r._currency : '') })),
     el('td', {}, el('a', { href: r._url, target: '_blank', textContent: host(r._url) }), r._via ? el('span', { className: 'via', title: VIA[r._via], textContent: ` · ${r._via}` }) : null)));
   $('#table').replaceChildren(el('thead', {}, head), el('tbody', {}, ...body));
+  $('#table').classList.toggle('final', final);
 }
+const rowKey = (r) => [...String(r._url) + JSON.stringify(Object.values(r))].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7) >>> 0;
 const cmp = (a, b) => (a == null) - (b == null) || (typeof a === 'number' && typeof b === 'number' ? a - b : String(a ?? '').localeCompare(String(b ?? '')));
 const fmt = (v, cur) => (v == null || v === '' ? '—' : typeof v === 'number' && cur ? `${v.toLocaleString()} ${cur}` : String(v));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };

@@ -3,7 +3,7 @@
   const EG = window.EG;
   if (!EG || location.protocol === 'chrome-extension:') return;
 
-  EG.style('.eg-tip { position: absolute; max-width: 320px; padding: 6px 10px; border-radius: 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18); }');
+  EG.style('.eg-tip { position: absolute; max-width: 320px; padding: 6px 10px; border-radius: 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: var(--shadow-menu); }');
   const tip = Object.assign(document.createElement('div'), { className: 'eg-tip', hidden: true, role: 'tooltip' });
   EG.root.append(tip);
   const cache = new Map(); // term + context -> definition promise

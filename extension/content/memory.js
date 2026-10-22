@@ -90,7 +90,7 @@
     };
     chip.append(open, Object.assign(document.createElement('button'), { textContent: '✕', ariaLabel: 'Dismiss', onclick: () => (chip.remove(), keep()) }));
     EG.style(`.changed { position: fixed; right: 18px; bottom: 112px; display: flex; gap: 6px; align-items: center; padding: 6px 10px;
-      border-radius: 10px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+      border-radius: 10px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: var(--shadow-menu); }
       .changed .link { background: none; color: var(--accent); padding: 0; } .changed button { padding: 0 6px; }`);
     EG.mount();
     EG.root.append(chip);
@@ -103,7 +103,7 @@
     if (!hit) return;
     EG.style(`.seen { position: fixed; right: 18px; bottom: 70px; display: flex; gap: 6px; align-items: center; max-width: 340px;
       padding: 6px 10px; border-radius: 10px; background: var(--bg); color: var(--fg); border: 1px solid var(--line);
-      box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+      box-shadow: var(--shadow-menu); }
       .seen a { color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .seen button { padding: 0 6px; }`);
     EG.mount();

@@ -19,7 +19,7 @@
   };
   const known = THREAD[location.hostname];
 
-  EG.style('.eg-reply { position: absolute; border-radius: 999px; font-size: 12px; padding: 3px 10px; color: var(--accent); background: var(--bg); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.15); }');
+  EG.style('.eg-reply { position: absolute; border-radius: 999px; font-size: 12px; padding: 3px 10px; color: var(--accent); background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow-menu); }');
   const pill = Object.assign(document.createElement('button'), { className: 'eg-reply', textContent: '✦ Reply', hidden: true });
   EG.root.append(pill);
   let box = null;

@@ -36,12 +36,16 @@
         <button id="stop" class="secondary" hidden>Stop</button>
       </div>
       <ol id="steps" class="pipeline"></ol>
+      <div id="loop" hidden>
+        <h3>Feedback loop <span class="muted small">act → check → revise, until the goal is met</span></h3>
+        <ol id="rounds" class="rounds"></ol>
+      </div>
       <details id="log-wrap"><summary>Activity</summary><ol id="log"></ol></details>
     </section>
 
     <section id="results" hidden>
       <div class="bar">
-        <h2>Results</h2>
+        <h2>Results <span id="verdict" class="badge" hidden></span></h2>
         <span class="grow"></span>
         <button id="csv" class="secondary">Export CSV</button>
         <button id="best" class="secondary">Open best</button>

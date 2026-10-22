@@ -106,5 +106,15 @@
   "options_page": "settings.html",
   "omnibox": {
     "keyword": "eg"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "ui/tokens.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

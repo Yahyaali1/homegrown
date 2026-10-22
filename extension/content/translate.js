@@ -186,7 +186,7 @@
   }
 
   EG.style(`.trbar{position:fixed;left:18px;bottom:18px;display:flex;gap:4px;align-items:center;padding:4px;border-radius:10px;
-    background:var(--bg);color:var(--fg);border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.18)}
+    background:var(--bg);color:var(--fg);border:1px solid var(--line);box-shadow: var(--shadow-menu)}
     .trbar .on{background:var(--accent);color:var(--bg)} .trbar span{color:var(--muted);font-size:11px;padding:0 6px;max-width:220px}
     .imgtr{position:absolute;cursor:pointer} .imgtr div{position:absolute;background:rgba(255,255,255,.96);color:#111;box-shadow:0 0 0 3px rgba(255,255,255,.96);
     line-height:1.1;overflow:hidden;border-radius:3px;padding:0 2px;font-family:system-ui,sans-serif}

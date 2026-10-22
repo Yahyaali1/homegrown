@@ -1,0 +1,100 @@
+/* Homegrown design system, built on Vercel's Geist (vercel.com/geist): a monochrome gray scale, blue
+   only for focus and links, hairline "shadow borders", short swift motion.
+   Loaded by every extension page (@import) and by the in-page shadow UI (<link> in content/core.js).
+   Rules and usage: docs/design-system.md. Change a value here, never in a surface's stylesheet. */
+
+:root, :host {
+  color-scheme: light dark;
+  interpolate-size: allow-keywords; /* lets height/width animate to and from auto */
+
+  /* Geist gray scale. 100 bg · 200 hover bg · 300 active bg · 400 border · 500 hover border · 600 active border
+     700 high-contrast bg · 800 its hover · 900 secondary text · 1000 primary text */
+  --gray-100: hsl(0 0% 95%); --gray-200: hsl(0 0% 92%); --gray-300: hsl(0 0% 90%); --gray-400: hsl(0 0% 92%);
+  --gray-500: hsl(0 0% 79%); --gray-600: hsl(0 0% 66%); --gray-700: hsl(0 0% 56%); --gray-800: hsl(0 0% 49%);
+  --gray-900: hsl(0 0% 30%); --gray-1000: hsl(0 0% 9%);
+  --bg-100: hsl(0 0% 100%); --bg-200: hsl(0 0% 98%);
+  --blue-700: hsl(212 100% 48%); --blue-900: hsl(211 100% 42%);
+  --green-900: hsl(133 50% 32%); --amber-900: hsl(30 100% 32%); --red-900: hsl(358 66% 48%);
+
+  /* roles */
+  --bg: var(--bg-100);              /* surfaces, popovers, cards */
+  --bg-2: var(--bg-200);            /* page base behind surfaces, used sparingly */
+  --fg: var(--gray-1000);
+  --muted: var(--gray-900);
+  --faint: var(--gray-700);
+  --line: var(--gray-400);
+  --chip: var(--gray-100);          /* quiet fill; hover = --gray-200, pressed = --gray-300 */
+  --accent: var(--gray-1000);       /* primary action is high contrast, not coloured */
+  --accent-fg: var(--bg-100);
+  --accent-soft: var(--gray-100);
+  --focus: var(--blue-700);
+  --link: var(--blue-900);
+  --good: var(--green-900); --warn: var(--amber-900); --danger: var(--red-900);
+
+  /* type: Geist if installed, then the system face */
+  --font: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --serif: Georgia, "Iowan Old Style", serif;
+  --t-xs: 11px; --t-sm: 12px; --t-md: 13px; --t-base: 14px; --t-lg: 16px; --t-xl: 20px; --t-2xl: 32px;
+
+  /* Geist materials: base/small 6px, menu/modal 12px, fullscreen 16px */
+  --r-sm: 6px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+
+  /* shadows double as borders (Geist "shadow-border") */
+  --shadow-border-base: 0 0 0 1px #00000014;
+  --shadow-border: var(--shadow-border-base), 0 0 0 1px var(--bg-200);
+  --shadow-small: var(--shadow-border-base), 0 2px 2px #0000000a;
+  --shadow-tooltip: var(--shadow-border-base), 0 1px 1px #00000005, 0 4px 8px #0000000a;
+  --shadow-menu: var(--shadow-border-base), 0 1px 1px #00000005, 0 4px 8px -4px #0000000a, 0 16px 24px -8px #0000000f;
+  --shadow-modal: var(--shadow-border-base), 0 1px 1px #00000005, 0 8px 16px -4px #0000000a, 0 24px 32px -8px #0000000f;
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus);
+
+  /* Geist motion: popovers .2s, overlays .3s from scale .96, on the "swift" curve (a small overshoot) */
+  --ease-swift: cubic-bezier(.175, .885, .32, 1.1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --d-fast: .15s; --d-popover: .2s; --d-overlay: .3s;
+  --enter-scale: .96;
+
+  /* older names still used by some surfaces */
+  --text: var(--fg); --border: var(--line); --panel: var(--bg); --surface: var(--gray-100); --glass: var(--bg);
+  --accent-text: var(--accent-fg); --user: var(--gray-100); --warn-bg: var(--gray-100);
+  --shadow: var(--shadow-menu); --shadow-sm: var(--shadow-small);
+}
+@media (prefers-color-scheme: dark) {
+  :root, :host {
+    --gray-100: hsl(0 0% 10%); --gray-200: hsl(0 0% 12%); --gray-300: hsl(0 0% 16%); --gray-400: hsl(0 0% 18%);
+    --gray-500: hsl(0 0% 27%); --gray-600: hsl(0 0% 53%); --gray-700: hsl(0 0% 56%); --gray-800: hsl(0 0% 49%);
+    --gray-900: hsl(0 0% 63%); --gray-1000: hsl(0 0% 93%);
+    --bg-100: hsl(0 0% 4%); --bg-200: hsl(0 0% 0%);
+    --blue-700: hsl(212 100% 48%); --blue-900: hsl(210 100% 66%);
+    --green-900: hsl(131 43% 57%); --amber-900: hsl(39 90% 50%); --red-900: hsl(358 100% 69%);
+    --shadow-border-base: 0 0 0 1px #ffffff25;
+    --shadow-small: var(--shadow-border-base), 0 1px 2px #00000029;
+  }
+}
+
+/* ---- primitives (opt in by class) ---- */
+
+/* popover entrance: fade, rise 4px, scale from .96 */
+.hg-enter { animation: hg-pop var(--d-popover) var(--ease-swift) both; }
+/* skeleton while waiting for the first token */
+.hg-shimmer { border-radius: var(--r-sm); background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%) 0 0/300% 100%;
+  animation: hg-shimmer 1.6s linear infinite; }
+/* gray text with a light sweep: "Thinking…", "Checking…" */
+.hg-thinking { background: linear-gradient(90deg, var(--faint) 35%, var(--fg) 50%, var(--faint) 65%) 0 0/300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: hg-shimmer 2s linear infinite; }
+/* indeterminate 2px bar along the top edge of whatever is working (needs position: relative/absolute) */
+.hg-progress::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; opacity: .5; }
+
+@keyframes hg-pop { from { opacity: 0; transform: translateY(4px) scale(var(--enter-scale)); } }
+@keyframes hg-rise { from { opacity: 0; transform: translateY(4px); } }
+@keyframes hg-fade { from { opacity: 0; } }
+@keyframes hg-shimmer { from { background-position: 100% 0; } to { background-position: -200% 0; } }
+@keyframes hg-breathe { 50% { opacity: .35; } }
+@keyframes hg-indeterminate { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

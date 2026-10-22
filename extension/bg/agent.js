@@ -402,9 +402,11 @@ function applyFilter(rows, { field, op, value }) {
 const runs = new Map(); // runId -> { cancelled, group }
 const say = (runId, data) => chrome.runtime.sendMessage({ type: 'agent-progress', runId, ...data }).catch(() => {});
 
-export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) {
-  const run = { cancelled: false, group: null };
+// ctx (missions): { seen: Set of URLs already read, carry: rows from earlier rounds, run } — shared across rounds.
+export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID(), ctx = null) {
+  const run = ctx?.run || { cancelled: false, group: null };
   runs.set(runId, run);
+  let pool = [];
   let results = [];
   let pages = [];
   let rows = [];
@@ -420,7 +422,9 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
           ? urls.map((url) => ({ title: url, url }))
           : await searchInTab(step.query, step.n || 8, run).catch(() => []);
         if (!urls.length && results.length < 2) results = await web.search({ q: step.query, n: step.n || 8 });
-        say(runId, { step: i, status: 'done', detail: `${results.length} results`, log: results.map((r) => `found ${r.title}`) });
+        const fresh = ctx ? results.filter((r) => !ctx.seen.has(r.url)) : results; // later rounds read new pages only
+        say(runId, { step: i, status: 'done', detail: `${fresh.length} ${ctx && fresh.length < results.length ? 'new ' : ''}results`, log: fresh.map((r) => `found ${r.title}`) });
+        results = fresh;
       } else if (step.type === 'open') {
         const todo = results.slice(0, step.limit || 6);
         pages = [];
@@ -428,6 +432,7 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
         const worker = async () => {
           while (next < todo.length && !run.cancelled) {
             const r = todo[next++];
+            ctx?.seen.add(r.url);
             say(runId, { step: i, status: 'running', log: [`reading ${new URL(r.url).hostname}`] });
             // Terms an in-page control may be named after: the required terms plus years and other numbers in
             // the goal ("2015"), which requiredTerms leaves out because they rarely appear on every row.
@@ -449,14 +454,18 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
         const need = (step.require || []).filter(Boolean);
         const found = rows.length;
         const matching = need.length ? rows.filter((r) => need.every((t) => mentions(`${r._text || ''} ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([, v]) => v).join(' ')}`, t))) : rows;
-        if (matching.length) rows = matching; // when no row mentions them (a year that labels the whole section), keep all
+        // When no row mentions them (a year that labels the whole section), keep all — but not on a mission's
+        // later rounds, whose wider searches bring in unrelated pages.
+        if (matching.length || ctx?.round > 1) rows = matching;
         rows.forEach((r) => delete r._text);
+        if (ctx) rows = mergeRows(ctx.carry, rows, step.fields); // earlier rounds' rows, filled in by this round's
         say(runId, { step: i, status: 'done', detail: `${rows.length} rows from ${pages.length} pages${need.length && found > rows.length ? ` · ${found - rows.length} didn't mention ${need.join(', ')}` : ''}`, rows });
       } else if (step.type === 'filter') {
         const before = rows.length;
         rows = applyFilter(rows, step);
         say(runId, { step: i, status: 'done', detail: step.field && step.value !== '' ? `${rows.length} of ${before} kept` : 'off', rows });
       } else if (step.type === 'rank') {
+        pool = rows; // everything found, before ranking trims it — carried into the next round
         rows = rows.filter((r) => r[step.by] != null && r[step.by] !== '');
         // Summary rows ("World", "Total") aren't items: they would always rank first.
         const nameKey = Object.keys(rows[0] || {}).find((k) => !k.startsWith('_') && typeof rows[0][k] === 'string');
@@ -480,11 +489,22 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
             aside = before - rows.length;
           }
         }
+        // A price a tenth of the median is a misread cell (a rating, a count), not a bargain.
+        // ponytail: price-only median rule; per-field plausible ranges if other fields misread too
+        if (/price|cost/.test(step.by) && rows.length >= 3) {
+          const nums = rows.map((r) => r[step.by]).filter((v) => typeof v === 'number').sort((a, b) => a - b);
+          const median = nums[nums.length >> 1];
+          if (median) rows = rows.filter((r) => typeof r[step.by] !== 'number' || r[step.by] >= median / 10);
+        }
         rows.sort((a, b) => compare(a[step.by], b[step.by]) * (step.order === 'desc' ? -1 : 1));
         rows = rows.slice(0, step.keep || 5);
         say(runId, { step: i, status: 'done', detail: `top ${rows.length} by ${step.by}${aside ? ` · ${aside} in other currencies set aside` : ''}`, rows });
       } else if (step.type === 'answer') {
-        if (!rows.length) throw new Error('No usable results: the pages could not be read or had none of the fields.');
+        if (!pool.length) pool = rows;
+        if (!rows.length) {
+          if (ctx) return { rows, pool, answer: '' }; // the mission loop decides what to try next
+          throw new Error('No usable results: the pages could not be read or had none of the fields.');
+        }
         // Prices go in with their currency attached, so the answer can't turn kronor into dollars.
         const val = (k, v, r) => (/price|cost/.test(k) && typeof v === 'number' && r._currency ? `${v} ${r._currency}` : v);
         const table = rows.map((r, n) => `[${n + 1}] ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([k, v]) => `${k}: ${val(k, v, r)}`).join('; ')} (source: ${r._source}, ${r._url})`).join('\n');
@@ -492,7 +512,117 @@ export async function runWorkflow({ goal, steps }, runId = crypto.randomUUID()) 
         say(runId, { step: i, status: 'done', detail: 'written', answer });
       }
     }
-    return { rows, answer };
+    return { rows, pool: pool.length ? pool : rows, answer };
+  } finally {
+    if (!ctx) { // the mission loop cleans up after its last round
+      runs.delete(runId);
+      if (run.group) chrome.tabs.query({ groupId: run.group }).then((ts) => ts.length && chrome.tabs.remove(ts.map((t) => t.id))).catch(() => {});
+    }
+  }
+}
+
+// ---- mission loop: act → check → revise, until the goal is met ----
+
+const MAX_ROUNDS = 4;
+const key = (r, fields) => `${String(r[fields[0]] ?? '').toLowerCase().replace(/\W+/g, ' ').trim().slice(0, 50)}`;
+
+// Rows from a new round join earlier ones: the same item (same detail URL, or same name) gets its empty
+// fields filled; new items are added.
+function mergeRows(old, fresh, fields) {
+  const out = old.map((r) => ({ ...r }));
+  for (const n of fresh) {
+    // Same item = same detail page (a followed link filling its listing row). Same name elsewhere is another offer.
+    const same = n._url && out.slice(0, old.length).find((o) => o._url === n._url && (o._via !== 'table' || key(o, fields) === key(n, fields)));
+    if (!same) out.push(n);
+    else for (const f of fields) if (same[f] == null && n[f] != null) (same[f] = n[f]), n._currency && !same._currency && (same._currency = n._currency);
+  }
+  return out;
+}
+
+// Deterministic checks first; when they pass, Gemma judges the answer against the goal.
+async function check(goal, wf, r, seen) {
+  const fields = wf.steps.find((s) => s.type === 'extract')?.fields || [];
+  const rank = wf.steps.find((s) => s.type === 'rank');
+  const must = rank ? [rank.by] : fields; // the ranking field decides the answer; other gaps are nice-to-have
+  const want = rank ? Math.min(3, rank.keep || 5) : 1;
+  const usable = r.rows.filter((x) => must.every((f) => x[f] != null));
+  // Unread detail pages of rows with holes: following them is the cheapest way to fill gaps.
+  const incomplete = (r.pool || []).filter((x) => fields.some((f) => x[f] == null) && /^https?:/.test(x._url || '') && !seen.has(x._url));
+  if (!r.rows.length) return { achieved: false, why: 'no usable rows yet', next: 'search', incomplete };
+  if (usable.length < want && r.pool.length > usable.length) {
+    return { achieved: false, why: `only ${usable.length} of ${r.pool.length} results have ${must.join(', ')}`, next: incomplete.length ? 'follow' : 'search', incomplete };
+  }
+  const table = r.rows.slice(0, 6).map((x, i) => `[${i + 1}] ${fields.map((f) => `${f}: ${x[f]}`).join('; ')}`).join('\n');
+  const v = parseJson(await ask(
+    `Goal: ${goal}\nAnswer so far: ${r.answer}\n` +
+      'Do these results contain what the goal asks for? Say achieved: true when the answer is supported by the rows, even if more sources ' +
+      'could exist or the wording could be better. Say false only when a value the goal needs is missing, or the answer is wrong or off-topic. Reply with JSON only: ' +
+      '{"achieved": true or false, "missing": "<what is missing or wrong, short>", "better_query": "<a better web search query, or empty>"}',
+    table, EXTRACT));
+  if (!v || v.achieved !== false) return { achieved: true, why: `${usable.length} result${usable.length === 1 ? '' : 's'} answer the goal` };
+  return { achieved: false, why: v.missing || 'the answer does not meet the goal yet', next: incomplete.length ? 'follow' : 'search', query: v.better_query, incomplete };
+}
+
+// The next round's workflow from the check's feedback.
+function revise(wf, verdict) {
+  const steps = wf.steps.map((s) => ({ ...s }));
+  const search = steps.find((s) => s.type === 'search');
+  const open = steps.find((s) => s.type === 'open');
+  const base = wf.baseQuery || search.query;
+  const tried = [...(wf.tried || [search.query])];
+  if (verdict.next === 'follow') {
+    // Detail pages of the incomplete items: product pages usually publish what the listing left out.
+    const urls = [...new Set(verdict.incomplete.map((x) => x._url))].slice(0, 5);
+    Object.assign(search, { urls, query: `${urls.length} result pages` });
+    Object.assign(open, { limit: urls.length });
+    return { ...wf, baseQuery: base, tried, steps, note: `Following ${urls.length} result links to fill the gaps` };
+  }
+  if (wf.fixedUrls) return null; // the user's own pages (open tabs): no web search to widen into
+  delete search.urls;
+  // Feedback query first; otherwise widen: shopping words, the goal itself, reviews.
+  const query = [verdict.query, `${base} buy price`, wf.goal, `${base} review comparison`].find((q) => q && !tried.includes(q));
+  if (!query) return null;
+  Object.assign(search, { query, n: Math.min((search.n || 8) + 4, 16) });
+  Object.assign(open, { limit: Math.max(open.limit || 6, 6) });
+  return { ...wf, baseQuery: base, tried: [...tried, query], steps, note: `Searching again: "${query}"` };
+}
+
+export async function runMission(workflow, runId = crypto.randomUUID()) {
+  const run = { cancelled: false, group: null };
+  const ctx = { seen: new Set(), carry: [], run };
+  runs.set(runId, run);
+  let wf = { ...workflow, fixedUrls: !!workflow.steps.find((s) => s.type === 'search')?.urls?.length };
+  let result = { rows: [], pool: [], answer: '' };
+  const rounds = [];
+  try {
+    for (let round = 1; round <= MAX_ROUNDS; round++) {
+      if (run.cancelled) throw new Error('Stopped.');
+      ctx.round = round;
+      say(runId, { round, phase: 'start', steps: wf.steps, note: wf.note || 'First pass' });
+      const before = { pool: ctx.carry.length, complete: ctx.carry.filter((x) => (wf.steps.find((s) => s.type === 'extract')?.fields || []).every((f) => x[f] != null)).length, seen: ctx.seen.size };
+      result = await runWorkflow(wf, runId, ctx);
+      ctx.carry = result.pool;
+      if (run.cancelled) throw new Error('Stopped.');
+      say(runId, { round, phase: 'checking' });
+      const verdict = await check(wf.goal, wf, result, ctx.seen);
+      const fields = wf.steps.find((s) => s.type === 'extract')?.fields || [];
+      const progressed = result.pool.length > before.pool || result.pool.filter((x) => fields.every((f) => x[f] != null)).length > before.complete;
+      rounds.push({ round, note: wf.note || 'First pass', why: verdict.why, achieved: verdict.achieved });
+      say(runId, { round, phase: 'verdict', achieved: verdict.achieved, why: verdict.why, rows: result.rows, answer: result.answer });
+      if (verdict.achieved) break;
+      if (round > 1 && !progressed && ctx.seen.size === before.seen) {
+        rounds.at(-1).why += ' · stopped: the last round found nothing new';
+        break;
+      }
+      if (round === MAX_ROUNDS) break;
+      const next = revise(wf, verdict);
+      if (!next) {
+        rounds.at(-1).why += wf.fixedUrls ? ' · stopped: only your own pages to read' : ' · stopped: no other searches to try';
+        break;
+      }
+      wf = next;
+    }
+    return { ...result, rounds, achieved: rounds.at(-1)?.achieved || false };
   } finally {
     runs.delete(runId);
     if (run.group) chrome.tabs.query({ groupId: run.group }).then((ts) => ts.length && chrome.tabs.remove(ts.map((t) => t.id))).catch(() => {});
@@ -520,7 +650,8 @@ async function scheduled(id) {
 
 export const handlers = {
   agentPlan,
-  agentRun: ({ workflow, runId }) => runWorkflow(workflow, runId),
+  // loop: false runs the workflow once (benchmarks, schedules); missions from the page loop by default.
+  agentRun: ({ workflow, runId, loop = true }) => (loop ? runMission(workflow, runId) : runWorkflow(workflow, runId)),
   agentCancel: ({ runId }) => {
     const r = runs.get(runId);
     if (r) r.cancelled = true;

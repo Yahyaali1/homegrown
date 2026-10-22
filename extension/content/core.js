@@ -10,45 +10,65 @@
   host.style.cssText = 'all: initial; position: absolute; top: 0; left: 0; z-index: 2147483647;';
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `
+<link rel="stylesheet" href="${chrome.runtime.getURL('ui/tokens.css')}">
 <style>
-  :host { --bg: #fff; --fg: #1f2328; --muted: #646b73; --line: #d9dde2; --chip: #f1f3f4; --accent: #1a73e8; --warn: #8a4b00; }
-  @media (prefers-color-scheme: dark) {
-    :host { --bg: #202124; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --chip: #303134; --accent: #8ab4f8; --warn: #f5c27a; }
-  }
-  * { box-sizing: border-box; font: 13px/1.45 system-ui, sans-serif; }
+  /* Geist (ui/tokens.css): opaque surfaces with hairline shadow borders, gray everywhere, motion on the swift curve. */
+  * { box-sizing: border-box; font: var(--t-md)/1.5 var(--font); -webkit-font-smoothing: antialiased; }
   [hidden] { display: none !important; }
-  .bar, .card, .imgbtn { position: absolute; background: var(--bg); color: var(--fg); border: 1px solid var(--line);
-    box-shadow: 0 4px 16px rgba(0,0,0,.18); }
-  .bar { z-index: 2; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; width: max-content; max-width: min(460px, calc(100vw - 16px)); }
-  button { border: 0; border-radius: 7px; padding: 4px 9px; background: var(--chip); color: var(--fg); cursor: pointer; white-space: nowrap; }
-  button:hover { background: var(--line); }
-  button.primary { background: var(--accent); color: var(--bg); }
-  .brand { color: var(--accent); font-weight: 700; padding: 4px 6px; }
+  .bar, .card, .imgbtn, .fab { position: absolute; background: var(--bg); color: var(--fg); box-shadow: var(--shadow-menu); }
+  .bar { z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px; border-radius: var(--r-md); width: max-content;
+    max-width: min(480px, calc(100vw - 16px)); animation: hg-pop var(--d-popover) var(--ease-swift) both; transform-origin: 24px 0; }
+  .bar > * { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+  .bar > :nth-child(2) { animation-delay: 15ms } .bar > :nth-child(3) { animation-delay: 30ms } .bar > :nth-child(4) { animation-delay: 45ms }
+  .bar > :nth-child(5) { animation-delay: 60ms } .bar > :nth-child(n+6) { animation-delay: 75ms }
+  button { border: 0; border-radius: var(--r-sm); padding: 0 10px; height: 28px; background: transparent; color: var(--fg); cursor: pointer; white-space: nowrap;
+    font-weight: 500; transition: background var(--d-fast), transform var(--d-fast) var(--ease-swift), color var(--d-fast); }
+  button:hover { background: var(--gray-200); }
+  button:active { background: var(--gray-300); transform: scale(.97); }
+  button:focus-visible, input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  button.primary { background: var(--accent); color: var(--accent-fg); }
+  button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--bg)); }
+  .brand { font-weight: 600; padding: 0 8px; color: var(--fg); letter-spacing: -.01em; }
   .bar form { display: flex; gap: 4px; }
-  input { border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; background: var(--bg); color: var(--fg); min-width: 220px; flex: 1; }
-  .imgbtn { border-radius: 50%; width: 28px; height: 28px; padding: 0; font-size: 15px; color: var(--accent); }
-  .fab { position: fixed; right: 18px; bottom: 18px; width: 40px; height: 40px; border-radius: 50%; font-size: 18px; padding: 0;
-    background: var(--bg); color: var(--accent); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18); opacity: .85; }
-  .fab:hover { opacity: 1; }
+  input { border: 0; box-shadow: 0 0 0 1px var(--line); border-radius: var(--r-sm); height: 28px; padding: 0 10px; background: var(--bg); color: var(--fg);
+    min-width: 220px; flex: 1; transition: box-shadow var(--d-fast); }
+  input:hover { box-shadow: 0 0 0 1px var(--gray-500); }
+  input:focus { outline: none; box-shadow: 0 0 0 1px var(--gray-600), var(--focus-ring); }
+  .imgbtn { border-radius: 50%; width: 30px; height: 30px; padding: 0; font-size: 14px; animation: hg-pop var(--d-popover) var(--ease-swift) both; }
+  .fab { position: fixed; right: 18px; bottom: 18px; width: 40px; height: 40px; border-radius: 50%; font-size: 16px; padding: 0;
+    transition: transform var(--d-overlay) var(--ease-swift), box-shadow var(--d-fast); }
+  .fab:hover { background: var(--bg); transform: scale(1.06); box-shadow: var(--shadow-modal); }
+  .fab:active { transform: scale(.94); }
   .bar .wide { flex-basis: 100%; }
-  .bar .note { color: var(--muted); font-size: 12px; font-weight: 400; padding: 2px 6px 4px; max-width: 360px; white-space: normal; }
-  .card { width: 400px; max-width: calc(100vw - 16px); border-radius: 12px; display: flex; flex-direction: column; max-height: 60vh; }
-  .card header { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--line); cursor: move; }
-  .card header .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card header button { padding: 2px 7px; }
-  .body { padding: 8px 12px; overflow: auto; flex: 1; }
-  .body p { margin: 0 0 6px; } .body ul, .body ol { margin: 0 0 6px; padding-left: 20px; }
-  .body pre { background: var(--chip); padding: 6px; border-radius: 6px; overflow: auto; white-space: pre-wrap; }
-  .body code { font-family: ui-monospace, monospace; background: var(--chip); border-radius: 4px; padding: 0 3px; }
-  .q { color: var(--muted); margin: 8px 0 4px; } .q::before { content: 'You: '; font-weight: 600; }
-  .err { color: var(--warn); }
-  .meta { color: var(--muted); font-size: 11px; padding: 0 12px 4px; }
+  .bar .note { color: var(--muted); font-size: var(--t-sm); font-weight: 400; padding: 2px 8px 4px; max-width: 380px; white-space: normal; }
+  .card { width: 420px; max-width: calc(100vw - 16px); border-radius: var(--r-md); display: flex; flex-direction: column; max-height: 62vh; overflow: hidden;
+    animation: hg-pop var(--d-overlay) var(--ease-swift) both; transform-origin: 24px 0; }
+  .card.live { position: absolute; }
+  .card.live::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none; opacity: .55;
+    background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; }
+  .card header { display: flex; align-items: center; gap: 2px; padding: 8px 8px 6px 14px; cursor: move; border-bottom: 1px solid var(--line); }
+  .card header .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.01em; }
+  .card header button { height: 24px; padding: 0 8px; color: var(--muted); font-size: var(--t-sm); } .card header button:hover { color: var(--fg); }
+  .body { padding: 10px 14px; overflow: auto; flex: 1; scrollbar-width: thin; }
+  .body p { margin: 0 0 8px; } .body ul, .body ol { margin: 0 0 8px; padding-left: 20px; }
+  .body pre { background: var(--gray-100); box-shadow: 0 0 0 1px var(--line); padding: 10px; border-radius: var(--r-sm); overflow: auto; white-space: pre-wrap; }
+  .body code { font-family: var(--mono); font-size: .92em; background: var(--gray-100); border-radius: 4px; padding: 1px 4px; }
+  .body a { color: var(--link); }
+  .q { color: var(--muted); margin: 12px 0 4px; font-weight: 500; animation: hg-rise var(--d-popover) var(--ease-out) both; }
+  .err { color: var(--danger); }
+  .meta { color: var(--faint); font-size: var(--t-xs); padding: 0 14px 6px; }
   .meta .warn { color: var(--warn); }
-  .card form { display: flex; gap: 4px; padding: 6px 8px 8px; }
-  .actions { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 6px; }
+  .card form { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--line); background: var(--bg-2); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
   .actions:empty { display: none; }
-  .cursor::after { content: '▍'; animation: blink 1s steps(2) infinite; color: var(--accent); }
-  @keyframes blink { 50% { opacity: 0; } }
+  .actions button { box-shadow: 0 0 0 1px var(--line); border-radius: var(--r-pill); font-size: var(--t-sm); height: 26px; animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+  .actions button:nth-child(2) { animation-delay: 30ms } .actions button:nth-child(3) { animation-delay: 60ms } .actions button:nth-child(n+4) { animation-delay: 90ms }
+  .cursor::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--fg); vertical-align: middle;
+    animation: hg-breathe 1s ease-in-out infinite; }
+  .thinking::after { display: none; }
+  .thinking::before { content: 'Thinking…'; display: block; width: max-content; font-weight: 500;
+    background: linear-gradient(90deg, var(--faint) 35%, var(--fg) 50%, var(--faint) 65%) 0 0/300% 100%; -webkit-background-clip: text; background-clip: text;
+    color: transparent; animation: hg-shimmer 2s linear infinite; }
 </style>
 <div class="bar" role="toolbar" aria-label="Homegrown" hidden></div>
 <button class="fab" title="Homegrown: ask about this page (Alt+Shift+A)" aria-label="Open Homegrown" hidden>✦</button>
@@ -306,8 +326,9 @@
   function send(req) {
     $('.meta').textContent = '';
     answerEl = document.createElement('div');
-    answerEl.className = 'cursor';
+    answerEl.className = 'cursor thinking'; // a shimmer until the first token
     $('.body').append(answerEl);
+    card.classList.add('live');
     raw = '';
     $('.stop').hidden = false;
     port = chrome.runtime.connect({ name: 'run' });
@@ -322,6 +343,7 @@
       } else {
         answerEl.className = '';
         $('.stop').hidden = true;
+        card.classList.remove('live');
         if (m.type === 'error') {
           answerEl.replaceChildren(Object.assign(document.createElement('span'), { className: 'err', textContent: m.message }));
           if (m.code === 'no-model') offerDownload(m.model, req, answerEl);
@@ -403,6 +425,7 @@
     port?.disconnect(); // background cancels the generation
     port = null;
     bar.hidden = card.hidden = imgbtn.hidden = true;
+    card.classList.remove('live');
   }
 
   // Small markdown subset the model actually uses: paragraphs, bullets, numbered lists, **bold**, `code`, ``` blocks.

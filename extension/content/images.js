@@ -17,7 +17,7 @@
     .eg-h-n { left: calc(50% - 6px); top: -7px; cursor: ns-resize; } .eg-h-s { left: calc(50% - 6px); bottom: -7px; cursor: ns-resize; }
     .eg-h-e { right: -7px; top: calc(50% - 6px); cursor: ew-resize; } .eg-h-w { left: -7px; top: calc(50% - 6px); cursor: ew-resize; }
     .eg-size { position: fixed; background: var(--accent); color: var(--bg); font-size: 11px; border-radius: 4px; padding: 1px 6px; pointer-events: none; }
-    .eg-tools { position: fixed; display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+    .eg-tools { position: fixed; display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: var(--shadow-menu); }
   `);
 
   const btn = (label, onclick, primary) => Object.assign(document.createElement('button'), { textContent: label, onclick, className: primary ? 'primary' : '' });

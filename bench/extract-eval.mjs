@@ -267,7 +267,7 @@ for (const c of CASES) {
   const truth = await c.truth(c.url);
   const t = Date.now();
   const steps = [{ type: 'search', urls: [c.url] }, { type: 'open', limit: 1 }, { type: 'extract', fields: c.fields }, ...(c.rank ? [{ type: 'rank', by: c.rank[0], order: c.rank[1], keep: 5 }] : []), { type: 'answer', question: c.goal }];
-  const r = await page.evaluate((wf) => chrome.runtime.sendMessage({ target: 'bg', cmd: 'agentRun', runId: Math.random().toString(), workflow: wf }), { goal: c.goal, steps });
+  const r = await page.evaluate((wf) => chrome.runtime.sendMessage({ target: 'bg', cmd: 'agentRun', runId: Math.random().toString(), workflow: wf, loop: false }), { goal: c.goal, steps });
   const secs = ((Date.now() - t) / 1000).toFixed(0);
   const top = r.ok ? r.result.rows[0] : null;
   const vals = top ? Object.entries(top).filter(([k]) => !k.startsWith('_')).map(([, v]) => v) : [];

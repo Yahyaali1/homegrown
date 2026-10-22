@@ -1,5 +1,4 @@
-:root { --bg: #fff; --fg: #1f2328; --muted: #646b73; --line: #d9dde2; --accent: #1a73e8; color-scheme: light dark; }
-@media (prefers-color-scheme: dark) { :root { --bg: #1b1c1f; --fg: #e6e7e9; --muted: #9aa0a6; --line: #3a3d42; --accent: #8ab4f8; } }
+@import url('ui/tokens.css');
 body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.65 Georgia, serif; }
 header { position: sticky; top: 0; display: flex; gap: 16px; align-items: center; padding: 10px 16px;
   background: var(--bg); border-bottom: 1px solid var(--line); font: 14px system-ui, sans-serif; }

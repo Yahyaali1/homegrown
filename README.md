@@ -92,7 +92,8 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 ### Missions (open tasks → workflows)
 | Feature | How | Status |
 |---|---|---|
-| Reads any page | Product data the page publishes, main content (Readability), tables (multi-row headers), repeated item blocks, shadow-DOM components, cross-origin iframes, content behind in-page tabs/"show more"; the model only on relevant parts, and only values found on the page are kept | ✅ real-page benchmark (`bench/extract-eval.mjs`): tuned 10/10; held-out 4/9 untouched → 9/9; fresh 7/9 untouched → 9/9 (28/28 overall) |
+| Reads any page | Product data the page publishes, main content (Readability), tables (multi-row headers), repeated item blocks, shadow-DOM components, cross-origin iframes, content behind in-page tabs/"show more"; the model only on relevant parts, and only values found on the page are kept | ✅ real-page benchmark (`bench/extract-eval.mjs`): tuned 10/10; held-out 4/9 untouched → 9/9; fresh 7/9 untouched → 9/9; fourth 6/10 untouched → 10/10 (38/38 overall) |
+| Feedback loop until the goal is met | Act → check → revise, up to 4 rounds: rules first (enough rows, every field filled), then Gemma judges the answer against the goal; the next round follows result links to fill gaps or searches with a better query, skipping pages already read, and merges rows across rounds. Mission control shows each round and why it continued | ✅ fixture shops (goal met, $129 at Bravo Mart) and a live web run; follow-links and search-again rounds seen on live runs |
 | Goal → editable workflow | "Find the cheapest 27-inch 4K monitor with USB-C" → Search → Read pages → Pull out fields → Filter → Rank → Conclude | ✅ live web run, 53 s |
 | Results | Sortable table, cited answer, CSV export, Open best; prices keep their currency | ✅ |
 | Across my open tabs | Compare the tabs you already have open, no web search | ✅ |
@@ -118,6 +119,19 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Tasks | Your own tasks with `{variables}`, reorder, export/import; they appear in the toolbar, palette and menus | ✅ |
 | Savings meter | Answers run, tokens, estimated cloud cost avoided, data kept off servers | ✅ |
 | Per-site off switch, feature toggles | Settings, or "Turn off on this site" in the launcher | ✅ |
+
+## Design
+
+Homegrown follows Vercel's [Geist](https://vercel.com/geist) design system:
+- monochrome grays;
+- blue only for focus and links;
+- hairline shadow borders;
+- short "swift" motion (a .96 scale-in, staggered lists, height changes that animate, View
+  Transitions for sorting).
+
+Tokens are in `extension/ui/tokens.css`; rules are in [docs/design-system.md](docs/design-system.md).
+While the model works you see a thin moving bar and shimmering gray text, never extra colour.
+Reduce Motion is honoured.
 
 ## Models (all on-device)
 

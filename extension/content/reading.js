@@ -9,7 +9,7 @@
     .mm { padding-left: 0; } .mm li { margin: 2px 0; } .mm summary { cursor: pointer; }
     .mm li > span::before, .mm summary::marker { color: var(--accent); }
     .quiz p { margin: 10px 0 4px; } .quiz button { display: block; margin: 3px 0; text-align: left; white-space: normal; }
-    .quiz .ok { background: #1e8e3e; color: #fff; } .quiz .no { background: #c5221f; color: #fff; }
+    .quiz .ok { background: var(--good); color: var(--bg); } .quiz .no { background: var(--danger); color: var(--bg); }
     .pod p { margin: 4px 0; } .pod .now { background: var(--chip); border-radius: 6px; }
     .gist { position: absolute; width: 190px; font: italic 12px/1.35 system-ui, sans-serif; color: var(--muted); pointer-events: none; }
   `);

@@ -1,4 +1,4 @@
 @import url('library.css');
-fieldset { border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin: 16px 0; }
+fieldset { border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 16px; margin: 16px 0; }
 legend { font-weight: 600; padding: 0 6px; }
-.notice { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); border-radius: 8px; padding: 8px 10px; }
+.notice { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); border-radius: var(--r-sm); padding: 8px 10px; }

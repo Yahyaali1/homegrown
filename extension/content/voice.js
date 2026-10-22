@@ -12,7 +12,7 @@
   EG.style(`
     .rec { display: flex; flex-direction: column; gap: 8px; }
     .rec .live { display: flex; align-items: center; gap: 8px; }
-    .rec .dot { width: 10px; height: 10px; border-radius: 50%; background: #d93025; animation: recpulse 1s infinite; }
+    .rec .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: recpulse 1s infinite; }
     .rec.paused .dot { animation: none; background: var(--muted); }
     @keyframes recpulse { 50% { opacity: .25; } }
     .rec .meter { flex: 1; height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
@@ -22,13 +22,13 @@
     .rec .opts select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
     .rec textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; resize: vertical; min-height: 56px; }
     .rec audio { width: 100%; height: 32px; }
-    .mic-pill { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: #d93025; color: #fff; border-radius: 999px;
-      padding: 4px 12px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 10px rgba(0,0,0,.25); pointer-events: none; }
+    .mic-pill { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: var(--danger); color: #fff; border-radius: 999px;
+      padding: 4px 12px; font-size: 12px; font-weight: 600; box-shadow: var(--shadow-menu); pointer-events: none; }
     .player { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
     .player select { font: inherit; font-size: 12px; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; max-width: 150px; }
     .player .pos { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
-    ::highlight(eg-read) { background: rgba(26,115,232,.22); }
-    .now { background: rgba(26,115,232,.14); border-radius: 4px; }
+    ::highlight(eg-read) { background: color-mix(in srgb, var(--fg) 14%, transparent); }
+    .now { background: var(--gray-200); border-radius: 4px; }
   `);
 
   const el = (tag, props = {}, kids = []) => {

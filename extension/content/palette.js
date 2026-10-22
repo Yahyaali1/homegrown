@@ -6,8 +6,8 @@
   if (!EG || window !== top) return;
 
   EG.style(`
-    .pal-back { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh; }
-    .pal { width: min(620px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.35); overflow: hidden; }
+    .pal-back { position: fixed; inset: 0; background: rgba(0,0,0,.2); animation: hg-fade var(--d-overlay) ease-out both; display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh; }
+    .pal { width: min(620px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-modal); animation: hg-pop var(--d-overlay) var(--ease-swift) both; overflow: hidden; }
     .pal input { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 16px; font-size: 16px; min-width: 0; outline: none; }
     .pal ul { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow: auto; }
     .pal li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
