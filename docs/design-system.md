@@ -31,8 +31,15 @@ Homegrown follows **Vercel's Geist** design system ([vercel.com/geist](https://v
    - a breathing dot at the end of streamed text.
 5. **Reduce Motion is honoured.** All animation and transition collapse to one frame. State still
    shows in text.
-6. **Light and dark are equal.** Geist defines both scales; `tokens.css` switches on
-   `prefers-color-scheme`.
+6. **Light and dark are equal, and the user picks.**
+   - Every colour token is `light-dark(light, dark)`, so `color-scheme` alone switches the theme.
+   - The setting is `theme` in `chrome.storage.sync`: `system`, `light` or `dark`. You change it
+     with the ◐ ☀ ☾ switch in Settings → Appearance or in the Mission control sidebar.
+   - Extension pages load `ui/theme.js`, which sets `data-theme` on `<html>`. It paints from a
+     localStorage copy first, so there is no flash.
+   - The in-page UI sets `color-scheme` inline on its host, because the host's `all: initial`
+     would override a `:host` rule.
+   - Any `<div class="theme-switch">` on a page becomes the switch.
 
 ## Tokens
 
@@ -42,6 +49,7 @@ Homegrown follows **Vercel's Geist** design system ([vercel.com/geist](https://v
 | Backgrounds | `--bg` (`--bg-100`), `--bg-2` (`--bg-200`) | surfaces · page base behind them (sparingly) |
 | Roles | `--fg`, `--muted`, `--faint`, `--line`, `--chip` | text · secondary text · tertiary/meta · borders · quiet fills |
 | Action | `--accent` (= gray-1000), `--accent-fg` | primary button only |
+| Buttons | `--btn-bg`, `--btn-bg-hover`, `--btn-edge` | secondary buttons: fill, hover fill, 1px ring |
 | Blue | `--focus`, `--link`, `--focus-ring` | keyboard focus, links |
 | Status | `--good`, `--warn`, `--danger` | text and small marks only |
 | Type | `--font` (Geist → Inter → system), `--mono`, `--serif`; `--t-xs` 11 … `--t-2xl` 32 | in-page `--t-md`, pages `--t-base`, headings tight (-.01 to -.04em) |
@@ -84,6 +92,12 @@ code uses the names in the table.
 - **Launcher** (`.fab`): a 40px circle with `--shadow-menu`. Hover scales it to 1.06 and lifts it to
   `--shadow-modal`. Press scales it to .94.
 - **Command palette:** `--shadow-modal`, entering with `hg-pop`, over a 20% black scrim that fades in.
+- **Buttons:**
+  - Secondary buttons always show an edge: a 1px `--btn-edge` ring on `--btn-bg`, with
+    `--btn-bg-hover` on hover.
+  - In dark mode the fill is lifted to 11% gray and the ring is 18% white, so buttons separate from
+    the near-black surface.
+  - Card-header buttons stay ghost (no fill or edge) to keep the header quiet.
 - **Inputs:** a 1px ring (`--line`). Hover deepens it to `--gray-500`. Focus shows `--gray-600` plus
   the blue focus ring.
 - **Mission control**

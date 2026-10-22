@@ -13,7 +13,8 @@ nav { display: flex; gap: 4px; margin: 16px 0; flex-wrap: wrap; }
 nav button { background: none; color: var(--muted); }
 nav button[aria-selected='true'] { background: var(--surface); color: var(--text); font-weight: 600; }
 button { font: inherit; border: 0; border-radius: var(--r-sm); padding: 6px 14px; background: var(--accent); color: var(--accent-text); cursor: pointer; }
-button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+button.secondary { background: var(--btn-bg); color: var(--text); border: 0; box-shadow: 0 0 0 1px var(--btn-edge); }
+button.secondary:hover { background: var(--btn-bg-hover); }
 input, textarea { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px; width: 100%; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .row input { flex: 1; width: auto; }
@@ -26,3 +27,8 @@ blockquote { margin: 0; border-left: 3px solid #ffd500; padding-left: 8px; }
 label.toggle { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; }
 label.toggle input { width: auto; margin-top: 4px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* theme switch (ui/theme.js) */
+.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); width: max-content; }
+.theme-switch button { height: 26px; width: 30px; padding: 0; border: 0; box-shadow: none; background: transparent; color: var(--muted); }
+.theme-switch button[aria-pressed=true] { background: var(--gray-200); color: var(--fg); }

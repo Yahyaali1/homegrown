@@ -57,7 +57,8 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: 0.5; cursor: default; }
-button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+button.secondary { background: var(--btn-bg); color: var(--text); border: 0; box-shadow: 0 0 0 1px var(--btn-edge); }
+button.secondary:hover { background: var(--btn-bg-hover); }
 button.link { background: none; color: var(--link); padding: 0; align-self: flex-start; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
@@ -108,3 +109,8 @@ footer b { color: var(--text); font-weight: 600; }
 .task-list .result { display: block; font-size: 12px; white-space: pre-wrap; margin-top: 4px; }
 #task-vars label { display: flex; gap: 6px; align-items: center; }
 #sched-url, #task-paste { flex: 1; }
+
+/* theme switch (ui/theme.js) */
+.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); width: max-content; }
+.theme-switch button { height: 26px; width: 30px; padding: 0; border: 0; box-shadow: none; background: transparent; color: var(--muted); }
+.theme-switch button[aria-pressed=true] { background: var(--gray-200); color: var(--fg); }

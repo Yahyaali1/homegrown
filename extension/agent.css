@@ -11,13 +11,13 @@ h3 { font-size: var(--t-base); font-weight: 600; margin: var(--s5) 0 var(--s3); 
 .spark { color: var(--fg); }
 .muted { color: var(--muted); } .small { font-size: var(--t-sm); font-weight: 400; }
 kbd { box-shadow: 0 0 0 1px var(--line); border-radius: 4px; padding: 0 5px; font: var(--t-xs) var(--mono); background: var(--bg); }
-button { font: inherit; font-weight: 500; border: 0; border-radius: var(--r-sm); height: 32px; padding: 0 12px; cursor: pointer; background: var(--bg); color: var(--fg);
-  box-shadow: var(--shadow-small); transition: background var(--d-fast), transform var(--d-fast) var(--ease-swift), opacity var(--d-fast); }
-button:hover { background: var(--gray-100); }
+button { font: inherit; font-weight: 500; border: 0; border-radius: var(--r-sm); height: 32px; padding: 0 12px; cursor: pointer; background: var(--btn-bg); color: var(--fg);
+  box-shadow: 0 0 0 1px var(--btn-edge), 0 1px 2px var(--sh-2); transition: background var(--d-fast), transform var(--d-fast) var(--ease-swift), opacity var(--d-fast); }
+button:hover { background: var(--btn-bg-hover); }
 button:active { transform: scale(.97); background: var(--gray-200); }
 button.primary { background: var(--accent); color: var(--accent-fg); box-shadow: none; }
 button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--bg)); }
-button.secondary { background: var(--bg); }
+button.secondary { background: var(--btn-bg); }
 button.wide { width: 100%; }
 button:disabled { opacity: .5; cursor: default; }
 :focus-visible { outline: none; box-shadow: var(--focus-ring) !important; }
@@ -118,3 +118,8 @@ td a { color: var(--link); text-decoration: none; }
 #saved .acts { display: flex; gap: 6px; }
 #saved .acts button { font-size: var(--t-sm); height: 26px; padding: 0 8px; }
 @media (max-width: 760px) { body { grid-template-columns: 1fr; } aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); } .goal-row { flex-direction: column; } }
+
+/* theme switch (ui/theme.js) */
+.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); width: max-content; }
+.theme-switch button { height: 26px; width: 30px; padding: 0; box-shadow: none; background: transparent; color: var(--muted); }
+.theme-switch button[aria-pressed=true] { background: var(--gray-200); color: var(--fg); }

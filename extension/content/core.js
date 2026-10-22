@@ -7,7 +7,7 @@
   window.__edgeGallery = true;
 
   const host = document.createElement('edge-gallery');
-  host.style.cssText = 'all: initial; position: absolute; top: 0; left: 0; z-index: 2147483647;';
+  host.style.cssText = 'all: initial; position: absolute; top: 0; left: 0; z-index: 2147483647; color-scheme: light dark;';
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `
 <link rel="stylesheet" href="${chrome.runtime.getURL('ui/tokens.css')}">
@@ -16,17 +16,17 @@
   * { box-sizing: border-box; font: var(--t-md)/1.5 var(--font); -webkit-font-smoothing: antialiased; }
   [hidden] { display: none !important; }
   .bar, .card, .imgbtn, .fab { position: absolute; background: var(--bg); color: var(--fg); box-shadow: var(--shadow-menu); }
-  .bar { z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px; border-radius: var(--r-md); width: max-content;
+  .bar { z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 5px; border-radius: var(--r-md); width: max-content;
     max-width: min(480px, calc(100vw - 16px)); animation: hg-pop var(--d-popover) var(--ease-swift) both; transform-origin: 24px 0; }
   .bar > * { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
   .bar > :nth-child(2) { animation-delay: 15ms } .bar > :nth-child(3) { animation-delay: 30ms } .bar > :nth-child(4) { animation-delay: 45ms }
   .bar > :nth-child(5) { animation-delay: 60ms } .bar > :nth-child(n+6) { animation-delay: 75ms }
-  button { border: 0; border-radius: var(--r-sm); padding: 0 10px; height: 28px; background: transparent; color: var(--fg); cursor: pointer; white-space: nowrap;
+  button { border: 0; border-radius: var(--r-sm); padding: 0 10px; height: 28px; background: var(--btn-bg); box-shadow: 0 0 0 1px var(--btn-edge); color: var(--fg); cursor: pointer; white-space: nowrap;
     font-weight: 500; transition: background var(--d-fast), transform var(--d-fast) var(--ease-swift), color var(--d-fast); }
-  button:hover { background: var(--gray-200); }
+  button:hover { background: var(--btn-bg-hover); }
   button:active { background: var(--gray-300); transform: scale(.97); }
   button:focus-visible, input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-  button.primary { background: var(--accent); color: var(--accent-fg); }
+  button.primary { background: var(--accent); color: var(--accent-fg); box-shadow: none; }
   button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--bg)); }
   .brand { font-weight: 600; padding: 0 8px; color: var(--fg); letter-spacing: -.01em; }
   .bar form { display: flex; gap: 4px; }
@@ -48,7 +48,8 @@
     background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; }
   .card header { display: flex; align-items: center; gap: 2px; padding: 8px 8px 6px 14px; cursor: move; border-bottom: 1px solid var(--line); }
   .card header .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.01em; }
-  .card header button { height: 24px; padding: 0 8px; color: var(--muted); font-size: var(--t-sm); } .card header button:hover { color: var(--fg); }
+  .card header button { height: 24px; padding: 0 8px; color: var(--muted); font-size: var(--t-sm); background: transparent; box-shadow: none; }
+  .card header button:hover { background: var(--btn-bg-hover); } .card header button:hover { color: var(--fg); }
   .body { padding: 10px 14px; overflow: auto; flex: 1; scrollbar-width: thin; }
   .body p { margin: 0 0 8px; } .body ul, .body ol { margin: 0 0 8px; padding-left: 20px; }
   .body pre { background: var(--gray-100); box-shadow: 0 0 0 1px var(--line); padding: 10px; border-radius: var(--r-sm); overflow: auto; white-space: pre-wrap; }
@@ -61,7 +62,7 @@
   .card form { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--line); background: var(--bg-2); }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
   .actions:empty { display: none; }
-  .actions button { box-shadow: 0 0 0 1px var(--line); border-radius: var(--r-pill); font-size: var(--t-sm); height: 26px; animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+  .actions button { border-radius: var(--r-pill); font-size: var(--t-sm); height: 26px; animation: hg-rise var(--d-overlay) var(--ease-out) both; }
   .actions button:nth-child(2) { animation-delay: 30ms } .actions button:nth-child(3) { animation-delay: 60ms } .actions button:nth-child(n+4) { animation-delay: 90ms }
   .cursor::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--fg); vertical-align: middle;
     animation: hg-breathe 1s ease-in-out infinite; }
@@ -99,6 +100,8 @@
       settings = { toolbar: true, fab: true, ...s };
       tasks = settings.tasks || [];
       enabled = settings.toolbar && !siteOff();
+      // Inline, because the host's `all: initial` would beat a :host rule. Tokens use light-dark().
+      host.style.colorScheme = settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'light dark';
       // The launcher lives in the top frame only, so iframes don't each get a button.
       if (window === top && settings.fab && !siteOff()) (mount(), (fab.hidden = false));
       else fab.hidden = true;
