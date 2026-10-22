@@ -31,7 +31,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 5603
+    "ms": 5738
   },
   {
     "goal": "Compare the best noise-cancelling headphones under $300",
@@ -66,13 +66,12 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 4411
+    "ms": 4498
   },
   {
     "goal": "Which electric car has the longest range for the money?",
     "ok": false,
     "fails": [
-      "invented a budget <40000",
       "want list"
     ],
     "brief": {
@@ -88,11 +87,7 @@
       "must": [],
       "avoid": [],
       "prefer": [],
-      "budget": {
-        "op": "<",
-        "value": 40000,
-        "currency": "USD"
-      },
+      "budget": null,
       "rank": {
         "by": "range_miles",
         "order": "desc"
@@ -101,10 +96,10 @@
         "kind": "list",
         "n": 5
       },
-      "shopping": true
+      "shopping": false
     },
     "planner": "gemma",
-    "ms": 8619
+    "ms": 8722
   },
   {
     "goal": "electric cars under 40k with the longest range",
@@ -139,7 +134,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9173
+    "ms": 9029
   },
   {
     "goal": "top 5 lightest laptops under 1.2 kg",
@@ -166,7 +161,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 4292
+    "ms": 4355
   },
   {
     "goal": "cheapest 2TB NVMe SSD under £120",
@@ -202,7 +197,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 4892
+    "ms": 4838
   },
   {
     "goal": "a quiet robot vacuum for pet hair under 400 euros",
@@ -241,7 +236,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 4891
+    "ms": 5046
   },
   {
     "goal": "phones with at least 256GB storage under $600",
@@ -265,7 +260,10 @@
         "value": 600,
         "currency": "USD"
       },
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "list",
         "n": 5
@@ -273,7 +271,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8983
+    "ms": 9607
   },
   {
     "goal": "best rated ramen in Tokyo near Shinjuku",
@@ -308,7 +306,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 4020
+    "ms": 4127
   },
   {
     "goal": "used mountain bike, not carbon, under $800",
@@ -346,14 +344,12 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 5040
+    "ms": 5069
   },
   {
     "goal": "3 good espresso machines for a beginner, not too expensive",
-    "ok": false,
-    "fails": [
-      "invented a budget <300"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "espresso machine",
       "subjectWords": [
@@ -367,11 +363,7 @@
       "prefer": [
         "not too expensive"
       ],
-      "budget": {
-        "op": "<",
-        "value": 300,
-        "currency": "USD"
-      },
+      "budget": null,
       "rank": {
         "by": "rating",
         "order": "desc"
@@ -380,10 +372,10 @@
         "kind": "list",
         "n": 3
       },
-      "shopping": true
+      "shopping": false
     },
     "planner": "gemma",
-    "ms": 9378
+    "ms": 17912
   },
   {
     "goal": "wireless gaming mouse lighter than 60 grams",
@@ -418,7 +410,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 4439
+    "ms": 4566
   },
   {
     "goal": "flights from London to Lisbon in May, cheapest",
@@ -450,7 +442,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 4075
+    "ms": 4361
   },
   {
     "goal": "the most popular open-source password manager",
@@ -470,7 +462,10 @@
       "avoid": [],
       "prefer": [],
       "budget": null,
-      "rank": null,
+      "rank": {
+        "by": "rating",
+        "order": "desc"
+      },
       "want": {
         "kind": "one",
         "n": 3
@@ -478,7 +473,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 6510
+    "ms": 6967
   },
   {
     "goal": "standing desk under 500 dollars with memory presets",
@@ -513,7 +508,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 9405
+    "ms": 9385
   },
   {
     "goal": "which 65 inch OLED TV has the best picture under 2000",
@@ -551,6 +546,6 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 10154
+    "ms": 10007
   }
 ]

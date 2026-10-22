@@ -32,7 +32,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 5750
+    "ms": 6253
   },
   {
     "goal": "compare three robot lawn mowers under 1500 euros",
@@ -56,7 +56,10 @@
         "value": 1500,
         "currency": "EUR"
       },
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "list",
         "n": 3
@@ -64,14 +67,12 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 4735
+    "ms": 6202
   },
   {
     "goal": "which air fryer is the biggest under $150",
-    "ok": false,
-    "fails": [
-      "rank missing"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "air fryer",
       "subjectWords": [
@@ -88,7 +89,10 @@
         "value": 150,
         "currency": "USD"
       },
-      "rank": null,
+      "rank": {
+        "by": "size",
+        "order": "desc"
+      },
       "want": {
         "kind": "one",
         "n": 3
@@ -96,7 +100,7 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 8006
+    "ms": 10361
   },
   {
     "goal": "best rated Thai restaurant in Brooklyn",
@@ -129,7 +133,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 8064
+    "ms": 9577
   },
   {
     "goal": "a 4-person tent lighter than 3 kg, not a pop-up",
@@ -166,7 +170,7 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 11511
+    "ms": 14046
   },
   {
     "goal": "top 10 longest-lasting AA rechargeable batteries",
@@ -201,14 +205,12 @@
       "shopping": false
     },
     "planner": "gemma",
-    "ms": 5659
+    "ms": 6677
   },
   {
     "goal": "cheapest flight Berlin to Rome in June",
-    "ok": false,
-    "fails": [
-      "rank missing"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "flight",
       "subjectWords": [
@@ -223,22 +225,23 @@
       "avoid": [],
       "prefer": [],
       "budget": null,
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "one",
         "n": 3
       },
-      "shopping": false
+      "shopping": true
     },
     "planner": "gemma",
-    "ms": 4570
+    "ms": 6271
   },
   {
     "goal": "noise-cancelling headphones under $200, not refurbished",
-    "ok": false,
-    "fails": [
-      "budget missing"
-    ],
+    "ok": true,
+    "fails": [],
     "brief": {
       "subject": "headphones",
       "subjectWords": [
@@ -254,7 +257,11 @@
         "refurbished"
       ],
       "prefer": [],
-      "budget": null,
+      "budget": {
+        "op": "<",
+        "value": 200,
+        "currency": "<CO"
+      },
       "rank": {
         "by": "rating",
         "order": "desc"
@@ -263,10 +270,10 @@
         "kind": "list",
         "n": 5
       },
-      "shopping": false
+      "shopping": true
     },
     "planner": "gemma",
-    "ms": 10494
+    "ms": 13004
   },
   {
     "goal": "a USB-C hub with HDMI 2.1 and ethernet under 60 dollars",
@@ -293,7 +300,10 @@
         "value": 60,
         "currency": "USD"
       },
-      "rank": null,
+      "rank": {
+        "by": "price",
+        "order": "asc"
+      },
       "want": {
         "kind": "one",
         "n": 3
@@ -301,6 +311,6 @@
       "shopping": true
     },
     "planner": "gemma",
-    "ms": 5917
+    "ms": 8282
   }
 ]

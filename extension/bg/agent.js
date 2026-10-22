@@ -122,6 +122,15 @@ function briefProblems(form) {
   return p;
 }
 
+// A budget's number has to be in the goal: "300", "1,500", "1500" or "40k" for 40000.
+function budgetInGoal(g, value) {
+  const v = +value;
+  if (!(v > 0)) return false;
+  const digits = g.replace(/(\d),(\d{3})/g, '$1$2');
+  const forms = [String(v), ...(v >= 1000 && v % 1000 === 0 ? [`${v / 1000}k`] : []), ...(v % 1 ? [v.toFixed(2)] : [])];
+  return forms.some((f) => new RegExp(`(^|[^\\d.])${f.replace('.', '\\.')}(?![\\d])`, 'i').test(digits));
+}
+
 // Grounding: must-haves and exclusions have to appear in the goal, so the model can't add requirements the user
 // never stated. Checks Gemma's claims against the user's words; it doesn't read the words itself. (Grounding the
 // budget with a quoted span was tried: the extra field shifted Gemma's other answers, 22/25 → 20/25.)
@@ -130,6 +139,7 @@ function ground(goal, form) {
   const inGoal = (t) => !!t && g.includes(String(t).toLowerCase().trim());
   form.must = (form.must || []).filter((m) => inGoal(m) || inGoal(String(m).replace(/-/g, ' ')) || inGoal(String(m).replace(/ /g, '-')));
   form.avoid = (form.avoid || []).filter((a) => inGoal(a) || inGoal(String(a).replace(/s$/, '')));
+  if (form.budget && !budgetInGoal(g, form.budget.value)) form.budget = null; // "not too expensive" has no number
   // A wish counts if its words are the user's ("at least 256GB" from "…with at least 256GB storage"), not invented ("quiet").
   form.prefer = (form.prefer || []).filter((w) => String(w).toLowerCase().split(/\s+/).filter((x) => x.length > 2).every((x) => g.includes(x)));
   return form;
@@ -143,6 +153,18 @@ async function verifyBrief(goal, form) {
   for (const m of [...(form.must || [])].filter((m) => /\d/.test(m))) {
     const a = await short(`In this goal, is "${m}" an exact requirement every listing must show, or a minimum, maximum or limit? Answer with one word: exact or limit.`);
     if (/limit|min|max/.test(a)) (form.must = form.must.filter((x) => x !== m)), (form.prefer = [...(form.prefer || []), m]);
+  }
+  // Gaps only: narrow follow-ups when the brief left the budget or the ranking empty. A budget answer is kept only
+  // if its number is in the goal, so these can fill a miss but can't invent ("not too expensive" stays budget-free).
+  if (!form.budget) {
+    const a = await short('If this goal states a money limit, reply with it as JSON {"op": "<" or ">", "value": <number>, "currency": "<code>"}; otherwise reply none.');
+    const b = parseJson(a);
+    if (b && budgetInGoal(goal.toLowerCase(), b.value)) form.budget = b;
+  }
+  if (!form.rank?.by) {
+    const a = await short('Does this goal ask for the cheapest, best, biggest, longest, lightest or similar? If so reply as JSON {"by": "<field such as price, rating, size>", "order": "asc" or "desc"}; otherwise reply none.');
+    const r = parseJson(a);
+    if (r?.by && /^(asc|desc)$/.test(r.order)) form.rank = r;
   }
   return form;
 }
@@ -621,7 +643,9 @@ async function shopCheck({ product, urls }, sender) {
   await saveBook(b);
   const workflow = {
     goal: `Find ${product.name} cheaper`, planner: 'shopping sense',
-    brief: { subject: '', subjectWords: [], must: [], avoid: [], prefer: [], budget: null, rank: { by: 'price', order: 'asc' }, want: { kind: 'list', n: 10 }, shopping: true },
+    // The product's own name words decide what's on topic (a search for "MARKUS chair" that returns people named Marcus).
+    brief: { subject: product.name, subjectWords: [...new Set(String(product.name).toLowerCase().match(/[a-z0-9][a-z0-9-]{3,}/g) || [])].slice(0, 8),
+      must: [], avoid: [], prefer: [], budget: null, rank: { by: 'price', order: 'asc' }, want: { kind: 'list', n: 10 }, shopping: true },
     steps: [{ type: 'search', query: `${product.name} price`, n: 8, ...(urls && { urls }) }, { type: 'open', limit: urls?.length || 6 }, { type: 'extract', fields: ['product', 'price', 'store'], require: [] },
       { type: 'filter', field: '', op: '<', value: '' }, { type: 'rank', by: 'price', order: 'asc', keep: 10 }, { type: 'answer', question: 'Which store sells this exact product cheapest?' }],
   };

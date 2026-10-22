@@ -48,7 +48,13 @@ regex can't know what someone means.
 2. **Critic:** `briefProblems` checks the model's output for inconsistencies, e.g. a "must" item holding a money
    word or a comparison, or a price ranking with no price column. Gemma gets one targeted request to fix them.
 3. **Verify:** for each numbered must-have, one narrow question: "exact, or a limit?" ("256GB" in "at least 256GB").
-4. **`normalizeBrief`:** cleans the JSON (types, numbers, caps). It doesn't interpret anything.
+4. **Grounding and gap-only follow-ups:**
+   - Must-haves, exclusions and wishes have to appear in the goal.
+   - A budget's number has to be in it ("300", "1,500", "40k"), so "not too expensive" can't become $300.
+   - When the brief leaves the budget or the ranking empty, one narrow question fills the gap, and a budget answer
+     is kept only if its number is in the goal. These questions can only add, never overwrite. That's why they help
+     where the earlier always-on questions hurt.
+5. **`normalizeBrief`:** cleans the JSON (types, numbers, caps). It doesn't interpret anything.
 5. **Shown and editable:** Mission control's "Understood as" panel covers looking for, must have, not, ideally,
    budget, best means and how many. Edits rewrite the steps that enforce them.
 6. **Enforced every round:**
@@ -107,7 +113,9 @@ regex can't know what someone means.
 | After removing an example that taught invented exclusions | 14/16 | 5/8 |
 | + critic: a negated wish ("not refurbished") belongs in avoid (shipped; held-out set now 9 goals) | 14/16 | 5/9 |
 | **Same prompt on Gemma 4 E4B** (2.97 GB), shipped version | 14/16 | **9/9** |
-| Shipped version on Gemma 4 E2B (pinned, final) | 14/16 | 5/9 |
+| Gemma 4 E2B, before numeric grounding | 14/16 | 5/9 |
+| **+ numeric budget grounding and gap-only follow-ups** (shipped, E2B) | **15/16** | **8/9** |
+| Same, Gemma 4 E4B | 15/16 | **9/9** |
 
 Correction: an earlier run reported E2B at 9/9 held-out. The test profile still had "Missions: Gemma-4-E4B-it"
 from the chat-settings test, so that run was E4B. `bench/brief-eval.mjs` now pins the model through the Missions
@@ -146,6 +154,14 @@ Two fixes came from this run:
 - **Ranking:** rows without the ranking field now follow the ranked ones instead of vanishing. A rating ranking had
   dropped every shop listing.
 - **De-duplication:** it now runs on all rows, ranked or not.
+
+**Live shopping sense** (IKEA MARKUS chair; the page publishes MPN 902.891.72):
+- The chips showed, and the price was remembered under `id:90289172`.
+- With shopping sense on, the store check started after 8 s on the page. It read 6 on-topic pages (office chairs).
+- It treated IKEA's grey variant (MPN 702.611.50) as a different item, and sent no nudge, which is correct: no
+  same item was cheaper.
+- Fixed along the way: the check now uses the product name's words as its subject (it had read pages about people
+  named Marcus), and the product-page script runs once per page (a re-injected copy had recorded each visit twice).
 
 **Extraction** (`bench/extract-eval.mjs`, real pages, 38 questions over four sets): **38/38** after all of the above,
 the same as before.

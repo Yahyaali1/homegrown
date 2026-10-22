@@ -4,6 +4,9 @@
 (() => {
   const EG = window.EG;
   if (!EG || window !== top) return;
+  // One live copy per page (the scripts can be injected again after an install or reload; see content/core.js).
+  if (typeof window.__hgMissionChips === 'function' && window.__hgMissionChips()) return;
+  window.__hgMissionChips = () => !!chrome.runtime?.id;
   const open = (goal, run) => EG.bg('agentOpen', { goal, run, context: `${document.title} (${location.href})` });
 
   EG.actions.page.unshift({
