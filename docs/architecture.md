@@ -197,3 +197,9 @@ Search answers, research, claim checks and YouTube depend on other sites. Voice 
 | Option C | Change nothing in the product, and fake the world at its edges. Playwright answers requests to bing.com, duckduckgo.com, wikipedia.org and youtube.com with fixture pages. Chrome's fake media device plays a recorded WAV file as the microphone. The engine's existing file input (`liveStartFile`, already used for live-caption checks) stands in for tab capture. |
 | Against C | Intercepting the service worker's own requests is experimental in Playwright. If it doesn't work, research and claim checks stay untested in the browser. |
 | Decision | **C.** If interception of worker requests fails, say so and keep A for those two; don't add a seam. Image generation stays a manual check: a 2.4 GB model download in a test run costs more than the wiring risk it covers, and that wiring is shared with the image reader, which is tested. |
+
+**ADR-14, revised before adding the test.** The argument against testing image generation doesn't hold:
+- **Cost:** the download happens once per test profile, because transformers.js caches the weights.
+- **Wiring:** not shared after all. Image generation has its own progress relay through the worker and its own model call, and the image reader test covers neither.
+
+**Decision:** image generation gets a browser test, tagged `@slow` so a quick run can skip it with `--grep-invert @slow`.

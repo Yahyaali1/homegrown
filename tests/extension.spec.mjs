@@ -327,6 +327,7 @@ async function chip(page, label) {
 /** Opens the palette and runs the action whose label starts with `label`. */
 async function palette(page, label) {
   await page.keyboard.press('Alt+KeyK');
+  await expect(ui(page).locator('.pal input')).toBeFocused(); // the palette opens after loading saved missions
   await page.keyboard.type(label);
   await expect(ui(page).locator('.pal li[aria-selected=true]')).toContainText(label);
   await page.keyboard.press('Enter');
@@ -681,5 +682,40 @@ test('reader: an ePub opens as its chapters, with the toolbar on the text', asyn
   await expect(page.locator('#doc h2')).toHaveText(['The Hive', 'The Dance']);
   await dragSelect(page, page, '#doc section p >> nth=0');
   await expect(ui(page).locator('.bar')).toContainText('Summarize');
+  await page.close();
+});
+
+test('palette: a typed question becomes "Ask: …" and is answered about the page', async () => {
+  const page = await openPage('article.html');
+  await page.keyboard.press('Alt+KeyK');
+  await expect(ui(page).locator('.pal input')).toBeFocused();
+  await page.keyboard.type('Who decoded the dance?');
+  const rows = ui(page).locator('.pal li[role=option]');
+  await rows.filter({ hasText: 'Ask: Who decoded the dance?' }).click();
+  const r = await cardAnswer(page);
+  expect(r.err).toBe(false);
+  expect(r.text).toMatch(/Frisch/i);
+  await page.close();
+});
+
+test('image generation @slow: a prompt becomes an image on this device, with progress shown while it works', async () => {
+  test.setTimeout(30 * 60 * 1000); // the first run downloads the 2.4 GB model; later runs use the cache
+  const page = await openPage('article.html');
+  await palette(page, 'Create image');
+  const card = ui(page).locator('.card');
+  await card.getByLabel('Describe the image').fill('a honeybee on a sunflower, simple flat illustration');
+  await card.getByRole('button', { name: 'Create' }).click();
+  const seen = new Set();
+  await expect.poll(async () => {
+    seen.add((await card.locator('.meta').innerText()).replace(/\d+%.*$/, ''));
+    return card.locator('img.eg-img').count();
+  }, { timeout: 28 * 60 * 1000, intervals: [1000] }).toBe(1);
+  console.log(`  [image] progress lines: ${[...seen].filter(Boolean).join(' → ')}`);
+  expect([...seen].some((s) => /Drawing|Downloading the image model/.test(s))).toBe(true); // the worker relayed the engine's progress
+  const size = await card.locator('img.eg-img').evaluate((img) => [img.naturalWidth, img.naturalHeight]);
+  expect(size[0]).toBeGreaterThanOrEqual(256);
+  await expect(card.locator('.meta')).toContainText('On this device');
+  await expect(card.getByRole('button', { name: 'Download' })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Regenerate' })).toBeVisible();
   await page.close();
 });

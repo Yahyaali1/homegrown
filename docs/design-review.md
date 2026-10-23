@@ -86,7 +86,7 @@ changed because of the argument). The last section maps each user-visible featur
 | Compare and tidy tabs | "compare tabs…"; `html.test.ts` (JSON from the model) | e2e, unit |
 | Highlights, memory, "changed since" | "highlights…"; `compare.test.ts` | e2e, unit |
 | Library | "library: answers from pages are in History…" | e2e |
-| Palette | "palette: Alt+K finds an action…"; `reading.test.ts` (fuzzy match) | e2e, unit |
+| Palette | "palette: Alt+K finds an action…", "palette: a typed question becomes Ask…"; `reading.test.ts` (fuzzy match) | e2e, unit |
 | Price chips, price memory | "a product page gets price chips…" | e2e |
 | Reader (PDF, ePub, DOCX) | "text action: Translate a selection from a PDF"; `zip.test.ts` | e2e, unit |
 | Engine lanes and context fitting | `engine.test.ts` | unit |
@@ -99,4 +99,4 @@ changed because of the argument). The last section maps each user-visible featur
 | Settings: turned-off sites | "settings: a site added to turned off…" | e2e |
 | Library: flashcards, ask | "library: a due flashcard…", "library: Ask your library…" | e2e |
 | Reader: ePub | "reader: an ePub opens as its chapters…"; `zip.test.ts` | e2e, unit |
-| Image generation | the worker relay it shares with the image reader | manual: a 2.4 GB model (ADR-14) |
+| Image generation | "image generation @slow: a prompt becomes an image…" | e2e (tagged @slow; downloads 2.4 GB once, ADR-14 revised) |
