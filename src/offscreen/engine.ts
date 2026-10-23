@@ -8,11 +8,11 @@ import { Lanes, type Lane } from './lanes.ts';
 import type { GenerationStats, ModelRuntime } from './runtime.ts';
 import { liteRtLm } from './runtimes/litertlm.ts';
 import * as store from './store.ts';
-import { readImage, IMAGE_READER } from '/vision.js';
-import * as embed from '/engine/embed.js';
-import * as imagegen from '/engine/imagegen.js';
-import * as stt from '/engine/stt.js';
-import * as imgtext from '/engine/imgtext.js';
+import { broadcast, downloadStatus } from './broadcast.ts';
+import { readImage, IMAGE_READER, handlers as vision } from './helpers/vision.ts';
+import * as embed from './helpers/embed.ts';
+import * as imagegen from './helpers/imagegen.ts';
+import * as stt from './helpers/stt.ts';
 
 // LiteRT's native logging goes to stderr, which Emscripten sends to console.error: INFO lines and harmless warnings
 // ("NPU accelerator could not be loaded") filled the extension's Errors page. Real errors stay errors.
@@ -27,8 +27,6 @@ const RUNTIMES: Partial<Record<RuntimeId, ModelRuntime>> = {
   'litert-lm': liteRtLm(chrome.runtime.getURL('vendor/wasm/')),
 };
 const available = MODELS.filter((m) => RUNTIMES[m.runtime]);
-
-export const broadcast = (msg: Record<string, unknown>) => chrome.runtime.sendMessage({ source: 'engine', ...msg }).catch(() => {});
 
 interface Loaded { name: string; maxTokens: number; loadMs: number; image: boolean }
 let loaded: (Loaded & { spec: ModelSpec; runtime: ModelRuntime }) | null = null;
@@ -98,12 +96,7 @@ async function describeForModel(id: string, turn: PageTurn): Promise<PageTurn> {
     throw new Error(`Can't read this image (${e instanceof Error ? e.message : e}). Images that need a login and blob: links the page has already released can't be read.`);
   }
   broadcast({ type: 'status', id, text: `Reading the image with ${IMAGE_READER}…` });
-  let lastSent = 0;
-  const seen = await readImage(blob, (p) => {
-    if (p.status !== 'progress' || performance.now() - lastSent < 300) return;
-    lastSent = performance.now();
-    broadcast({ type: 'status', id, text: `Downloading the image reader, once (${p.file.split('/').pop()} ${Math.round(p.progress)}%)…` });
-  });
+  const seen = await readImage(blob, downloadStatus(id, 'the image reader'));
   broadcast({ type: 'status', id, text: '' });
   return { role: 'user', text: `${turn.text}\n\nA local image-reading model looked at the image and reported:\nDescription: ${seen.description || 'none'}\nText in the image: ${seen.text || 'none'}` };
 }
@@ -169,7 +162,7 @@ const handlers: Record<string, (msg: never) => unknown> = {
   ...embed.handlers,
   ...imagegen.handlers,
   ...stt.handlers,
-  ...imgtext.handlers,
+  ...vision,
 };
 
 chrome.runtime.onMessage.addListener((msg: Msg & { target?: string }, _sender, reply) => {
