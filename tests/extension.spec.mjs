@@ -83,6 +83,7 @@ test('model download resumes after a dropped connection', async () => {
 test('chat streams an answer and shows stats', async () => {
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  await panel.click('[data-tab=chat]'); // the panel reopens on the last tab used
   await panel.fill('#chat-input', 'What is the capital of France? Answer in one word.');
   await panel.click('#chat-send');
   const a = await answer();

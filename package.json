@@ -1,11 +1,13 @@
 {
   "name": "gallery-ext",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Homegrown: a local-first browser assistant on your own GPU",
   "scripts": {
-    "vendor": "sh scripts/vendor.sh",
-    "test": "playwright test"
+    "build": "node scripts/build.mjs",
+    "check": "tsc -p .",
+    "test": "node --test \"tests/unit/*.test.ts\"",
+    "test:e2e": "npm run build && playwright test",
+    "vendor": "sh scripts/vendor.sh"
   },
   "keywords": [],
   "author": "",
@@ -18,8 +20,11 @@
     "@mlc-ai/web-llm": "^0.2.86",
     "@mozilla/readability": "^0.6.0",
     "@playwright/test": "^1.64.1",
+    "@types/chrome": "^0.3.6",
+    "@types/node": "^24.19.2",
     "esbuild": "^0.28.2",
     "mammoth": "^1.13.0",
-    "pdfjs-dist": "^6.4.299"
+    "pdfjs-dist": "^6.4.299",
+    "typescript": "^7.0.2"
   }
 }

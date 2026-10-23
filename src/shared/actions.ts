@@ -1,8 +1,11 @@
-// Default tasks. The live list is in chrome.storage.sync 'tasks' (seeded from this on install),
-// so users can edit, delete and add their own. kind: what the task runs on.
-const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(chrome.i18n.getUILanguage().split('-')[0]);
+// Tasks: what the in-page toolbar, right-click menu and side panel offer. The live list is chrome.storage.sync
+// 'tasks' (seeded from DEFAULT_TASKS), so people edit, delete and add their own. Built to actions.js for pages.
+export type TaskKind = 'text' | 'page' | 'image';
+export interface Task { id: string; kind: TaskKind; title: string; prompt: string }
 
-export const DEFAULT_TASKS = [
+const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(chrome.i18n.getUILanguage().split('-')[0] ?? 'en') ?? 'English';
+
+export const DEFAULT_TASKS: Task[] = [
   { id: 'summarize', kind: 'text', title: 'Summarize', prompt: 'Summarize the following text in a few key bullet points:' },
   { id: 'explain', kind: 'text', title: 'Explain', prompt: 'Explain the following text in simple terms:' },
   { id: 'translate', kind: 'text', title: `Translate to ${language}`, prompt: `Translate the following text to ${language}. Reply with the translation only:` },
@@ -13,14 +16,26 @@ export const DEFAULT_TASKS = [
   { id: 'extract', kind: 'image', title: 'Extract text from image', prompt: 'Extract all the text in this image. Reply with the text only.' },
 ];
 
-export const KINDS = { text: 'Selected text', page: 'Whole page', image: 'Image' };
+export const KINDS: Record<TaskKind, string> = { text: 'Selected text', page: 'Whole page', image: 'Image' };
 
-export async function getTasks() {
-  return (await chrome.storage.sync.get({ tasks: DEFAULT_TASKS })).tasks;
+/** Stored tasks, checked: an entry that isn't a usable task is skipped rather than breaking the menu. */
+export function parseTasks(raw: unknown): Task[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.flatMap((t): Task[] => {
+    if (!t || typeof t !== 'object') return [];
+    const { id, kind, title, prompt } = t as Record<string, unknown>;
+    return typeof id === 'string' && (kind === 'text' || kind === 'page' || kind === 'image') && typeof title === 'string' && typeof prompt === 'string'
+      ? [{ id, kind, title, prompt }] : [];
+  });
+}
+
+export async function getTasks(): Promise<Task[]> {
+  return parseTasks((await chrome.storage.sync.get('tasks')).tasks) ?? DEFAULT_TASKS;
 }
 
 // Gallery's Prompt Lab templates (ui/llmsingleturn/PromptTemplateConfigs.kt).
-export const PROMPT_LAB = [
+export interface PromptTemplate { id: string; title: string; option?: string; options?: string[]; build(input: string, option: string): string }
+export const PROMPT_LAB: PromptTemplate[] = [
   { id: 'free', title: 'Free form', build: (input) => input },
   {
     id: 'tone', title: 'Rewrite tone', option: 'Tone',

@@ -14,10 +14,12 @@ features paid AI extensions charge for, plus things only local compute makes aff
 
 ```sh
 npm install
-npm run vendor     # bundles the model runtimes and libraries into extension/vendor
+npm run vendor     # model runtimes and libraries into legacy/vendor
+npm run build      # TypeScript (src/) and legacy/ into extension/
 ```
 
 Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose `extension/`.
+After a change, run `npm run build` and reload the extension.
 The first request offers to download Gemma 4 E2B (2 GB) right in the page; or open the side panel →
 **Settings** → Models. Helper models download the first time a feature needs them.
 
@@ -126,7 +128,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 
 ## Design
 
-<img src="extension/ui/flower.svg" width="48" alt="">
+<img src="legacy/ui/flower.svg" width="48" alt="">
 
 **Grown, not built.** Homegrown's mark is a daisy leaning left out of a pot:
 - the pot is your machine;
@@ -149,7 +151,7 @@ The same potted daisy is used everywhere, from the 16px icon to page headers.
 - **Theme:** system, light or dark.
 
 Read [docs/design-philosophy.md](docs/design-philosophy.md) for the why, and
-[docs/design-system.md](docs/design-system.md) for the tokens (`extension/ui/tokens.css`).
+[docs/design-system.md](docs/design-system.md) for the tokens (`legacy/ui/tokens.css`).
 
 ## Models (all on-device)
 
@@ -245,11 +247,16 @@ developer or agent: [`docs/plan/`](docs/plan/README.md).
 
 ## Development
 
+The code is moving from plain JS (`legacy/`) to strict TypeScript (`src/`), one module at a time; see
+[docs/architecture.md](docs/architecture.md) for the layout and the decisions behind it.
+
 ```sh
-npx playwright test                 # regression suite on the real model and WebGPU (~2 min)
+npm run check                       # type check
+npm test                            # unit tests: objectives in plain words, no browser, no model
+npm run test:e2e                    # build, then the regression suite on the real model and WebGPU
 ./scripts/gpu.sh node <script>      # smoke scripts: up to 3 in parallel, one test profile each
-node bench/compare.mjs 5            # extension vs native LiteRT-LM, interleaved
-node bench/determinism.mjs          # temperature-0 output vs native
+./scripts/gpu.sh node bench/compare.mjs 5            # extension vs native LiteRT-LM, interleaved
+./scripts/gpu.sh node bench/determinism.mjs          # temperature-0 output vs native
 ```
 
 Chromium 156 ignores `--load-extension`, so `tests/harness.mjs` loads the extension over CDP. Playwright

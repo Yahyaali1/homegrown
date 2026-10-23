@@ -7,7 +7,7 @@ import { execSync } from 'node:child_process';
 import { chromium } from '@playwright/test';
 
 export const ROOT = path.resolve(import.meta.dirname, '..');
-export const EXT = path.join(ROOT, 'extension');
+export const EXT = path.join(ROOT, 'extension'); // built by npm run build (ADR-12)
 
 // Serves `dir` with Range support. `cutAt` aborts the response after N bytes to simulate a dropped download.
 export function serve(dir, { cutAt } = {}) {

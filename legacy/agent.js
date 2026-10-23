@@ -197,7 +197,7 @@ async function attach(id) {
 
 function showWorkflow(wf) {
   workflow = wf;
-  $('#planner').textContent = wf.planner === 'gemma' ? 'planned by Gemma' : wf.planner ? 'from a template' : '';
+  $('#planner').textContent = ({ model: 'planned by the model', template: 'from a template', 'shopping sense': 'shopping sense' })[wf.planner] ?? '';
   renderBrief();
   renderSteps();
   $('#workflow').hidden = false;
