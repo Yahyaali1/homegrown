@@ -719,3 +719,70 @@ test('image generation @slow: a prompt becomes an image on this device, with pro
   await expect(card.getByRole('button', { name: 'Regenerate' })).toBeVisible();
   await page.close();
 });
+
+test('palette: with text selected, selection actions come first; the ❀ button opens it as a menu above itself', async () => {
+  const page = await openPage('article.html');
+  await dragSelect(page, page, '#p1');
+  await page.keyboard.press('Alt+KeyK');
+  await expect(ui(page).locator('.pal input')).toBeFocused();
+  await expect(ui(page).locator('.pal .ctx')).toContainText('Selection: “Honeybees tell');
+  await expect(ui(page).locator('.pal li.h').first()).toHaveText('Selection');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(5, 5); // drop the selection
+  await ui(page).locator('.fab').click();
+  const pal = ui(page).locator('.pal-back.anchored .pal');
+  await expect(pal).toBeVisible();
+  const [fab, box] = await Promise.all([ui(page).locator('.fab').boundingBox(), pal.boundingBox()]);
+  expect(box.y + box.height).toBeLessThanOrEqual(fab.y); // the menu sits above the button
+  await page.close();
+});
+
+test('palette: "Mission: …" starts a mission and opens Mission control on it; saved missions are listed', async () => {
+  await sw.evaluate(() => self.bgHandlers.missionSave({ mission: { id: 'pal-test', name: 'Weekly bee books', goal: 'Find the best bee book', steps: [{ type: 'search', query: 'bee book', n: 8 }, { type: 'answer', question: 'Which?' }] } }));
+  const page = await openPage('article.html');
+  await page.keyboard.press('Alt+KeyK');
+  await expect(ui(page).locator('.pal input')).toBeFocused();
+  await expect(ui(page).locator('.pal')).toContainText('Weekly bee books'); // under Saved missions
+  await page.keyboard.type('cheapest bee book');
+  const opened = ctx.waitForEvent('page');
+  await ui(page).locator('.pal li[role=option]').filter({ hasText: 'Mission: cheapest bee book' }).click();
+  const mc = await opened;
+  await expect(mc).toHaveURL(/agent\.html\?run=/);
+  await expect(mc.locator('#goal')).toHaveValue('cheapest bee book');
+  await sw.evaluate(async () => {
+    for (const m of await self.bgHandlers.missionsLive()) await self.bgHandlers.agentCancel({ runId: m.id });
+    await self.bgHandlers.missionDelete({ id: 'pal-test' });
+  });
+  await Promise.all([mc.close(), page.close()]);
+});
+
+test('jargon lens: nothing shows without Alt, and pointing at the same word again doesn\'t ask the model twice', async () => {
+  const page = await openPage('article.html');
+  const at = await page.evaluate(() => {
+    const t = document.querySelector('#p1').firstChild;
+    const r = document.createRange();
+    const i = t.data.indexOf('nestmates');
+    r.setStart(t, i + 2);
+    r.setEnd(t, i + 3);
+    const b = r.getBoundingClientRect();
+    return { x: b.left + 1, y: b.top + b.height / 2 };
+  });
+  const tip = ui(page).locator('.eg-tip');
+  await page.mouse.move(at.x, at.y);
+  await page.waitForTimeout(600);
+  await expect(tip).toBeHidden(); // no Alt, no tooltip
+  await page.keyboard.down('Alt');
+  await page.waitForTimeout(500);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.move(at.x + 1, at.y);
+  await expect(tip).toContainText('—', { timeout: 60000 });
+  const first = await tip.innerText();
+  await page.keyboard.up('Alt');
+  await page.keyboard.down('Alt');
+  await page.waitForTimeout(500);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.move(at.x + 1, at.y);
+  await expect(tip).toHaveText(first, { timeout: 2000 }); // the cached definition at once: no second model call
+  await page.keyboard.up('Alt');
+  await page.close();
+});

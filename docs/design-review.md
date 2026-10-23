@@ -77,7 +77,7 @@ changed because of the argument). The last section maps each user-visible featur
 | Writing (proofread, replace) | "writing: Proofread fixes a text box…" | e2e |
 | Ghost text | "ghost text: after a pause…" | e2e |
 | Reply pill | "reply pill: a compose box…" | e2e |
-| Jargon lens | "jargon lens: holding Alt…" | e2e |
+| Jargon lens | "jargon lens: holding Alt…", "jargon lens: nothing shows without Alt…" | e2e |
 | Form helper | "form helper: suggests values…" | e2e |
 | Mind map, quiz, flashcards, podcast, long-page Q&A | "mind map…"; `reading.test.ts` | e2e, unit |
 | Translation | "translate: a selection translated into French…"; `reading.test.ts` (numbered lines) | e2e, unit |
@@ -86,7 +86,7 @@ changed because of the argument). The last section maps each user-visible featur
 | Compare and tidy tabs | "compare tabs…"; `html.test.ts` (JSON from the model) | e2e, unit |
 | Highlights, memory, "changed since" | "highlights…"; `compare.test.ts` | e2e, unit |
 | Library | "library: answers from pages are in History…" | e2e |
-| Palette | "palette: Alt+K finds an action…", "palette: a typed question becomes Ask…"; `reading.test.ts` (fuzzy match) | e2e, unit |
+| Palette | "palette: Alt+K finds an action…", "palette: a typed question becomes Ask…", "palette: with text selected…", "palette: Mission: … starts a mission…"; `reading.test.ts` (fuzzy match) | e2e, unit |
 | Price chips, price memory | "a product page gets price chips…" | e2e |
 | Reader (PDF, ePub, DOCX) | "text action: Translate a selection from a PDF"; `zip.test.ts` | e2e, unit |
 | Engine lanes and context fitting | `engine.test.ts` | unit |
