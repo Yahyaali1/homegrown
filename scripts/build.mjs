@@ -20,9 +20,7 @@ await Promise.all([
     ...common, format: 'esm', splitting: true, outdir: 'extension', chunkNames: 'chunks/[name]-[hash]', plugins: [legacy],
     entryPoints: {
       background: 'src/background/main.ts',
-      'bg/agent': 'src/background/missions.ts',
-      'bg/engine': 'src/background/engine.ts',
-      'bg/pagesend': 'src/background/pagesend.ts',
+      'bg/engine': 'src/background/engine.ts', // the side panel reads TASKS from it until it's ported
       actions: 'src/shared/actions.ts',
       models: 'src/compat/models.ts',
     },

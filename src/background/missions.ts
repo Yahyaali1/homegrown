@@ -3,7 +3,7 @@
 // Several missions run at once; each can be attached to, and a nudge says when one ends unwatched.
 // Built to bg/agent.js and keeps that module's handlers, messages and storage keys (ADR-11).
 import { ask as engineAsk } from './engine.ts';
-import { handlers as web } from '/bg/web.js';
+import { search as webSearch } from './web.ts';
 import { toTab } from './pagesend.ts';
 import { plan } from '../domain/mission/plan.ts';
 import { runMission, runWorkflow, Stopped } from '../domain/mission/runner.ts';
@@ -97,7 +97,7 @@ function portsFor(runId: string, run: Run): MissionPorts {
     ask,
     // The tab engines first; the service worker's own fetch last (engines often challenge it, but it needs no tab).
     engines: ENGINES.length + 1,
-    search: (q, n, e) => (ENGINES[e] ? searchInTab(q, n, run, ENGINES[e]) : web.search({ q, n })),
+    search: (q, n, e) => (ENGINES[e] ? searchInTab(q, n, run, ENGINES[e]) : webSearch({ q, n })),
     readPage: (url, terms) => readInTab(url, run, terms),
     progress: (event) => say(runId, event),
     signal: run.stop.signal,

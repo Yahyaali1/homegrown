@@ -5,17 +5,25 @@ import { MODELS } from '../domain/model.ts';
 import { ensureEngine, engine, modelFor } from './engine.ts';
 import { toTab, injectInto } from './pagesend.ts';
 import * as missions from './missions.ts';
-// Feature modules (BackgroundModule): handlers become bg commands; init, menus and onAnswer are optional hooks.
-import * as reader from '/bg/reader.js';
-import * as web from '/bg/web.js';
-import * as capture from '/bg/capture.js';
-import * as tabs from '/bg/tabs.js';
-import * as monitors from '/bg/monitors.js';
-import * as memory from '/bg/memory.js';
-import * as livecaptions from '/bg/livecaptions.js';
+import * as reader from './reader.ts';
+import * as web from './web.ts';
+import * as capture from './capture.ts';
+import * as tabs from './tabs.ts';
+import * as monitors from './monitors.ts';
+import * as memory from './memory.ts';
+import * as livecaptions from './livecaptions.ts';
 
 type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
-const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions as BackgroundModule];
+/** A feature module: its handlers become bg commands; the hooks are optional. */
+interface BackgroundModule {
+  handlers?: Record<string, Handler>;
+  init?(): void;
+  /** Adds its own right-click items (the menu is rebuilt from scratch). */
+  menus?(): void;
+  /** Called after every answer to a page request. */
+  onAnswer?(req: unknown, result: { text: string }, sender?: chrome.runtime.MessageSender): unknown;
+}
+const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions];
 const handlers: Record<string, Handler> = Object.assign({}, ...modules.map((m) => m.handlers ?? {}));
 // The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
 handlers.toPage = async ({ msg }: { msg: object }) => {
