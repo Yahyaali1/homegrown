@@ -90,7 +90,13 @@ changed because of the argument). The last section maps each user-visible featur
 | Price chips, price memory | "a product page gets price chips…" | e2e |
 | Reader (PDF, ePub, DOCX) | "text action: Translate a selection from a PDF"; `zip.test.ts` | e2e, unit |
 | Engine lanes and context fitting | `engine.test.ts` | unit |
-| YouTube | `reading.test.ts` (captions, transcript) | unit only: needs youtube.com |
-| Search answers, research, claim checks | `cite.test.ts`, `html.test.ts` | unit only: need the live web |
-| Voice, read aloud, live captions | `audio.test.ts`, `reading.test.ts` (sentences) | unit only: need a microphone or tab capture |
-| Image generation | none beyond the worker relay | needs a 2.4 GB model; checked by hand |
+| YouTube | "YouTube: a video summary from its captions…"; `reading.test.ts` (captions) | e2e (fake youtube.com, ADR-14), unit |
+| Answers on search pages | "search page: an answer from the results…" | e2e (fake bing.com) |
+| Deep research, claim checks | "deep research…", "claim check…"; `cite.test.ts`, `html.test.ts` | e2e (fake search and sources), unit |
+| Voice (Speak…) | "voice: Speak… records, stops after you pause…"; `audio.test.ts` | e2e (fake microphone) |
+| Live captions | "live captions: speech in the tab becomes captions…"; `audio.test.ts` | e2e (audio file in place of tab capture) |
+| Side panel: tasks, missions | "side panel tasks…", "side panel missions…" | e2e |
+| Settings: turned-off sites | "settings: a site added to turned off…" | e2e |
+| Library: flashcards, ask | "library: a due flashcard…", "library: Ask your library…" | e2e |
+| Reader: ePub | "reader: an ePub opens as its chapters…"; `zip.test.ts` | e2e, unit |
+| Image generation | the worker relay it shares with the image reader | manual: a 2.4 GB model (ADR-14) |

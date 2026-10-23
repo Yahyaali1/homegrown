@@ -17,8 +17,21 @@ test.beforeAll(async () => {
   models = await serve(path.join(ROOT, 'models'), { cutAt: 300 << 20 });
   siteA = await serve(path.join(ROOT, 'tests/fixtures'));
   siteB = await serve(path.join(ROOT, 'tests/fixtures')); // different port = different origin
-  ({ ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') }));
+  // A fake microphone that says tests/fixtures/speech.wav, and no permission prompt (ADR-14).
+  const mic = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${path.join(ROOT, 'tests/fixtures/speech.wav')}`];
+  ({ ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test'), args: mic }));
+  await fakeWeb(ctx);
 });
+
+// The outside world at its edges (ADR-14): search engines, the pages they find, and YouTube answer from fixtures.
+async function fakeWeb(context) {
+  const web = (f) => path.join(ROOT, 'tests/fixtures/web', f);
+  await context.route('https://html.duckduckgo.com/**', (r) => r.fulfill({ path: web('ddg.html') }));
+  await context.route('https://bees.test/**', (r) => r.fulfill({ path: web(`${new URL(r.request().url()).pathname.slice(1)}.html`) }));
+  await context.route('https://www.bing.com/search**', (r) => r.fulfill({ path: web('bing.html') }));
+  await context.route('https://www.youtube.com/watch**', (r) => r.fulfill({ path: web('youtube.html') }));
+  await context.route('https://www.youtube.com/api/timedtext**', (r) => r.fulfill({ path: web('captions.json'), contentType: 'application/json' }));
+}
 
 test.afterAll(async () => {
   await ctx?.close();
@@ -505,4 +518,168 @@ test('chat: "use the dark theme" proposes the change, and nothing changes until 
   await expect.poll(() => sw.evaluate(() => chrome.storage.sync.get('theme').then((s) => s.theme))).toBe('dark');
   await expect(panel.locator('html')).toHaveAttribute('data-theme', 'dark');
   await sw.evaluate(() => chrome.storage.sync.set({ theme: 'system' }));
+});
+
+// ---- features that reach the outside world, with the world faked at its edges (ADR-14) ----
+
+test('search page: an answer from the results already on the page, citing them, appears beside the results', async () => {
+  const page = await ctx.newPage();
+  await page.goto('https://www.bing.com/search?q=what+does+the+waggle+dance+tell+bees');
+  const card = ui(page).locator('.card');
+  await expect(card).toContainText('Answer: what does the waggle dance tell bees');
+  await expect(card.locator('.meta')).toContainText('From the results on this page', { timeout: 120000 });
+  console.log(`  [search] ${(await card.locator('.body').innerText()).slice(0, 160)}`);
+  await expect(card.getByRole('button', { name: 'Read top results' })).toBeVisible();
+  await page.close();
+});
+
+test('deep research: searches, reads the top pages and writes a report that cites them', async () => {
+  const page = await openPage('article.html');
+  await palette(page, 'Research');
+  const card = ui(page).locator('.card');
+  await card.getByLabel('Research question').fill('How do honeybees tell each other where food is?');
+  await card.getByRole('button', { name: 'Research' }).click();
+  await expect(card.locator('.meta')).toContainText('sources · read and summarized on this device', { timeout: 300000 });
+  const links = await card.locator('.body ol a').evaluateAll((as) => as.map((a) => a.href));
+  console.log(`  [research] ${links.length} sources · ${(await card.locator('.body').innerText()).slice(0, 140)}`);
+  expect(links.length).toBeGreaterThan(0);
+  expect(links.every((u) => u.startsWith('https://bees.test/'))).toBe(true);
+  await page.close();
+});
+
+test('claim check: a selected claim is weighed against sources and gets a one-word verdict', async () => {
+  const page = await openPage('article.html');
+  await dragSelect(page, page, '#p1');
+  await chip(page, 'Check claim');
+  const card = ui(page).locator('.card');
+  await expect(card.locator('.meta')).toContainText('sources · read and summarized', { timeout: 300000 }); // the finished line, not a progress one
+  const verdict = (await card.locator('.body').innerText()).trim();
+  console.log(`  [claim] ${verdict.slice(0, 140)}`);
+  expect(verdict).toMatch(/^\W*(Supported|Contradicted|Mixed|Unclear)/i);
+  await page.close();
+});
+
+test('YouTube: a video summary from its captions, with times that link into the video', async () => {
+  const page = await ctx.newPage();
+  await page.goto('https://www.youtube.com/watch?v=bees01');
+  await expect.poll(() => page.evaluate(() => !!document.querySelector('edge-gallery')?.shadowRoot)).toBe(true);
+  await palette(page, 'Summarize video');
+  const card = ui(page).locator('.card');
+  await expect(card.locator('.meta')).toContainText('Click a time to jump there', { timeout: 120000 });
+  console.log(`  [video] ${(await card.locator('.body').innerText()).slice(0, 160)}`);
+  expect(await card.locator('.body a[data-t]').count()).toBeGreaterThan(0);
+  await page.close();
+});
+
+test('voice: Speak… records, stops after you pause, and shows an editable transcript before anything is asked', async () => {
+  const page = await openPage('article.html');
+  await palette(page, 'Speak…');
+  const card = ui(page).locator('.card');
+  const transcript = card.getByLabel('Transcript — edit before asking');
+  await expect(transcript).toBeEnabled({ timeout: 120000 });
+  const text = await transcript.inputValue();
+  console.log(`  [voice] ${text}`);
+  expect(text).toMatch(/waggle|dance|bees/i);
+  await expect(card.getByRole('button', { name: 'Ask' })).toBeEnabled(); // nothing is sent until Ask
+  await page.close();
+});
+
+test('live captions: speech in the tab becomes captions in a bar on the page, with a transcript', async () => {
+  const page = await openPage('article.html');
+  const tabId = await sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0]?.id, page.url());
+  await sw.evaluate(([audioUrl, tabId]) => self.bgHandlers.liveStartFile({ audioUrl, tabId, task: 'transcribe' }), [`${siteA.url}/speech.wav`, tabId]);
+  const lines = ui(page).locator('.lc .lines');
+  await expect(lines).toContainText(/waggle|dance|bees/i, { timeout: 120000 });
+  console.log(`  [captions] ${await lines.innerText()}`);
+  await ui(page).getByRole('button', { name: 'Stop live captions' }).click();
+  await expect(ui(page).locator('.lc')).toHaveCount(0);
+  await page.close();
+});
+
+// ---- the pages, by behaviour ----
+
+test('settings: a site added to "turned off" loses the ❀ button, and "Turn back on" restores it', async () => {
+  const settings = await ctx.newPage();
+  await settings.goto(`chrome-extension://${id}/settings.html`);
+  await settings.fill('#site', siteA.url); // a URL is reduced to its host
+  await settings.locator('#site-form').getByRole('button').click();
+  await expect(settings.locator('#sites')).toContainText('127.0.0.1');
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/article.html`);
+  await expect.poll(() => shadow(page, (r) => !r || r.querySelector('.fab').hidden)).toBe(true);
+  await settings.getByRole('button', { name: 'Turn back on' }).click();
+  await expect.poll(() => shadow(page, (r) => r && !r.querySelector('.fab').hidden)).toBe(true);
+  await Promise.all([page.close(), settings.close()]);
+});
+
+test('library: a due flashcard shows its answer on demand, and grading it schedules it for later', async () => {
+  await sw.evaluate(() => chrome.storage.local.set({ flashcards: [{ id: 'f1', q: 'Who decoded the waggle dance?', a: 'Karl von Frisch', due: 0, interval: 1 }] }));
+  const page = await ctx.newPage();
+  await page.goto(`chrome-extension://${id}/library.html`);
+  await page.getByRole('tab', { name: 'Flashcards' }).click();
+  await expect(page.locator('#cards-count')).toHaveText('1 due of 1 cards');
+  await expect(page.locator('#card-a')).toBeHidden();
+  await page.locator('#show').click();
+  await expect(page.locator('#card-a')).toHaveText('Karl von Frisch');
+  await page.locator('[data-grade=good]').click();
+  await expect(page.locator('#cards-count')).toHaveText('0 due of 1 cards');
+  const [card] = (await sw.evaluate(() => chrome.storage.local.get('flashcards'))).flashcards;
+  expect(card.interval).toBe(2);
+  expect(card.due).toBeGreaterThan(Date.now() + 864e5);
+  await sw.evaluate(() => chrome.storage.local.remove('flashcards'));
+  await page.close();
+});
+
+test('library: "Ask your library" answers from saved pages and highlights, with sources', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`chrome-extension://${id}/library.html`);
+  await page.getByRole('tab', { name: 'Ask your library' }).click();
+  await page.fill('#ask-q', 'What do I have saved about honeybees?');
+  await page.locator('#ask-form').getByRole('button').click();
+  await expect(page.locator('#ask-sources li').first()).toBeVisible({ timeout: 120000 });
+  console.log(`  [library] ${(await page.locator('#ask-answer').innerText()).slice(0, 140)}`);
+  await page.close();
+});
+
+test('side panel tasks: ↑ moves a task within its group, and a shared list imports by pasting', async () => {
+  panel ??= await ctx.newPage();
+  await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  await panel.click('[data-tab=tasks]');
+  const text = panel.locator('.task-list').first();
+  const titles = () => text.locator('li b').allTextContents();
+  const before = await titles();
+  await panel.getByRole('button', { name: `Move ${before[1]} up` }).click();
+  await expect.poll(titles).toEqual([before[1], before[0], ...before.slice(2)]);
+  await panel.getByRole('button', { name: `Move ${before[1]} down` }).click(); // put it back
+  await expect.poll(titles).toEqual(before);
+  await panel.fill('#task-paste', JSON.stringify([{ id: 'shared-1', kind: 'text', title: 'Shared: haiku', prompt: 'Turn this into a haiku:' }]));
+  await panel.click('#task-paste-go');
+  await expect(text).toContainText('Shared: haiku');
+  await panel.getByRole('button', { name: 'Delete Shared: haiku' }).click();
+  await expect(text).not.toContainText('Shared: haiku');
+});
+
+test('side panel missions: a mission over the open tabs runs in the background and shows up as done', async () => {
+  const tabs = await Promise.all(['a', 'b', 'c'].map((s) => openPage(`shop/${s}.html`)));
+  panel ??= await ctx.newPage();
+  await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  await panel.click('[data-tab=missions]');
+  await panel.fill('#mission-goal', 'Which of these stores sells the Blue Widget Pro cheapest?');
+  await panel.check('#mission-tabs');
+  await panel.locator('#mission-form').getByRole('button').first().click();
+  const live = panel.locator('#live-list li').first();
+  await expect(live).toContainText('Which of these stores', { timeout: 30000 });
+  await expect(live.locator('svg.flower')).toHaveClass(/sprout|stage-3/, { timeout: 300000 }); // finished: grown, not growing
+  console.log(`  [panel mission] ${await live.innerText()}`);
+  await Promise.all(tabs.map((t) => t.close()));
+});
+
+test('reader: an ePub opens as its chapters, with the toolbar on the text', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`chrome-extension://${id}/reader.html?url=${encodeURIComponent(`${siteA.url}/book.epub`)}`);
+  await expect(page.locator('#doc')).toContainText('A Small Book of Bees');
+  await expect(page.locator('#doc h2')).toHaveText(['The Hive', 'The Dance']);
+  await dragSelect(page, page, '#doc section p >> nth=0');
+  await expect(ui(page).locator('.bar')).toContainText('Summarize');
+  await page.close();
 });

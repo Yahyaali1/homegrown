@@ -183,3 +183,17 @@ Each slice keeps the old module's outward contract: handler names, message shape
 | Decision | **B.** A feature is a module with one entry point, and the compiler checks every use of the page UI. The keyguard stays a separate `document_start` script, because it must run before the page's own key handlers. |
 
 Model output becomes HTML in one place, `domain/markdown.ts`, which escapes before it formats. A unit test holds it to that.
+
+### ADR-14 Testing features that depend on the outside world (written before the tests)
+
+Search answers, research, claim checks and YouTube depend on other sites. Voice depends on a microphone, and live captions on tab audio.
+
+| | |
+|---|---|
+| Option A | Leave them to unit tests of their parsing, as now. |
+| Against A | The parsing is the easy part. What breaks is the wiring: the content script waking up on the right page, the worker's fetches, messages coming back to the tab, the card rendering. |
+| Option B | Add test seams to the product: a "test mode" that swaps the search URL or the microphone. |
+| Against B | Test-only branches ship to users, and they test the seam rather than the real path. |
+| Option C | Change nothing in the product, and fake the world at its edges. Playwright answers requests to bing.com, duckduckgo.com, wikipedia.org and youtube.com with fixture pages. Chrome's fake media device plays a recorded WAV file as the microphone. The engine's existing file input (`liveStartFile`, already used for live-caption checks) stands in for tab capture. |
+| Against C | Intercepting the service worker's own requests is experimental in Playwright. If it doesn't work, research and claim checks stay untested in the browser. |
+| Decision | **C.** If interception of worker requests fails, say so and keep A for those two; don't add a seam. Image generation stays a manual check: a 2.4 GB model download in a test run costs more than the wiring risk it covers, and that wiring is shared with the image reader, which is tested. |
