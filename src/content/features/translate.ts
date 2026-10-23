@@ -39,8 +39,12 @@ async function builtin(texts: string[], to: string): Promise<string[] | null> {
     if (!from) return null;
     if (from === to) return texts;
     key = `${from}>${to}`;
+    // Only a pack that is ready (or being fetched after a click) is worth waiting for, and not for long: a create()
+    // that never settles must not stall page translation, which the local model can do meanwhile.
+    if (!translators[key] && (await Translator.availability({ sourceLanguage: from, targetLanguage: to })) !== 'available') return null;
     translators[key] ??= Translator.create({ sourceLanguage: from, targetLanguage: to });
-    const t = await translators[key]!;
+    const t = await Promise.race([translators[key]!, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+    if (!t) return null;
     return await Promise.all(texts.map((x) => t.translate(x)));
   } catch {
     delete translators[key]; // an unavailable pair, or no click to allow the download: the local model translates

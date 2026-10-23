@@ -786,3 +786,31 @@ test('jargon lens: nothing shows without Alt, and pointing at the same word agai
   await page.keyboard.up('Alt');
   await page.close();
 });
+
+test('image button: reaching an image across the text keeps its button (no stray hide timers from paragraphs)', async () => {
+  const page = await openPage('figure.html');
+  await page.locator('img').evaluate((i) => i.decode());
+  const img = await page.locator('img').boundingBox();
+  const [p1, p2] = await Promise.all(['p:nth-of-type(1)', 'p:nth-of-type(2)'].map((sel) => page.locator(sel).boundingBox()));
+  // Quickly across two paragraphs onto the image: each paragraph left behind used to start a hide timer.
+  await page.mouse.move(p1.x + 20, p1.y + p1.height / 2);
+  await page.mouse.move(p2.x + 20, p2.y + p2.height / 2, { steps: 3 });
+  await page.mouse.move(p2.x + 20, p2.y + p2.height + 30, { steps: 3 });
+  await page.mouse.move(img.x + img.width / 2, img.y + img.height / 2, { steps: 3 });
+  await page.waitForTimeout(800); // longer than the 400 ms hide delay
+  await expect(ui(page).locator('.imgbtn')).toBeVisible();
+  await page.close();
+});
+
+test('translate page: a Spanish page gets English side by side, even when Chrome\'s own translator never answers', async () => {
+  const page = await openPage('es.html');
+  await page.waitForTimeout(1600); // the page language is read
+  await palette(page, 'Translate page');
+  await expect.poll(() => page.locator('[data-eg-translation]').count(), { timeout: 150000 }).toBeGreaterThanOrEqual(3);
+  console.log(`  [bilingual] ${(await page.locator('[data-eg-translation]').first().innerText()).slice(0, 100)}`);
+  await ui(page).locator('.trbar [data-mode=translation]').click();
+  await expect(page.locator('[data-eg-src]:not([data-eg-inside])').first()).toBeHidden(); // "Translation" hides the original
+  await ui(page).getByRole('button', { name: 'Stop translating' }).click();
+  await expect(page.locator('[data-eg-translation]')).toHaveCount(0);
+  await page.close();
+});

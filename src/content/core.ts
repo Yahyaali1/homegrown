@@ -339,7 +339,11 @@ export function start(): boolean {
     imgbtn.style.left = `${r.right + scrollX - 34}px`;
   });
   document.addEventListener('mouseout', (e) => {
-    if ((e.target as Element).closest?.('img') === hoverImg) hideTimer = setTimeout(() => (imgbtn.hidden = true), 400);
+    // Only leaving the hovered image starts the hide timer, and only one timer at a time.
+    const img = (e.target as Element).closest?.('img');
+    if (!img || img !== hoverImg) return;
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => (imgbtn.hidden = true), 400);
   });
   imgbtn.onclick = () => {
     const img = hoverImg;

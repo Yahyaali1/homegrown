@@ -48,7 +48,7 @@ export async function launch(opts = {}) {
   }
 }
 
-async function launchOnce({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [] } = {}) {
+async function launchOnce({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [], contextOptions = {} } = {}) {
   // scripts/gpu.sh runs up to 3 checks at once, each with its own copy of the test profile.
   if (process.env.EG_PROFILE && userDataDir.endsWith('.profile-test')) userDataDir = process.env.EG_PROFILE;
   const port = await new Promise((r) => {
@@ -62,6 +62,7 @@ async function launchOnce({ headless = true, userDataDir = '', offline = false, 
     offline,
     ignoreDefaultArgs: ['--disable-extensions'],
     args: ['--enable-unsafe-extension-debugging', `--remote-debugging-port=${port}`, '--enable-unsafe-webgpu', ...args],
+    ...contextOptions, // e.g. viewport and recordVideo for the demo
   });
   let sw = ctx.serviceWorkers().find((w) => w.url().endsWith('/background.js'));
   if (!sw) {
