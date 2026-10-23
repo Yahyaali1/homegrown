@@ -22,7 +22,8 @@ function termAt(x: number, y: number): { term: string; node: Node } | null {
 
 export function install(): void {
   if (location.protocol === 'chrome-extension:') return;
-  ui.style('.eg-tip { position: absolute; max-width: 320px; padding: 6px 10px; border-radius: 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: var(--shadow-menu); }');
+  // width: max-content: the UI's host has no width, so a tooltip without one would wrap after every word.
+  ui.style('.eg-tip { position: absolute; width: max-content; max-width: 320px; padding: 6px 10px; border-radius: 8px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: var(--shadow-menu); }');
   const word = h('b');
   const said = h('span');
   const tip = h('div', { className: 'eg-tip', hidden: true, attrs: { role: 'tooltip' } }, word, ' ', said);
@@ -36,6 +37,9 @@ export function install(): void {
   addEventListener('blur', () => ((altSince = 0), (tip.hidden = true)));
 
   addEventListener('mousemove', (e) => {
+    // The mouse event says whether Alt is down. The key events alone can't: an Alt released while typing in our own
+    // boxes (the palette's Alt+K) never reaches the page, which would leave the lens armed.
+    if (!e.altKey) return void ((altSince = 0), (last = ''), (tip.hidden = true));
     if (!altSince || performance.now() - altSince < 400 || !ui.enabled() || e.composedPath().includes(ui.root.host)) return;
     const hit = termAt(e.clientX, e.clientY);
     if (!hit || hit.term === last) return;

@@ -10,6 +10,11 @@ Homegrown started as a browser version of Google's [AI Edge Gallery](https://git
 (on-device models, model management, live speed stats) and grew into a full browsing assistant: the
 features paid AI extensions charge for, plus things only local compute makes affordable.
 
+<p align="center">
+  <img src="docs/demo/homegrown-demo.gif" alt="Homegrown demo: asking about a selection, the jargon lens, writing help, page translation, link checks, the image reader, mind maps and quizzes, the command palette, missions, price memory, voice, live captions, video summaries, image generation, the library and settings by chat. All on a local model." width="800">
+</p>
+<p align="center"><a href="docs/demo/homegrown-demo.mp4"><b>Watch the full demo in HD</b></a> · every clip is the real extension and local models, sped up only while the model works.</p>
+
 ## Install
 
 ```sh
@@ -257,6 +262,10 @@ npm run test:e2e                    # build, then the regression suite on the re
 ./scripts/gpu.sh node bench/compare.mjs 5            # extension vs native LiteRT-LM, interleaved
 ./scripts/gpu.sh node bench/determinism.mjs          # temperature-0 output vs native
 ```
+
+The README demo is recorded from the real extension and local models: `npm run demo:record` drives every feature on
+the small site in `demo/site` (one clip per chapter), and `npm run demo:edit` cuts the clips with title cards into
+`docs/demo/` (needs `ffmpeg` and `gifski`).
 
 Chromium 156 ignores `--load-extension`, so `tests/harness.mjs` loads the extension over CDP. Playwright
 can't click Chrome's native menus or type in the address bar; those paths are exercised through the same

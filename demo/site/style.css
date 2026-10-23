@@ -1,0 +1,30 @@
+:root { --ink: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --bg: #fff; --soft: #f5f5f7; --blue: #0071e3; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 19px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+nav { position: sticky; top: 0; display: flex; gap: 28px; align-items: center; padding: 0 max(24px, calc(50% - 480px)); height: 48px; background: rgba(255,255,255,.82); backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--line); font-size: 13px; z-index: 1; }
+nav b { font-size: 17px; letter-spacing: -.01em; margin-right: auto; }
+nav a { color: var(--ink); text-decoration: none; opacity: .8; }
+main { max-width: 760px; margin: 0 auto; padding: 48px 24px 120px; }
+.eyebrow { color: #bf4800; font-weight: 600; font-size: 15px; margin: 0 0 8px; }
+h1 { font-size: 52px; line-height: 1.07; letter-spacing: -.02em; margin: 0 0 16px; font-weight: 700; }
+.dek { font-size: 24px; line-height: 1.35; color: var(--muted); margin: 0 0 32px; }
+figure { margin: 0 0 32px; } figure img { width: 100%; border-radius: 18px; display: block; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+p { margin: 0 0 22px; }
+a { color: var(--blue); }
+.byline { font-size: 14px; color: var(--muted); margin: 0 0 28px; }
+/* mail */
+.mail { max-width: 860px; }
+.msg { border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; margin-bottom: 14px; background: var(--soft); }
+.msg .from { font-weight: 600; font-size: 15px; } .msg .when { color: var(--muted); font-size: 13px; float: right; }
+.msg p { margin: 8px 0 0; font-size: 17px; }
+textarea { width: 100%; font: 17px/1.5 inherit; font-family: inherit; color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; resize: vertical; outline: none; }
+textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(0,113,227,.15); }
+label.field { display: block; font-size: 13px; color: var(--muted); margin: 18px 0 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+/* shop */
+.product { display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; align-items: center; max-width: 1080px; margin: 0 auto; padding: 56px 24px; }
+.product img { width: 100%; border-radius: 22px; }
+.product h1 { font-size: 44px; }
+.price { font-size: 28px; font-weight: 600; margin: 8px 0 24px; }
+.buy { display: inline-block; background: var(--blue); color: #fff; border-radius: 980px; padding: 12px 26px; font-size: 17px; text-decoration: none; }
+.store { color: var(--muted); font-size: 15px; }

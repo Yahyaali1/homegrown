@@ -125,6 +125,7 @@ function translateBatch(b: number): Promise<string[]> {
         quiet: true, // subtitles translate ahead of playback: background lane
         task: { kind: 'text', prompt: `Translate each numbered subtitle line to ${lang}. Reply with the same numbers and the translations only, one per line.` },
         selection: part.map((c, i) => `${i + 1}. ${c.text}`).join('\n'),
+        config: { temperature: 0 }, // faithful, repeatable subtitles
       });
       return parseNumbered(text, part.length).map((t, i) => t || part[i]!.text); // the original where a line is missing
     }).catch(() => part.map((c) => c.text));

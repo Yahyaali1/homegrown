@@ -21,6 +21,8 @@ const nameOf = (code: string) => {
 };
 
 // ---- engine: built-in first, local model second ----
+// Translation is greedy (temperature 0): the most likely rendering, the same every time, not a creative one.
+const GREEDY = { temperature: 0 };
 let pageLang = lang(document.documentElement.lang);
 let detector: ReturnType<typeof LanguageDetector.create> | null = null;
 const translators: Record<string, Promise<TranslatorInstance>> = {};
@@ -54,7 +56,7 @@ async function builtin(texts: string[], to: string): Promise<string[] | null> {
 /** Many texts in one request: numbered lines in, numbered lines out. */
 async function local(texts: string[], to: string, quiet: boolean): Promise<string[]> {
   const prompt = `Translate each numbered line to ${nameOf(to)}. Reply with exactly the same numbers, one line each, translation only, no notes:`;
-  const { text } = await ui.generate({ task: { kind: 'text', prompt }, selection: texts.map((t, i) => `${i + 1}. ${t.replace(/\s+/g, ' ')}`).join('\n'), quiet });
+  const { text } = await ui.generate({ task: { kind: 'text', prompt }, selection: texts.map((t, i) => `${i + 1}. ${t.replace(/\s+/g, ' ')}`).join('\n'), quiet, config: GREEDY });
   return parseNumbered(text, texts.length);
 }
 /** quiet: background lane (page translation while you scroll), so your own questions go first. */
@@ -188,7 +190,7 @@ async function translateSelection(text: string, sel: Sel, rect: Rect, to: string
     let out = fast?.[0] ?? '';
     if (!fast) {
       card.body.textContent = '';
-      out = (await ui.generate({ task: { kind: 'text', prompt: `Translate the following text to ${nameOf(to)}. Reply with the translation only:` }, selection: text }, (t) => (card.body.textContent += t))).text.trim();
+      out = (await ui.generate({ task: { kind: 'text', prompt: `Translate the following text to ${nameOf(to)}. Reply with the translation only:` }, selection: text, config: GREEDY }, (t) => (card.body.textContent += t))).text.trim();
     }
     card.body.textContent = out;
     card.meta.textContent = fast ? 'Chrome built-in translator · on this device' : 'Local model · on this device';

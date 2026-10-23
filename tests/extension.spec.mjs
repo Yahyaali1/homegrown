@@ -814,3 +814,19 @@ test('translate page: a Spanish page gets English side by side, even when Chrome
   await expect(page.locator('[data-eg-translation]')).toHaveCount(0);
   await page.close();
 });
+
+test('jargon lens: after Alt+K in the palette, moving the mouse over words shows nothing', async () => {
+  const page = await openPage('article.html');
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyK');
+  await expect(ui(page).locator('.pal input')).toBeFocused();
+  await page.keyboard.up('Alt'); // released inside the palette's box, where the page never sees it
+  await page.keyboard.press('Escape');
+  const p = await page.locator('#p1').boundingBox();
+  await page.waitForTimeout(500);
+  await page.mouse.move(p.x + 40, p.y + 10, { steps: 5 });
+  await page.mouse.move(p.x + 80, p.y + 12, { steps: 5 });
+  await page.waitForTimeout(1500);
+  await expect(ui(page).locator('.eg-tip')).toBeHidden();
+  await page.close();
+});

@@ -17,7 +17,7 @@ export function serve(dir, { cutAt } = {}) {
     const file = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
     if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return res.writeHead(404).end();
     const size = fs.statSync(file).size;
-    const type = { '.html': 'text/html', '.png': 'image/png', '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json' }[path.extname(file)] || 'application/octet-stream';
+    const type = { '.html': 'text/html', '.png': 'image/png', '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.css': 'text/css', '.wav': 'audio/wav', '.svg': 'image/svg+xml', '.epub': 'application/epub+zip' }[path.extname(file)] || 'application/octet-stream';
     const m = /bytes=(\d+)-/.exec(req.headers.range || '');
     const start = m ? +m[1] : 0;
     res.writeHead(m ? 206 : 200, {

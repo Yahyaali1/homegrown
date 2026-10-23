@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; height: 100%; background: #000; color: #f5f5f7; overflow: hidden; }
+body { display: grid; place-items: center; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+.wrap { text-align: center; padding: 0 80px; }
+h1 { font-size: 92px; line-height: 1.04; letter-spacing: -0.035em; font-weight: 700; margin: 0; opacity: 0; transform: translateY(18px); animation: in 900ms cubic-bezier(.2,.7,.2,1) 150ms forwards; }
+p { font-size: 32px; line-height: 1.25; letter-spacing: -0.01em; color: #86868b; margin: 22px 0 0; font-weight: 500; opacity: 0; transform: translateY(14px); animation: in 900ms cubic-bezier(.2,.7,.2,1) 450ms forwards; }
+.grad { background: linear-gradient(90deg, #ffc53d, #ff8a3d 45%, #ff5fa2); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mark { width: 120px; height: 120px; margin: 0 auto 28px; opacity: 0; animation: in 900ms cubic-bezier(.2,.7,.2,1) forwards; }
+.mark svg { width: 100%; height: 100%; color: #f5f5f7; }
+.small { font-size: 22px; color: #6e6e73; margin-top: 30px; font-family: ui-monospace, "SF Mono", Menlo, monospace; opacity: 0; animation: in 900ms ease 800ms forwards; }
+@keyframes in { to { opacity: 1; transform: none; } }
+</style></head><body><div class="wrap" id="w"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const w = document.getElementById('w');
+const flower = q.get('mark') ? `<div class="mark">${decodeURIComponent(q.get('mark'))}</div>` : '';
+const head = (q.get('h') || '').replace(/\*(.+?)\*/g, '<span class="grad">$1</span>');
+w.innerHTML = `${flower}<h1>${head}</h1>${q.get('s') ? `<p>${q.get('s')}</p>` : ''}${q.get('small') ? `<div class="small">${q.get('small')}</div>` : ''}`;
+</script></body></html>

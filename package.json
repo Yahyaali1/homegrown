@@ -6,7 +6,9 @@
     "build": "node scripts/build.mjs",
     "check": "tsc -p .",
     "test": "node --test \"tests/unit/*.test.ts\"",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "npm run build && playwright test",
+    "demo:record": "npm run build && ./scripts/gpu.sh node demo/record.mjs",
+    "demo:edit": "node demo/edit.mjs"
   },
   "keywords": [],
   "author": "",
