@@ -1,5 +1,5 @@
 {
- "date": "2026-10-23T05:24:40.503Z",
+ "date": "2026-10-23T06:00:51.743Z",
  "set": "all",
  "passed": 38,
  "total": 38,
@@ -120,17 +120,17 @@
    "rows": 5,
    "expected": {
     "name": "Quad9 (DNS Resolver) to Exit France",
-    "value": 1081
+    "value": 1101
    },
    "got": {
     "story": "Quad9 (DNS Resolver) to Exit France",
-    "points": 1081
+    "points": 1101
    }
   },
   {
    "case": "Wikipedia: population of Iceland (infobox, footnoted number)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table+model",
    "rows": 1,
    "expected": {
@@ -148,7 +148,7 @@
   {
    "case": "quotes.toscrape: who said the first quote on the page (repeated blocks)",
    "pass": true,
-   "secs": "11",
+   "secs": "10",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -193,7 +193,7 @@
   {
    "case": "Wikipedia: elevation of Mount Everest (infobox)",
    "pass": true,
-   "secs": "5",
+   "secs": "3",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -208,7 +208,7 @@
   {
    "case": "quotes.toscrape: author of the first \"love\" quote (tag page)",
    "pass": true,
-   "secs": "16",
+   "secs": "15",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -252,7 +252,7 @@
   {
    "case": "Wikipedia: most populous city (large table)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -285,7 +285,7 @@
   {
    "case": "Local: cheapest headphones in shadow-DOM product cards",
    "pass": true,
-   "secs": "8",
+   "secs": "7",
    "via": "model",
    "rows": 4,
    "expected": {
@@ -300,7 +300,7 @@
   {
    "case": "quotes.toscrape page 2: first author",
    "pass": true,
-   "secs": "15",
+   "secs": "14",
    "via": "list",
    "rows": 10,
    "expected": {
@@ -374,7 +374,7 @@
   {
    "case": "Wikipedia: number of floors of Burj Khalifa (infobox)",
    "pass": true,
-   "secs": "5",
+   "secs": "3",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -502,7 +502,7 @@
   {
    "case": "Wikipedia: elevation of Kilimanjaro (infobox)",
    "pass": true,
-   "secs": "4",
+   "secs": "3",
    "via": "table",
    "rows": 1,
    "expected": {

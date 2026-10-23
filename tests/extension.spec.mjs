@@ -229,3 +229,65 @@ test('works offline once the model is downloaded', async () => {
     await ctx.setOffline(false);
   }
 });
+
+// ---- objectives of the rewritten pages and in-page features ----
+
+const shadow = (page, fn, arg) => page.evaluate(([f, a]) => new Function('root', 'arg', `return (${f})(root, arg)`)(document.querySelector('edge-gallery')?.shadowRoot, a), [fn.toString(), arg]);
+
+test('Mission control: a mission over three store pages shows its steps live and ranks the cheapest offer first', async () => {
+  const urls = ['a', 'b', 'c'].map((s) => `${siteA.url}/shop/${s}.html`);
+  const workflow = {
+    goal: 'Find the cheapest Blue Widget Pro', brief: null, steps: [
+      { type: 'search', query: '3 pages', n: 3, urls }, { type: 'open', limit: 3 }, { type: 'extract', fields: ['product', 'price', 'store'], require: [] },
+      { type: 'filter', field: '', op: '<', value: '' }, { type: 'rank', by: 'price', order: 'asc', keep: 3 }, { type: 'answer', question: 'Which store is cheapest?' }],
+  };
+  const { id: run } = await sw.evaluate((wf) => self.bgHandlers.missionStart({ goal: wf.goal, workflow: wf }), workflow);
+  const page = await ctx.newPage();
+  await page.goto(`chrome-extension://${id}/agent.html?run=${run}`);
+  await expect(page.locator('#steps li')).toHaveCount(6); // the plan's cards render while it runs
+  await expect(page.locator('#verdict')).toBeVisible({ timeout: 180000 });
+  const prices = await page.locator('#table tbody tr td:nth-child(3)').allTextContents();
+  const nums = prices.map((p) => parseFloat(p.replace(/[^\d.]/g, '')));
+  console.log(`  [mission] ${prices.join(' | ')} · ${await page.locator('#answer').innerText()}`);
+  expect(nums.length).toBeGreaterThanOrEqual(2);
+  expect(nums).toEqual([...nums].sort((a, b) => a - b));
+  await page.close();
+});
+
+test('palette: Alt+K finds an action by a few letters, and Escape closes it', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/article.html`);
+  await expect.poll(() => page.evaluate(() => !!document.querySelector('edge-gallery'))).toBe(true);
+  await page.keyboard.press('Alt+KeyK');
+  await page.keyboard.type('quiz');
+  await expect.poll(() => shadow(page, (r) => r.querySelector('.pal li[aria-selected=true]')?.textContent)).toContain('Quiz me');
+  expect(await shadow(page, (r) => [...r.querySelectorAll('.pal li[role=option]')].map((l) => l.textContent).join('|'))).toContain('Ask: quiz');
+  await page.keyboard.press('Escape');
+  await expect.poll(() => shadow(page, (r) => !!r.querySelector('.pal'))).toBe(false);
+  await page.close();
+});
+
+test('a switch turned off in Settings takes effect on pages that are already open', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/article.html`);
+  const settings = await ctx.newPage();
+  await settings.goto(`chrome-extension://${id}/settings.html`);
+  const box = settings.locator('[data-key=fab]');
+  await expect(box).toBeChecked();
+  await expect.poll(() => shadow(page, (r) => r && !r.querySelector('.fab').hidden)).toBe(true);
+  await box.uncheck();
+  await expect.poll(() => shadow(page, (r) => r.querySelector('.fab').hidden)).toBe(true);
+  await box.check(); // leave the profile as it was
+  await expect.poll(() => shadow(page, (r) => r.querySelector('.fab').hidden)).toBe(false);
+  await Promise.all([page.close(), settings.close()]);
+});
+
+test('a product page gets price chips, and the price goes into the local price memory', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/shop/a.html`);
+  await expect.poll(() => shadow(page, (r) => r?.querySelector('.price-chips')?.textContent ?? ''), { timeout: 15000 }).toContain('Find it cheaper');
+  const book = await sw.evaluate(async () => (await chrome.storage.local.get('priceBook')).priceBook);
+  const entry = Object.values(book).find((e) => e.name === 'Blue Widget Pro');
+  expect(entry.seen.at(-1)).toMatchObject({ price: 149.99, currency: 'USD' });
+  await page.close();
+});
