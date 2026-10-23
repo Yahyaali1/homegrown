@@ -291,3 +291,218 @@ test('a product page gets price chips, and the price goes into the local price m
   expect(entry.seen.at(-1)).toMatchObject({ price: 149.99, currency: 'USD' });
   await page.close();
 });
+
+// ---- every in-page feature that a test browser can drive ----
+// Not here, and why: YouTube (needs youtube.com), answers on search pages, research and claim checks (need the live
+// web), voice and live captions (need a microphone or tab capture), image generation (a 2.4 GB model). Their logic is
+// covered by unit tests (captions, citations, audio, reading parsers).
+
+async function openPage(file) {
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/${file}`);
+  await expect.poll(() => page.evaluate(() => !!document.querySelector('edge-gallery')?.shadowRoot)).toBe(true);
+  return page;
+}
+const ui = (page) => page.locator('edge-gallery');
+/** Clicks a toolbar chip, opening "More ▸" first when the action is behind it. */
+async function chip(page, label) {
+  const bar = ui(page).locator('.bar');
+  await expect(bar).toBeVisible();
+  if (!(await bar.getByRole('button', { name: label, exact: true }).count())) await bar.getByRole('button', { name: 'More ▸' }).click();
+  await bar.getByRole('button', { name: label, exact: true }).click();
+}
+/** Opens the palette and runs the action whose label starts with `label`. */
+async function palette(page, label) {
+  await page.keyboard.press('Alt+KeyK');
+  await page.keyboard.type(label);
+  await expect(ui(page).locator('.pal li[aria-selected=true]')).toContainText(label);
+  await page.keyboard.press('Enter');
+}
+const cardDone = async (page) => cardAnswer(page);
+async function selectField(page, sel) {
+  await page.click(sel);
+  await page.keyboard.press('ControlOrMeta+KeyA');
+  await page.keyboard.down('Shift');
+  await page.keyboard.up('Shift'); // the toolbar follows a Shift+key selection, as with the mouse
+}
+
+test('writing: Proofread fixes a text box and "Replace selection" puts the fix back', async () => {
+  const page = await openPage('links.html');
+  await selectField(page, '#box');
+  await chip(page, 'Proofread');
+  const r = await cardDone(page);
+  expect(r.err).toBe(false);
+  await ui(page).getByRole('button', { name: 'Replace selection' }).click();
+  const fixed = await page.inputValue('#box');
+  expect(fixed).not.toContain('teh');
+  expect(fixed).toMatch(/the notice/i);
+  await page.close();
+});
+
+test('ghost text: after a pause in a text box a suggestion appears, and Tab accepts it', async () => {
+  await sw.evaluate(() => chrome.storage.sync.set({ ghostText: true }));
+  const page = await openPage('form.html');
+  await page.click('#notes');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' On weekends I usually', { delay: 20 });
+  const ghost = ui(page).locator('.eg-ghost');
+  await expect(ghost).toBeVisible({ timeout: 60000 });
+  const suggestion = (await ghost.textContent()).trim();
+  await page.keyboard.press('Tab');
+  expect(await page.inputValue('#notes')).toContain(suggestion);
+  await sw.evaluate(() => chrome.storage.sync.set({ ghostText: false }));
+  await page.close();
+});
+
+test('reply pill: a compose box under a conversation offers a drafted reply to insert', async () => {
+  const page = await openPage('links.html');
+  await page.click('#reply');
+  const pill = ui(page).locator('.eg-reply');
+  await expect(pill).toBeVisible();
+  await pill.click();
+  const r = await cardDone(page);
+  expect(r.err).toBe(false);
+  await ui(page).getByRole('button', { name: 'Insert' }).click();
+  expect((await page.inputValue('#reply')).length).toBeGreaterThan(10);
+  await page.close();
+});
+
+test('jargon lens: holding Alt over a word explains it in context', async () => {
+  const page = await openPage('article.html');
+  const word = await page.evaluate(() => {
+    const p = document.querySelector('#p1');
+    const r = document.createRange();
+    const t = p.firstChild;
+    const at = t.data.indexOf('waggle');
+    r.setStart(t, at + 2);
+    r.setEnd(t, at + 3);
+    const b = r.getBoundingClientRect();
+    return { x: b.left + 1, y: b.top + b.height / 2 };
+  });
+  await page.keyboard.down('Alt');
+  await page.waitForTimeout(500);
+  await page.mouse.move(word.x, word.y);
+  await page.mouse.move(word.x + 1, word.y);
+  const tip = ui(page).locator('.eg-tip');
+  await expect(tip).toContainText('waggle');
+  await expect(tip).toContainText('—', { timeout: 60000 });
+  await page.keyboard.up('Alt');
+  await expect(tip).toBeHidden();
+  await page.close();
+});
+
+test('form helper: suggests values from notes, never for passwords or cards, and fills only on Fill', async () => {
+  const page = await openPage('form.html');
+  await palette(page, 'Help with this form');
+  const card = ui(page).locator('.card');
+  await expect(card).toContainText('Password (you fill this)');
+  await expect(card).toContainText('Card number (you fill this)');
+  await card.getByLabel('Your notes').fill('Name: Ada Lovelace. Email: ada@example.com. Password: hunter2. Card 4111 1111 1111 1111');
+  await card.getByRole('button', { name: 'Suggest values' }).click();
+  await expect(card.getByRole('button', { name: 'Fill' })).toBeVisible({ timeout: 120000 });
+  expect(await page.inputValue('#name')).toBe(''); // nothing is written before Fill
+  await card.getByRole('button', { name: 'Fill' }).click();
+  expect(await page.inputValue('#email')).toContain('ada@example.com');
+  expect(await page.inputValue('#pw')).toBe('');
+  expect(await page.inputValue('#cc')).toBe('');
+  await page.close();
+});
+
+test('mind map: a page becomes a collapsible outline', async () => {
+  const page = await openPage('article.html');
+  await palette(page, 'Mind map');
+  const map = ui(page).locator('.card .mm');
+  await expect(map).toBeVisible({ timeout: 120000 });
+  expect(await map.locator('li').count()).toBeGreaterThan(2);
+  await page.close();
+});
+
+test('translate: a selection translated into French, with Copy', async () => {
+  const page = await openPage('article.html');
+  await dragSelect(page, page, '#p1'); // a real selection, as a person makes it
+  await chip(page, 'Translate into…');
+  await ui(page).locator('.bar').getByRole('button', { name: 'French' }).click();
+  const card = ui(page).locator('.card');
+  await expect(card.locator('.actions').getByRole('button', { name: 'Copy' })).toBeVisible({ timeout: 120000 }); // the answer's own row, not the header's
+  const text = await card.locator('.body').innerText();
+  console.log(`  [fr] ${text.slice(0, 120)}`);
+  expect(text).toMatch(/\b(les|des|abeilles|la|le)\b/i);
+  await page.close();
+});
+
+test('ask about an area: drag a box, adjust it, and Esc cancels without leaving anything behind', async () => {
+  const page = await openPage('article.html');
+  await palette(page, 'Ask about an area');
+  const shade = ui(page).locator('.eg-shade');
+  await expect(shade).toBeVisible();
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(300, 220, { steps: 5 });
+  await page.mouse.up();
+  await expect(ui(page).locator('.eg-size')).toHaveText('200 × 120');
+  await expect(ui(page).getByRole('button', { name: 'Ask about this' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(shade).toHaveCount(0);
+  await page.close();
+});
+
+test('link preview: a long press warns when a link\'s text names another site, then summarizes the target', async () => {
+  const page = await openPage('links.html');
+  const box = await page.locator('#trap').boundingBox();
+  await page.mouse.move(box.x + 5, box.y + 5);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  const card = ui(page).locator('.card');
+  await expect(card).toContainText('The link text says paypal.com, but it goes to 127.0.0.1.');
+  await expect(card).toContainText('min read', { timeout: 30000 });
+  expect(page.url()).toContain('links.html'); // the click after a long press doesn't navigate
+  await page.close();
+});
+
+test('compare tabs: lists the open web tabs to pick from', async () => {
+  const other = await openPage('article.html');
+  const page = await openPage('form.html');
+  await palette(page, 'Compare tabs');
+  const pick = ui(page).locator('.tabpick');
+  await expect(pick).toContainText('Article'); // tabs are listed by their titles
+  await expect(pick).toContainText('Sign up');
+  await Promise.all([page.close(), other.close()]);
+});
+
+test('highlights: a saved highlight is marked, stored, and comes back when the page is opened again', async () => {
+  const page = await openPage('article.html');
+  await dragSelect(page, page, '#p1'); // a real selection, as a person makes it
+  await chip(page, 'Highlight');
+  await expect(page.locator('mark.eg-highlight').first()).toBeVisible();
+  await expect.poll(() => sw.evaluate((url) => self.bgHandlers.memHighlights({ url }).then((l) => l.length), page.url())).toBeGreaterThan(0);
+  await page.reload();
+  await expect(page.locator('mark.eg-highlight').first()).toBeVisible({ timeout: 10000 });
+  await page.close();
+});
+
+test('library: answers from pages are in History, and highlights are listed', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`chrome-extension://${id}/library.html`);
+  const [latest] = await sw.evaluate(() => self.bgHandlers.memHistory({ limit: 1 }));
+  expect(latest).toBeTruthy(); // earlier tests got answers on pages
+  await expect(page.locator('#history-list li').first()).toContainText(latest.ask); // newest first
+  await page.getByRole('tab', { name: 'Highlights' }).click();
+  await expect(page.locator('#highlight-groups')).toContainText('Honeybees');
+  await page.close();
+});
+
+test('chat: "use the dark theme" proposes the change, and nothing changes until Apply', async () => {
+  panel ??= await ctx.newPage();
+  await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  await panel.click('[data-tab=chat]');
+  await panel.fill('#chat-input', 'please switch to the dark theme');
+  await panel.click('#chat-send');
+  const confirm = panel.locator('.confirm');
+  await expect(confirm).toBeVisible({ timeout: 60000 });
+  expect((await sw.evaluate(() => chrome.storage.sync.get('theme'))).theme ?? 'system').not.toBe('dark');
+  await confirm.getByRole('button', { name: 'Apply' }).click();
+  await expect.poll(() => sw.evaluate(() => chrome.storage.sync.get('theme').then((s) => s.theme))).toBe('dark');
+  await expect(panel.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await sw.evaluate(() => chrome.storage.sync.set({ theme: 'system' }));
+});

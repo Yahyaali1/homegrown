@@ -3,7 +3,8 @@
 A Chrome MV3 extension that runs a local language model (Gemma 4 on WebGPU) and acts on web pages. This document
 is the map. Each decision below was argued against before it was taken (the user asked for an adversarial pass on
 every design choice). The "Against" column holds the strongest counter-argument; "Decision" says why we went ahead
-anyway, or what we changed because of it.
+anyway, or what we changed because of it. [design-review.md](design-review.md) does the same for every module, and maps
+each feature to the test that holds it.
 
 ## Layout
 

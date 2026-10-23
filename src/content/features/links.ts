@@ -31,7 +31,11 @@ export function install(): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let start: { x: number; y: number } | null = null;
   let swallow = false;
-  const linkAt = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLAnchorElement>('a[href^="http"]') ?? null;
+  // The resolved URL decides, not the attribute: relative links ("/pricing") are web links too.
+  const linkAt = (t: EventTarget | null) => {
+    const a = (t as Element | null)?.closest?.<HTMLAnchorElement>('a[href]');
+    return a && /^https?:/.test(a.href) ? a : null;
+  };
   document.addEventListener('mousedown', (e) => {
     swallow = false; // a long press released off the link leaves no click to swallow
     const a = e.button === 0 ? linkAt(e.target) : null;
