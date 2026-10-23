@@ -5,7 +5,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { serve, launch, engine, ROOT } from '../tests/harness.mjs';
-import { byName } from '../extension/models.js';
+import { modelById } from '../src/domain/model.ts';
+const byName = (id) => { const s = modelById(id); return s && { name: s.id, modelFile: s.source.file }; };
 
 const rounds = +(process.argv[2] || 5);
 const m = byName('Gemma-4-E2B-it');

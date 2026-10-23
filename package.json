@@ -6,8 +6,7 @@
     "build": "node scripts/build.mjs",
     "check": "tsc -p .",
     "test": "node --test \"tests/unit/*.test.ts\"",
-    "test:e2e": "npm run build && playwright test",
-    "vendor": "sh scripts/vendor.sh"
+    "test:e2e": "npm run build && playwright test"
   },
   "keywords": [],
   "author": "",

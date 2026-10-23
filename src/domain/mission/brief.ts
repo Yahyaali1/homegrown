@@ -1,5 +1,5 @@
 // The brief: what the user is actually asking for (docs/plan/M-smarter-missions.md).
-// Gemma reads the goal and writes a plan form; nothing here parses the user's language. This module validates the
+// The model reads the goal and writes a plan form; nothing here parses the user's language. This module validates the
 // model's form (a trust boundary), grounds it in the goal's own words, and enforces the brief on rows.
 import { columns, type Brief, type Order, type Row } from './types.ts';
 

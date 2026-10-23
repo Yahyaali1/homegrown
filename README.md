@@ -14,8 +14,7 @@ features paid AI extensions charge for, plus things only local compute makes aff
 
 ```sh
 npm install
-npm run vendor     # model runtimes and libraries into legacy/vendor
-npm run build      # TypeScript (src/) and legacy/ into extension/
+npm run build      # TypeScript (src/) and static/ into extension/
 ```
 
 Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose `extension/`.
@@ -128,7 +127,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 
 ## Design
 
-<img src="legacy/ui/flower.svg" width="48" alt="">
+<img src="static/ui/flower.svg" width="48" alt="">
 
 **Grown, not built.** Homegrown's mark is a daisy leaning left out of a pot:
 - the pot is your machine;
@@ -151,7 +150,7 @@ The same potted daisy is used everywhere, from the 16px icon to page headers.
 - **Theme:** system, light or dark.
 
 Read [docs/design-philosophy.md](docs/design-philosophy.md) for the why, and
-[docs/design-system.md](docs/design-system.md) for the tokens (`legacy/ui/tokens.css`).
+[docs/design-system.md](docs/design-system.md) for the tokens (`static/ui/tokens.css`).
 
 ## Models (all on-device)
 
@@ -247,8 +246,8 @@ developer or agent: [`docs/plan/`](docs/plan/README.md).
 
 ## Development
 
-The code is moving from plain JS (`legacy/`) to strict TypeScript (`src/`), one module at a time; see
-[docs/architecture.md](docs/architecture.md) for the layout and the decisions behind it.
+Strict TypeScript in `src/`, pure logic in `src/domain/` with unit tests; see [docs/architecture.md](docs/architecture.md)
+for the layout and the decisions behind it.
 
 ```sh
 npm run check                       # type check

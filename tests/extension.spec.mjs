@@ -5,7 +5,8 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { serve, launch, engine, ROOT } from './harness.mjs';
-import { byName } from '../extension/models.js';
+import { modelById } from '../src/domain/model.ts';
+const byName = (id) => { const s = modelById(id); return s && { name: s.id, modelFile: s.source.file }; };
 
 const m = byName('Gemma-4-E2B-it');
 let ctx, sw, id, models, siteA, siteB, panel;

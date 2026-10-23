@@ -9,23 +9,26 @@ anyway, or what we changed because of it.
 
 ```
 src/
-  domain/      pure TypeScript: no chrome.*, no DOM. Missions (brief, rows, ranking, loop decisions), products,
-               numbers, tasks, settings schema. Everything here is unit-tested.
-  shared/      types and the typed message protocol between contexts (background ⇄ offscreen ⇄ pages ⇄ content).
-  platform/    thin adapters over chrome.* and the model engine, behind small interfaces where tests need fakes.
-  background/  the service worker: composition root, message handlers, mission runner, menus, alarms.
-  offscreen/   the model engine (LiteRT-LM, transformers.js helpers) in the offscreen document.
-  content/     the in-page UI (shadow DOM) and page features.
+  domain/      pure TypeScript: no chrome.*, no DOM. Missions (brief, planning, extraction, rows, the loop), the
+               model registry, settings schema, tasks, markdown, citations, captions, parsers for the model's
+               replies, link checks, comparisons, zip reading. Everything here is unit-tested.
+  shared/      what crosses between contexts: request and message types (protocol.ts), tasks, the page model.
+  background/  the service worker: entry and handlers (main.ts), the engine client, missions wired to Chrome
+               (tabs read and search pages), web search, memory, monitors, tabs, live captions, capture, reader.
+  offscreen/   the model engine: the ModelRuntime interface and its LiteRT-LM adapter, model files in OPFS,
+               priority lanes, and transformers.js helpers (image reader, embeddings, speech, image generation).
+  content/     the in-page UI: core.ts (shadow-DOM toolbar, card, launcher) and features/*, one module each;
+               keyguard, the page reader missions inject, the YouTube caption recorder.
   pages/       extension pages: side panel, Mission control, library, settings, reader.
-  ui/          design tokens (CSS), the flower mark, the theme, a typed DOM helper.
-static/        manifest, HTML shells, CSS, icons, vendored libraries: copied as-is into extension/.
-tests/
-  unit/        node:test, domain objectives (no browser).
-  e2e/         Playwright against the built extension (extension/): user-visible objectives.
-bench/         model and extraction benchmarks (need the GPU and real models; not part of `npm test`).
+  ui/          the typed DOM helper, the flower mark, the theme.
+static/        manifest, HTML, CSS, icons: copied as-is into extension/.
+tests/unit/    node:test, objectives in plain words, no browser and no model (npm test).
+tests/*.spec   Playwright on the built extension with a real model (npm run test:e2e).
+bench/         model and extraction benchmarks (need the GPU and real models).
 ```
 
-`npm run build` → `extension/` (load this unpacked; see ADR-12 for why it isn't `dist/`). `npm run check` → type check. `npm test` → unit then e2e.
+`npm run build` → `extension/` (load this unpacked; ADR-12 says why it isn't `dist/`). `npm run check` → type check.
+`npm test` → unit tests. `npm run test:e2e` → build, then the browser suite.
 
 ## Decisions
 
@@ -154,6 +157,8 @@ How each is prepared:
 
 Each slice keeps the old module's outward contract: handler names, message shapes and storage keys. Pages and benchmarks therefore keep working while their insides change.
 
+**Outcome:** every module was ported; `legacy/` became `static/` (assets only) and `legacy.d.ts` is gone. The vendor script went too: the build copies the four runtime files libraries load by URL straight from `node_modules`.
+
 ### ADR-12 The build goes where users already load the extension from
 
 | | |
@@ -165,3 +170,15 @@ Each slice keeps the old module's outward contract: handler names, message shape
 | Option C | Build into `extension/`, the folder already loaded; the unported sources move to `legacy/`. |
 | Against C | `extension/` becomes generated (gitignored) output, which is an unusual name for a build folder. |
 | Decision | **C.** Keeping the user's data beats the naming convention. Use B when publishing to the store. |
+
+### ADR-13 In-page scripts: one bundle, features installed through a typed API
+
+| | |
+|---|---|
+| Option A | Keep 19 separate classic scripts, each typed, that find each other through a declared global `window.EG`. |
+| Against A | The coupling stays implicit: load order is the manifest's list, a feature can read anything on the global, and a misspelt member fails only at run time on some page. |
+| Option B | One bundled content script. `core` builds the page UI and exposes a typed `PageUI` object as `ui`. Each feature exports `install()`, and the entry calls them in order after the "already running here?" guard. Features that others use (the speech player, write-back targets, translation) are plain exports. |
+| Against B | One file for every frame. But all 19 files already load in every frame, so the cost is the same. The guard must run before any feature installs, because re-injection after an extension reload runs the whole bundle again. |
+| Decision | **B.** A feature is a module with one entry point, and the compiler checks every use of the page UI. The keyguard stays a separate `document_start` script, because it must run before the page's own key handlers. |
+
+Model output becomes HTML in one place, `domain/markdown.ts`, which escapes before it formats. A unit test holds it to that.

@@ -1,6 +1,7 @@
 // Service worker: keeps the offscreen engine alive, runs requests from the in-page UI over a port, owns the
 // right-click menu and shortcuts, and hands PDF and browser-page actions to the side panel. Built to background.js.
-import { DEFAULT_TASKS, getTasks, type Task } from '../shared/actions.ts';
+import { DEFAULT_TASKS, getTasks } from '../shared/actions.ts';
+import type { PageRequest } from '../shared/protocol.ts';
 import { MODELS } from '../domain/model.ts';
 import { ensureEngine, engine, modelFor } from './engine.ts';
 import { toTab, injectInto } from './pagesend.ts';
@@ -46,18 +47,6 @@ async function seedTasks(): Promise<void> {
 
 const PAGE_TEXT_IN_HISTORY = 6000; // ponytail: follow-ups keep only this much of a page or selection, so they fit the context
 
-/** A request from the in-page UI or side panel. */
-interface PageRequest {
-  task?: { kind: Task['kind']; prompt: string; title?: string };
-  question?: string;
-  selection?: string;
-  page?: { title: string; url: string; text: string };
-  image?: { src: string; alt?: string; caption?: string; context?: string };
-  history?: { role: 'user' | 'model'; text: string }[];
-  config?: Record<string, number>;
-  /** Feature-driven calls (ghost text, gists): background lane, kept out of history. */
-  quiet?: boolean;
-}
 interface EngineTurn { role: 'user'; text: string; image?: string; selection?: string }
 
 function buildTurn(req: PageRequest): EngineTurn {

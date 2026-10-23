@@ -4,7 +4,8 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { serve, launch, engine, memorySampler, ROOT } from '../tests/harness.mjs';
-import { byName } from '../extension/models.js';
+import { modelById } from '../src/domain/model.ts';
+const byName = (id) => { const s = modelById(id); return s && { name: s.id, modelFile: s.source.file }; };
 
 const name = process.argv[2] || 'Gemma-4-E2B-it';
 const m = byName(name);

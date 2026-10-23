@@ -79,3 +79,11 @@ export const hostOf = (u: string | undefined): string => {
     return '';
   }
 };
+
+/** The model's reply as one short continuation, with a space when the text before needs one. */
+export function cleanContinuation(out: string, before: string): string {
+  let t = out.split('\n').find((l) => l.trim()) ?? '';
+  t = t.replace(/^["'“]|["'”]$/g, '').trim().split(/\s+/).slice(0, 15).join(' ');
+  if (t && before && !/\s$/.test(before) && !/^[.,;:!?)]/.test(t)) t = ` ${t}`;
+  return t;
+}

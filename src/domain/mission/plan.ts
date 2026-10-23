@@ -106,3 +106,26 @@ export async function plan(ask: Ask, goal: string, context = ''): Promise<Workfl
   }
   return { goal, brief: null, steps: buildSteps(templateForm(goal), null), planner: 'template' };
 }
+
+/**
+ * After the user edits the brief in Mission control: the steps that enforce it follow (must-haves on extract, the
+ * budget as the filter, the ranking and how many on rank). Returns new steps; the workflow is not changed.
+ */
+export function stepsForBrief(steps: Step[], brief: Brief): Step[] {
+  const out = steps.map((s) => ({ ...s }));
+  const ex = out.find((s): s is Extract<Step, { type: 'extract' }> => s.type === 'extract');
+  if (!ex) return out;
+  ex.require = brief.must;
+  const price = ex.fields.find((f) => /price|cost/.test(f));
+  const fi = out.findIndex((s) => s.type === 'filter');
+  if (fi >= 0) out[fi] = brief.budget && price ? { type: 'filter', field: price, op: brief.budget.op, value: String(brief.budget.value) } : { type: 'filter', field: '', op: '<', value: '' };
+  const wanted = brief.rank;
+  const by = wanted ? (ex.fields.includes(wanted.by) ? wanted.by : ex.fields.find((f) => f.includes(wanted.by))) : undefined;
+  const ri = out.findIndex((s) => s.type === 'rank');
+  if (ri >= 0) out.splice(ri, 1);
+  if (by && wanted) {
+    const at = out.findIndex((s) => s.type === 'answer');
+    out.splice(at < 0 ? out.length : at, 0, { type: 'rank', by, order: wanted.order, keep: brief.want.kind === 'list' ? brief.want.n : 3 });
+  }
+  return out;
+}

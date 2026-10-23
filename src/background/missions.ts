@@ -119,7 +119,7 @@ async function withRun<T>(runId: string, go: (ports: MissionPorts) => Promise<T>
 // ---- live missions: several at once, each attachable, kept across a service-worker restart as summaries ----
 
 type Status = 'planning' | 'running' | 'done' | 'failed' | 'stopped';
-interface LiveMission {
+export interface LiveMission {
   id: string;
   goal: string;
   status: Status;
@@ -151,10 +151,10 @@ function persist(): void {
 }
 const badge = () => chrome.action.setBadgeText({ text: unseen.size ? String(unseen.size) : '' }).catch(() => {});
 
-/** The event as extension pages receive it (unchanged since bg/agent.js). */
+/** The event as extension pages receive it: {type: 'agent-progress', runId, …}. */
 function wire(e: MissionEvent): Record<string, unknown> {
   switch (e.kind) {
-    case 'planned': return { type: 'planned', workflow: e.workflow };
+    case 'planned': return { workflow: e.workflow };
     case 'step': { const { kind, index, ...rest } = e; return { step: index, ...rest }; }
     case 'round': { const { kind, ...rest } = e; return rest; }
   }

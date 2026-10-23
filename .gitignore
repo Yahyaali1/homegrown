@@ -4,7 +4,6 @@ models/
 ref/
 .profile-*/
 test-results/
-legacy/vendor/
 .gpu.lock/
 .gpu.lock*/
 extension/

@@ -1,7 +1,8 @@
 // Tasks: what the in-page toolbar, right-click menu and side panel offer. The live list is chrome.storage.sync
 // 'tasks' (seeded from DEFAULT_TASKS), so people edit, delete and add their own. Built to actions.js for pages.
-export type TaskKind = 'text' | 'page' | 'image';
-export interface Task { id: string; kind: TaskKind; title: string; prompt: string }
+import { parseTasks, type Task } from '../domain/tasks.ts';
+
+export { KINDS, parseTasks, type Task, type TaskKind } from '../domain/tasks.ts';
 
 const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(chrome.i18n.getUILanguage().split('-')[0] ?? 'en') ?? 'English';
 
@@ -15,19 +16,6 @@ export const DEFAULT_TASKS: Task[] = [
   { id: 'describe', kind: 'image', title: 'Describe image', prompt: 'Describe this image.' },
   { id: 'extract', kind: 'image', title: 'Extract text from image', prompt: 'Extract all the text in this image. Reply with the text only.' },
 ];
-
-export const KINDS: Record<TaskKind, string> = { text: 'Selected text', page: 'Whole page', image: 'Image' };
-
-/** Stored tasks, checked: an entry that isn't a usable task is skipped rather than breaking the menu. */
-export function parseTasks(raw: unknown): Task[] | null {
-  if (!Array.isArray(raw)) return null;
-  return raw.flatMap((t): Task[] => {
-    if (!t || typeof t !== 'object') return [];
-    const { id, kind, title, prompt } = t as Record<string, unknown>;
-    return typeof id === 'string' && (kind === 'text' || kind === 'page' || kind === 'image') && typeof title === 'string' && typeof prompt === 'string'
-      ? [{ id, kind, title, prompt }] : [];
-  });
-}
 
 export async function getTasks(): Promise<Task[]> {
   return parseTasks((await chrome.storage.sync.get('tasks')).tasks) ?? DEFAULT_TASKS;

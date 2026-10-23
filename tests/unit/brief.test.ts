@@ -65,3 +65,15 @@ test('a mission saved by an older version still runs: missing numbers get defaul
   assert.equal(wf?.planner, 'model');
   assert.equal(parseWorkflow({ goal: 'x', steps: [{ type: 'answer' }] }), null, 'nothing to search: not runnable');
 });
+
+test('editing the brief in Mission control rewrites the steps that enforce it', async () => {
+  const { stepsForBrief, buildSteps } = await import('../../src/domain/mission/plan.ts');
+  const form = parsePlanForm({ subject: 'monitor', must: ['4k'], budget: null, rank: null, how_many: 1, query: 'monitor', fields: ['product', 'price'] })!;
+  const brief = toBrief(form);
+  const steps = buildSteps(form, brief);
+  const edited = stepsForBrief(steps, { ...brief, must: ['4k', 'usb-c'], budget: { op: '<', value: 300, currency: 'USD' }, rank: { by: 'price', order: 'asc' }, want: { kind: 'list', n: 5 } });
+  assert.deepEqual(edited.find((s) => s.type === 'extract'), { type: 'extract', fields: ['product', 'price'], require: ['4k', 'usb-c'] });
+  assert.deepEqual(edited.find((s) => s.type === 'filter'), { type: 'filter', field: 'price', op: '<', value: '300' });
+  assert.deepEqual(edited.at(-2), { type: 'rank', by: 'price', order: 'asc', keep: 5 });
+  assert.equal(stepsForBrief(edited, { ...brief, rank: null }).some((s) => s.type === 'rank'), false, 'no ranking: the rank step goes');
+});
