@@ -97,7 +97,10 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 - `search.ts`
   - Exports: `research(q, rect)`, the deep-research card (`bg('research')`).
   - Page actions: "Research…" and "Related reading" (`bg('related')`).
-  - Text action: "Check claim" (selections of 15 characters or more, `bg('checkClaim')`).
+  - Text actions: "Research this" for a term (`isTerm`: 1–8 words, at most 80 characters), and "Check claim"
+    (selections of 15 characters or more, `bg('checkClaim')`). "Research this" sends `bg('researchTerm')` the
+    term, up to 300 characters either side of it from its block, and the page title; the card's meta line
+    names the query it searched.
   - Search answer: a card at `ui.topRect()` (top-right) that answers from the result snippets, with a "Read
     top results" button. It works only on Google, Bing and DuckDuckGo result pages, only in the top frame,
     and only when `searchAnswers` is on and `ui.enabled()` is true.
@@ -159,7 +162,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 - `memory.ts`: `memHighlightSave`, `memHighlights`, `memChanged`, `memSnapshot`, `memSimilar`
 - `missions.ts`: `agentOpen`, `missionSave`, `priceSeen`, `shopCheck`
 - `palette.ts`: `missionsList`, and `agentOpen` (with `tabs: true` for "Across my open tabs:")
-- `search.ts`: `research`, `related`, `checkClaim`
+- `search.ts`: `research`, `researchTerm`, `related`, `checkClaim`
 - `tabs.ts`: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`, `watchPage`
 - `voice.ts`: `transcribe`
 - `youtube.ts`: `ytCaptions`

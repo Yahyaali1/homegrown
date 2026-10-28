@@ -44,6 +44,10 @@ runtime adapters and storage live outside `domain/`.
   keeps at most 15 words.
 - `csv.ts`: `csvCell`, `toCsv(keys, rows)`. Quotes every cell and prefixes `'` to a cell that starts like a
   spreadsheet formula (`= + - @`, tab, CR) unless it is a plain number.
+- `research.ts`: `isTerm(text)` (1–8 words, at most 80 characters), `termQuery(ask, term, context, title)` and
+  `termReport` (a fixed instruction). The term, title and sentence go to the model as data, defanged; the query is the
+  reply's first line without quotes or a "Query:" label, at most 100 characters. A query that doesn't name
+  the term, or a failed call, falls back to the term plus up to 3 longer title words.
 - `zip.ts`: `Zip`, `unzip`. Reads the zip central directory and returns a lazy reader for each entry.
 - [`mission/`](./mission/README.md): planning, running, checking and revising missions through injected
   ports.
@@ -92,5 +96,5 @@ contract. Where it differs, this list says so.
 ## Verification
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
-  `reading`, `settings`, `tasks`, `zip` and `csv`, in `scrape.test.ts`)
+  `reading`, `settings`, `tasks`, `zip`, `research`, and `csv` in `scrape.test.ts`)
 - Type check: `npm run check`

@@ -116,6 +116,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Feature | How | Status |
 |---|---|---|
 | Deep research | Reads the top 6 results and writes a cited report | ✅ |
+| Research this | Select or double-click a word or phrase → **Research this**: the local model reads the sentence around it to search for the meaning *this page* uses ("waggle" → "waggle dance meaning honeybees"), reads the top results, and explains it: what it is, cited key facts, and how it relates to the page | ✅ fixture web, Gemma 4 E2B, ~10 s |
 | Check a claim, related reading | Text action / page action with sources | ✅ |
 | Answer beside search results | On Google, Bing and DuckDuckGo result pages | ✅ |
 | Compare tabs, Tidy tabs | Comparison table; named tab groups with "where was I" notes | ✅ |

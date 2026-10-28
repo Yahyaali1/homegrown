@@ -61,11 +61,15 @@ It also owns these parts:
   - Exports the `LiveMission` interface.
   - Sends `{type:'nudge', …}` to tabs when a mission ends unwatched, and when `shopCheck` finds a deal.
   - Omnibox: sets the default suggestion and runs `agentOpen({goal, run:true})` on enter.
-- `web.ts` handlers: `fetchText`, `search`, `research`, `checkClaim`, `related`, `ytCaptions`.
+- `web.ts` handlers: `fetchText`, `search`, `research`, `researchTerm`, `checkClaim`, `related`, `ytCaptions`.
+  - `researchTerm({ id, term, context, title })`: `termQuery` asks the model for a query that finds the
+    term's meaning in that sentence, then the same search and per-page notes as `research`, then a
+    `termReport`. When no page can be read, it reports from the search snippets (`fromSnippets: true`).
+    Returns `{ report, sources, query, fromSnippets }`.
   - `search` tries DuckDuckGo, then Bing, then Wikipedia. Bing results are kept only when they share a
     query word of more than 3 letters. At least 2 Bing results are needed, or it falls back to Wikipedia.
     Wikipedia is tried with the full query, then with up to 7 keywords.
-  - `research` and `checkClaim` send `{type:'web-progress', id, text}` to the asking tab.
+  - `research`, `researchTerm` and `checkClaim` send `{type:'web-progress', id, text}` to the asking tab. Page text, titles, snippets, notes, the topic and the claim reach the model as defanged data, never inside an instruction; a model error ends the run instead of being read as "page would not load".
   - `init` registers the MAIN-world content script `eg-youtube-main` for `*://*.youtube.com/*`.
 - `memory.ts` handlers: `memHistory`, `memClearHistory`, `memHighlightSave`, `memHighlights`,
   `memHighlightDelete`, `memSimilar`, `memAsk`, `memChanged`, `memSnapshot`, `memSavings`, `transcribe`.

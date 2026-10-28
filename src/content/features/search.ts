@@ -1,6 +1,7 @@
 // Web features: an answer above search results, deep research, claim checks and related reading. The heavy lifting
 // (search, fetching, per-page notes) runs in the worker (background/web.ts); this is the UI.
-import { ui, type Card, type Rect } from '../core.ts';
+import { ui, type Card, type Rect, type Sel } from '../core.ts';
+import { isTerm } from '../../domain/research.ts';
 import { h } from '../../ui/dom.ts';
 import { cited, type Source } from '../cite.ts';
 
@@ -27,6 +28,25 @@ function showReport(card: Card, { report, verdict, why, sources }: Report): void
   card.body.innerHTML = cited(report || verdict || why || '', sources); // escaped first (cite.ts)
   card.body.append(h('p', { textContent: 'Sources', style: 'font-weight:600;margin-top:8px' }), sourceList(sources));
 }
+const collapse = (s: string) => s.replace(/\s+/g, ' ');
+// Up to 300 characters either side of the selection, from the block it sits in: enough to tell which meaning.
+// The offset comes from the range itself, so a term that repeats in the block gets the right sentence.
+function around(sel: Sel): string {
+  const field = sel.target && 'field' in sel.target ? sel.target : null;
+  if (field) return collapse(field.field.value.slice(Math.max(0, field.start - 300), field.end + 300));
+  const range = sel.range;
+  if (!range) return '';
+  const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+  const block = start?.closest('p, li, td, th, dd, dt, blockquote, h1, h2, h3, h4, h5, h6, figcaption, caption, pre') ?? start;
+  if (!block) return '';
+  const before = document.createRange();
+  before.setStart(block, 0);
+  before.setEnd(range.startContainer, range.startOffset);
+  const head = collapse(before.toString());
+  const rest = collapse((block as HTMLElement).innerText ?? block.textContent ?? '').slice(head.length);
+  return `${head.slice(-300)}${rest.slice(0, collapse(sel.text).length + 300)}`.trim();
+}
+
 const failed = (card: Card, e: unknown) => ((card.body.textContent = (e as Error).message), (card.meta.textContent = ''));
 
 /** Deep research: search, read the top pages, write a cited report. */
@@ -107,6 +127,22 @@ export function install(): void {
       card.body.textContent = 'Finding related pages…';
       try {
         showReport(card, await ui.bg<Report>('related', { title: page.title, url: page.url }));
+      } catch (e) {
+        failed(card, e);
+      }
+    },
+  });
+  ui.actions.text.push({
+    label: 'Research this',
+    when: (sel) => !!sel && isTerm(sel.text),
+    run: async ({ selection, ctx, rect }) => {
+      const term = selection.trim();
+      const card = ui.openCard(`Research: ${term}`, rect);
+      card.body.textContent = 'Finding what it means here, then reading sources…';
+      try {
+        const r = await withProgress<Report & { query: string; fromSnippets: boolean }>('researchTerm', { term, context: around(ctx), title: ui.pageInfo().title }, card.meta);
+        showReport(card, r);
+        card.meta.textContent = `Searched “${r.query}” · ${r.sources.length} sources${r.fromSnippets ? ' (search snippets: the pages would not load)' : ''} · read and summarized on this device`;
       } catch (e) {
         failed(card, e);
       }

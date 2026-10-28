@@ -548,6 +548,32 @@ test('deep research: searches, reads the top pages and writes a report that cite
   await page.close();
 });
 
+test('research this: a double-clicked word is researched in the sense the page uses, with cited sources', async () => {
+  const page = await openPage('article.html');
+  const at = await page.evaluate(() => {
+    const t = document.querySelector('#p1').firstChild;
+    const r = document.createRange();
+    const i = t.textContent.indexOf('waggle');
+    r.setStart(t, i);
+    r.setEnd(t, i + 6);
+    const b = r.getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  });
+  await page.mouse.dblclick(at.x, at.y);
+  await chip(page, 'Research this');
+  const card = ui(page).locator('.card');
+  await expect(card).toContainText('Research: waggle');
+  await expect(card.locator('.meta')).toContainText('read and summarized on this device', { timeout: 300000 });
+  const meta = await card.locator('.meta').innerText();
+  console.log(`  [research this] ${meta} · ${(await card.locator('.body').innerText()).slice(0, 160)}`);
+  expect(meta).toMatch(/Searched “[^”]*waggle[^”]*”/i); // the query keeps the term…
+  expect(meta).toMatch(/Searched “[^”]*(dance|bee)[^”]*”/i); // …and takes its sense from the sentence (the fallback would be "waggle Article")
+  const links = await card.locator('.body ol a').evaluateAll((as) => as.map((a) => a.href));
+  expect(links.length).toBeGreaterThan(0);
+  expect(links.every((u) => u.startsWith('https://bees.test/'))).toBe(true);
+  await page.close();
+});
+
 test('claim check: a selected claim is weighed against sources and gets a one-word verdict', async () => {
   const page = await openPage('article.html');
   await dragSelect(page, page, '#p1');

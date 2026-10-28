@@ -24,6 +24,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | K Reading any web page (missions) | [K-page-reading.md](K-page-reading.md) | Done, checked on fixtures + live web |
 | L Mission feedback loop + design system | [L-loop-and-design.md](L-loop-and-design.md), [../design-system.md](../design-system.md) | Done, smoke-checked |
 | N Collect from pages (ScrapingBee-style rules) | [N-scrape.md](N-scrape.md) | Done: 3 review rounds, unit + browser tests |
+| O Research this (highlight a term) | [O-research-this.md](O-research-this.md) | Done: unit + real-model browser test |
 | Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Done: launcher grouped, shared fixes applied, suite 10/10 |
 
 Update the State column and each plan's "Status" section as work lands.
