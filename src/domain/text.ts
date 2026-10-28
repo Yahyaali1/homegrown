@@ -32,7 +32,7 @@ export function parseJsonObject(text: unknown): Record<string, unknown> | null {
 
 // Sentences that try to instruct the model ("ignore previous instructions…") are dropped from page text before the
 // model reads it: a page is data, not a prompt. Deterministic, so it can't be talked around.
-const INJECTION = /[^.!?\n]*\b(ignore|disregard|forget|override)\b[^.!?\n]{0,40}\b(previous|prior|above|earlier|all|any)\b[^.!?\n]{0,40}\b(instructions?|prompts?|rules?|directions?)\b[^.!?\n]*[.!?]?|[^.!?\n]*\b(you are now|system prompt|new instructions?:|as an ai|assistant:)[^.!?\n]*[.!?]?/gi;
+const INJECTION = /[^.!?\n]*\b(ignore|disregard|forget|override)\b[^.!?\n]{0,40}\b(previous|prior|above|earlier|all|any)\b[^.!?\n]{0,40}\b(instructions?|prompts?|rules?|directions?)\b[^.!?\n]*[.!?]?|[^.!?\n]*\b(you are now|system prompt|new instructions?:|as an ai\b|assistant:)[^.!?\n]*[.!?]?/gi;
 export const defang = (text: unknown): string => String(text ?? '').replace(INJECTION, ' ');
 
 /** Is a value (from the model) actually on the page? Numbers match in any common format; text by most of its words. */

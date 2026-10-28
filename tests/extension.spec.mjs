@@ -660,6 +660,16 @@ test('side panel tasks: ↑ moves a task within its group, and a shared list imp
   await expect(text).not.toContainText('Shared: haiku');
 });
 
+test('collect from pages: AI rules are filled by the local model, one call per page, only with what each item says', async () => {
+  const r = await sw.evaluate((url) => self.bgHandlers.scrapeRun({ runId: 'ai', recipe: {
+    url, extract_rules: { plants: { selector: '.card', type: 'list', output: { name: 'h2' } } },
+    ai_extract_rules: { delivery_days: { description: 'delivery time in days', type: 'number' }, in_stock: { description: 'is it in stock now', type: 'boolean' } },
+  } }), `${siteA.url}/scrape/ai.html`);
+  expect(r.ai.calls).toBe(1);
+  const got = Object.fromEntries(r.results[0].data.plants.map((p) => [p.name, [p.delivery_days, p.in_stock]]));
+  expect(got).toEqual({ Fern: [2, true], Orchid: [5, false], Cactus: [3, true] }); // the injected "0 days" never lands
+});
+
 test('side panel missions: a mission over the open tabs runs in the background and shows up as done', async () => {
   const tabs = await Promise.all(['a', 'b', 'c'].map((s) => openPage(`shop/${s}.html`)));
   panel ??= await ctx.newPage();

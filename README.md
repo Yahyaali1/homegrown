@@ -109,7 +109,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Across my open tabs | Compare the tabs you already have open, no web search | ✅ |
 | Find it cheaper / Alert me if it drops | Chips on product pages (from the page's product data) | ✅ |
 | Saved and scheduled missions | Hourly or daily, with a notification when the best result changes or crosses a value | ✅ |
-| Collect from pages (rules) | Mission control → **Collect from pages**: paste page addresses and ScrapingBee-style `extract_rules` (CSS or XPath, `@href`, item or list, nested, tables), wait for an element, follow next-page links up to 5 pages. Table, Copy JSON, formula-safe CSV, saved recipes. No model, no clicks | ✅ fixture site: 3 pages, late content, a loop back to page 1 |
+| Collect from pages (rules) | Mission control → **Collect from pages**: paste page addresses and ScrapingBee-style `extract_rules` (CSS or XPath, `@href`, item or list, nested, tables), wait for an element, follow next-page links up to 5 pages. Optional `ai_extract_rules`: the local model fills described fields in one call per page, and keeps only values found in that item's text. Table, Copy JSON, formula-safe CSV, saved recipes. No clicks | ✅ fixture site: 3 pages, late content, a loop back to page 1; AI rules on Gemma 4 E2B: 6/6 values, injected '0 days' ignored |
 | Address-bar keyword `eg` | Starts a mission from anywhere | ○ can't be typed in headless tests |
 
 ### Web, tabs and automation

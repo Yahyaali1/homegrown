@@ -39,7 +39,10 @@ The other files are separate bundles or pure helpers:
   - `readPage(opts): Promise<PageModel>`: a layered page reader. It uses JSON-LD, microdata and Open Graph,
     then Readability markdown, tables, lists and plain text.
   - `window.__hgReadPage`: the same reader, set for `chrome.scripting.executeScript`.
-  - `window.__hgScrape`: `scrape.ts` `scrape({ rules, waitFor, wait })`, bundled into the same file.
+  - `window.__hgScrape`: `scrape.ts` `scrape({ rules, waitFor, wait, ai })`, bundled into the same file. With
+    `ai: { items, selector }` it also returns `aiText`: the text of each item the item rule matched (at most
+    20, 1500 characters each), or one block for the page: the `ai_selector` element, else `main`, `[role=main]`,
+    `article` or the body (6000 characters).
 - `scrape.ts`: `extract(root, rules)`, `nextPage()`, `scrape(opts)`. Applies ScrapingBee extract rules to the
   live DOM (CSS or XPath, `text`, `html`, `@attr`, `table_json`, `table_array`, `item`/`list`, nested).
   XPath is used when `selectorType` is `xpath`, or on `auto` when the selector starts with `/`, `./` or `(`;

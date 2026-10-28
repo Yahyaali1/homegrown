@@ -62,6 +62,18 @@ test('scrape: a pagination widget labelled "Go to next page" with an arrow is fo
   expect(r.results.map((p) => new URL(p.url).pathname)).toEqual(['/scrape/aria.html', '/scrape/page2.html']);
 });
 
+test('scrape: with no model downloaded, AI rules are skipped with a note and the CSS rules still collect', async () => {
+  const r = await run({ urls: [`${site.url}/scrape/ai.html`], extract_rules: { plants: { selector: '.card', type: 'list', output: { name: 'h2' } } }, ai_extract_rules: { delivery: 'delivery time' } });
+  expect(r.results[0].data.plants.map((p) => p.name)).toEqual(['Fern', 'Orchid', 'Cactus']);
+  expect(r.results[0].aiText).toBeUndefined(); // page text stays in the worker
+  expect(r.notes.join(' ')).toContain('AI fields skipped: No model downloaded');
+  // A bad item selector with AI rules still reads the page: only that field fails.
+  const bad = await run({ urls: [`${site.url}/scrape/ai.html`], extract_rules: { title: 'h1', plants: { selector: '##bad', type: 'list', output: { name: 'h2' } } }, ai_extract_rules: { delivery: 'delivery time' } });
+  expect(bad.results[0].error).toBeUndefined();
+  expect(bad.results[0].data.title).toBe('Plants');
+  expect(bad.results[0].data._errors.plants).toContain('Bad selector');
+});
+
 test('scrape: Stop ends a run between pages', async () => {
   const r = await sw.evaluate(async (url) => {
     const going = self.bgHandlers.scrapeRun({ recipe: { urls: [url], extract_rules: { h: 'h1' }, pages: 5 }, runId: 'stop-me' });
@@ -84,6 +96,11 @@ test('scrape: Mission control collects into the table, exports safe CSV, and sav
   await page.click('#c-run');
   await expect(page.locator('#c-status')).toContainText('ScrapingBee extract_rules');
   await page.fill('#c-rules', JSON.stringify(RULES));
+  await page.fill('#c-ai', '{"when": {"description": "date", "type": "date"}}');
+  await page.click('#c-run');
+  await expect(page.locator('#c-status')).toContainText('ai_extract_rules form');
+  await page.fill('#c-ai', '');
+  await page.fill('#c-rules', JSON.stringify(RULES));
   await page.fill('#c-pages', '2');
   await page.click('#c-run');
   await expect(page.locator('#c-status')).toContainText('3 rows from 2 pages', { timeout: 60000 });
@@ -99,6 +116,8 @@ test('scrape: Mission control collects into the table, exports safe CSV, and sav
   await page.getByRole('tab', { name: 'Collect from pages' }).click();
   await expect(page.locator('#table tbody tr')).toHaveCount(3);
   await expect(page.locator('#table tr.best')).toHaveCount(0);
+  await page.fill('#c-ai', '{"when": "when it ships"}');
+  await page.fill('#c-ai-selector', 'main');
   await page.fill('#c-name', 'Plants');
   await page.click('#c-save');
   await expect(page.locator('#saved')).toContainText('Plants');
@@ -107,6 +126,8 @@ test('scrape: Mission control collects into the table, exports safe CSV, and sav
   await page.locator('#saved li', { hasText: 'Plants' }).getByRole('button', { name: 'Open' }).click();
   await expect(page.locator('#c-urls')).toHaveValue(`${site.url}/scrape/page1.html`);
   await expect(page.locator('#c-pages')).toHaveValue('2');
+  expect(JSON.parse(await page.inputValue('#c-ai'))).toEqual({ when: 'when it ships' }); // AI rules come back too
+  await expect(page.locator('#c-ai-selector')).toHaveValue('main');
 });
 
 test('Mission control: New lets go of a running mission (Run comes back, a reload does not re-attach)', async () => {

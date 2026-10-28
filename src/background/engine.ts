@@ -35,13 +35,21 @@ export async function modelFor(task: TaskId): Promise<string> {
  * One-shot generation for background features (missions, monitors, research, tab naming): returns the answer text.
  * `selection` is data after the instruction, cut to fit the context. Runs in the background lane: users go first.
  */
-export async function ask(prompt: string, selection?: string, config: Partial<Sampling> & { task?: TaskId } = {}): Promise<string> {
-  const { task = 'background', ...sampling } = config;
+export async function ask(prompt: string, selection?: string, config: Partial<Sampling> & { task?: TaskId; signal?: AbortSignal } = {}): Promise<string> {
+  const { task = 'background', signal, ...sampling } = config;
+  signal?.throwIfAborted();
+  const id = crypto.randomUUID();
+  const stop = () => void engine('cancel', { id }).catch(() => {}); // this request only, never the user's chat
+  signal?.addEventListener('abort', stop, { once: true });
   const turn = selection === undefined ? { role: 'user', text: prompt } : { role: 'user', text: prompt, selection };
   // The engine takes the sampler's old field name for the seed.
   const { seed, ...rest } = sampling;
-  const r = await engine<{ text: string }>('generate', {
-    id: crypto.randomUUID(), turns: [turn], config: { ...rest, ...(seed !== undefined && { randomSeed: seed }) }, model: await modelFor(task), priority: 'background',
-  });
-  return r.text;
+  try {
+    const r = await engine<{ text: string }>('generate', {
+      id, turns: [turn], config: { ...rest, ...(seed !== undefined && { randomSeed: seed }) }, model: await modelFor(task), priority: 'background',
+    });
+    return r.text;
+  } finally {
+    signal?.removeEventListener('abort', stop);
+  }
 }

@@ -49,7 +49,9 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     Delete (`bg('missionDelete')`).
   - It downloads the results as `mission.csv` (formula-safe, `domain/csv.ts`; the page address is the
     `source_url` column, or `_source_url` when a field has that name), copies them as JSON, and opens the best result.
-  - **Collect from pages** mode: URLs, ScrapingBee `extract_rules`, pages per URL, wait for, then wait. Runs
+  - **Collect from pages** mode: URLs, ScrapingBee `extract_rules` and optional `ai_extract_rules` (with
+    "AI reads" for `ai_selector`), pages per URL, wait for, then wait. The status line says how many values the
+    model filled and dropped. Runs
     with `bg('scrapeRun', {recipe, runId})`, shows `scrape-progress`, and keeps the pages that arrived if the
     run breaks off. Stop sends `bg('scrapeStop')`. While a run goes, the page holds a
     `chrome.runtime.connect({name: 'scrape:<runId>'})` port, so closing, reloading or leaving the page stops it. Saved recipes share the Saved list (`bg('recipesList')`,

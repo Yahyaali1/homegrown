@@ -98,8 +98,28 @@ export function nextPage(): string | null {
   return null;
 }
 
-/** The injected entry: waits as asked, then returns the rules' data and the next page. */
-export async function scrape({ rules, waitFor = '', wait = 0 }: { rules: Rules; waitFor?: string; wait?: number }) {
+/** Text for the model: one block per matched item, or one for the page (its ai selector, else the main content). */
+function aiText(rules: Rules, items: string | null, aiSelector: string): string[] {
+  const text = (n: Node | null | undefined) => tidy(n instanceof HTMLElement ? n.innerText : n?.textContent);
+  if (items) {
+    const r = rules[items]!;
+    try {
+      return select(document, r.selector, r.selectorType).slice(0, 20).map((n) => text(n).slice(0, 1500));
+    } catch {
+      return []; // a bad item selector: extract() already reported it
+    }
+  }
+  let scope: Node | null = null;
+  try {
+    scope = aiSelector ? select(document, aiSelector)[0] ?? null : null;
+  } catch {
+    scope = null; // a bad ai_selector: read the main content
+  }
+  return [text(scope ?? document.querySelector('main, [role=main], article') ?? document.body).slice(0, 6000)];
+}
+
+/** The injected entry: waits as asked, then returns the rules' data and the next page (and text for AI rules). */
+export async function scrape({ rules, waitFor = '', wait = 0, ai = null }: { rules: Rules; waitFor?: string; wait?: number; ai?: { items: string | null; selector: string } | null }) {
   if (waitFor) {
     for (let t = 0; t < 10000; t += 200) {
       try {
@@ -111,5 +131,5 @@ export async function scrape({ rules, waitFor = '', wait = 0 }: { rules: Rules; 
     }
   }
   if (wait > 0) await sleep(Math.min(wait, 10000));
-  return { url: location.href, data: extract(document, rules), next: nextPage() };
+  return { url: location.href, data: extract(document, rules), next: nextPage(), ...(ai && { aiText: aiText(rules, ai.items, ai.selector) }) };
 }

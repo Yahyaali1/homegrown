@@ -16,6 +16,7 @@ It also owns these parts:
 ## Interface
 
 - `main.ts`
+  - `ask(prompt, selection, { task, signal, …sampling })`: an abort cancels that request only.
   - The `run` port takes a `PageRequest`, `{type:'cancel'}` or `{type:'download'}`.
     - A page request first calls the engine command `ensureLoaded`, then `generate`. It streams
       `token`/`status`, then sends `done` (with `stats`, `model` and `history`) or `error`. A
@@ -137,6 +138,11 @@ It also owns these parts:
   links up to `recipe.pages`, at most 25 pages per run, one second apart when following next links, never a page twice. Closing the
   page that started it, reloading it or leaving it stops the run: the page holds a `scrape:<runId>` port. Progress goes
   out as `{type: 'scrape-progress', runId, reading | result}`.
+  - With AI rules, each page read gets `aiFill` on the Missions model (`engine.ts` `ask`, background lane):
+    one call for the page, or a few items per call. Progress says `{asking: url}` first. Stop cancels the model
+    call by its request id (`ask` takes a `signal`), and the page keeps its CSS fields. Values go into each item of the item rule, or onto the page's data. A failed call (for example, no
+    model downloaded) adds one note and the CSS rules still collect. The result carries
+    `ai: { calls, filled, dropped }`.
 
 ## Side Effects
 

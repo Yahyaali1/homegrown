@@ -39,6 +39,8 @@
       <textarea id="c-urls" rows="2" spellcheck="false" placeholder="One URL per line"></textarea>
       <label for="c-rules" class="sub">Rules <span class="muted small">ScrapingBee extract_rules, e.g. {"title": "h1", "links": {"selector": "a", "type": "list", "output": "@href"}}</span></label>
       <textarea id="c-rules" rows="6" spellcheck="false" class="code"></textarea>
+      <label for="c-ai" class="sub">AI rules <span class="muted small">optional, filled by the model on this device: ScrapingBee ai_extract_rules, e.g. {"delivery": "delivery time in days", "in_stock": {"description": "is it available", "type": "boolean"}}</span></label>
+      <textarea id="c-ai" rows="2" spellcheck="false" class="code"></textarea>
       <div class="save-row">
         <label class="muted small" for="c-pages">Pages per URL</label>
         <input id="c-pages" type="number" min="1" max="5" value="1" size="3">
@@ -46,6 +48,8 @@
         <input id="c-wait-for" placeholder="CSS selector (optional)">
         <label class="muted small" for="c-wait">then wait</label>
         <input id="c-wait" type="number" min="0" max="10" value="0" size="3"><span class="muted small">s</span>
+        <label class="muted small" for="c-ai-selector">AI reads</label>
+        <input id="c-ai-selector" placeholder="CSS selector (optional)">
         <span class="grow"></span>
         <button id="c-run" class="primary">Collect</button>
         <button id="c-stop" class="secondary" hidden>Stop</button>

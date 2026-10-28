@@ -9,7 +9,8 @@ import { parseWorkflow } from '../domain/mission/workflow.ts';
 import { columns, type Brief, type Row, type Step, type Workflow } from '../domain/mission/types.ts';
 import { hostOf } from '../domain/text.ts';
 import { toCsv } from '../domain/csv.ts';
-import { parseRecipe, parseRules, toExtractRules, toRows, type PageResult, type Recipe, type Rules } from '../domain/scrape/recipe.ts';
+import { parseAiRules, toAiExtractRules } from '../domain/scrape/ai.ts';
+import { aiClash, parseRecipe, parseRules, toExtractRules, toRows, type PageResult, type Recipe, type Rules } from '../domain/scrape/recipe.ts';
 import { bg } from '../shared/protocol.ts';
 import type { LiveMission } from '../background/missions.ts';
 import type { ScrapeResult } from '../background/scrape.ts';
@@ -455,12 +456,18 @@ const recipeFromForm = () => ({
   pages: $<HTMLInputElement>('#c-pages').value,
   wait_for: $<HTMLInputElement>('#c-wait-for').value,
   wait: Number($<HTMLInputElement>('#c-wait').value) * 1000,
+  ai_extract_rules: $<HTMLTextAreaElement>('#c-ai').value.trim(),
+  ai_selector: $<HTMLInputElement>('#c-ai-selector').value,
 });
 // Says what is wrong with the form, in words a user can act on; null when it can run.
 function recipeProblem(): string | null {
   const f = recipeFromForm();
   if (!f.urls.some((u) => /^https?:\/\//.test(u))) return 'Add at least one page address starting with http:// or https://.';
   if (!parseRules(f.extract_rules)) return 'The rules need to be JSON in ScrapingBee extract_rules form, e.g. {"title": "h1", "link": "a@href"}.';
+  const ai = f.ai_extract_rules ? parseAiRules(f.ai_extract_rules) : null;
+  if (f.ai_extract_rules && !ai) return 'The AI rules need to be JSON in ScrapingBee ai_extract_rules form, e.g. {"delivery": "delivery time in days"}; types are string, number, boolean or list.';
+  const clash = ai && aiClash(parseRules(f.extract_rules)!, ai);
+  if (clash) return `"${clash}" is both a rule and an AI rule. Give the AI field another name.`;
   return null;
 }
 function loadRecipe(r: Recipe): void {
@@ -470,15 +477,18 @@ function loadRecipe(r: Recipe): void {
   $<HTMLTextAreaElement>('#c-urls').value = r.urls.join('\n');
   $<HTMLTextAreaElement>('#c-rules').value = JSON.stringify(toExtractRules(r.rules), null, 2);
   $<HTMLInputElement>('#c-wait').value = String(r.wait / 1000);
+  $<HTMLTextAreaElement>('#c-ai').value = r.ai ? JSON.stringify(toAiExtractRules(r.ai), null, 2) : '';
+  $<HTMLInputElement>('#c-ai-selector').value = r.aiSelector;
   $<HTMLInputElement>('#c-pages').value = String(r.pages);
   $<HTMLInputElement>('#c-wait-for').value = r.waitFor;
 }
 
 let collectRun: string | null = null;
 let partial: PageResult[] = []; // pages read so far: shown if the run breaks off
-chrome.runtime.onMessage.addListener((m: { type?: string; runId?: string; reading?: string; reads?: number; result?: PageResult }) => {
+chrome.runtime.onMessage.addListener((m: { type?: string; runId?: string; reading?: string; asking?: string; reads?: number; result?: PageResult }) => {
   if (m.type !== 'scrape-progress' || m.runId !== collectRun) return;
   if (m.reading) $('#c-status').textContent = `Reading page ${m.reads}: ${hostOf(m.reading)}…`;
+  if (m.asking) $('#c-status').textContent = `The model on this device is reading ${hostOf(m.asking)}…`;
   if (m.result) partial.push(m.result);
 });
 $('#c-run').onclick = async () => {
@@ -504,6 +514,7 @@ $('#c-run').onclick = async () => {
       `${n} row${n === 1 ? '' : 's'} from ${r.reads} page${r.reads === 1 ? '' : 's'}${r.stopped ? ' (stopped)' : ''}.`,
       failed.length && `${failed.length} page${failed.length === 1 ? '' : 's'} could not be read: ${failed[0]!.error}`,
       ...fieldErrors,
+      r.ai.calls > 0 && `The model on this device filled ${r.ai.filled} value${r.ai.filled === 1 ? '' : 's'} in ${r.ai.calls} call${r.ai.calls === 1 ? '' : 's'}${r.ai.dropped ? `; ${r.ai.dropped} dropped as not on the page` : ''}.`,
       ...r.notes,
       !n && !failed.length && 'No element matched the rules. Check the selectors on one of the pages.',
     ].filter(Boolean).join(' ');

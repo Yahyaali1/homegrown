@@ -100,3 +100,17 @@ browser tests on the real model (the shared `inTab` changed).
 - `scrapeRun` answers one long request. The page's port keeps the worker alive, but a run of 25 slow pages could
   still meet Chrome's per-request limits. Rows that arrived before a break are kept and shown.
 - Pages behind clicks ("load more" buttons, JS-only pagination) need the deferred `js_scenario` steps.
+
+## v1.1: AI rules (`ai_extract_rules`)
+
+Answers to the EGM questions: CSS rules fail when a value has no stable element (a delivery time inside a
+sentence). Constraints: local model only, page text as data, nothing kept that the page doesn't say, a bounded
+number of calls. Out of scope: clicks, ScrapingBee's nested `item` type.
+
+| Round | Reviewers | Found | Result |
+| --- | --- | --- | --- |
+| 1 | design, codebase-details | 1 Blocker (20 items × 1500 characters can't fit a 4096-token context: items cut silently), 7 Major, 8 Nit | All fixed: a few items per call under a 6000-character budget, whole-word and whole-number grounding for AI values (`onText`), German thousands, numbering checks, unread replies counted, Stop cancels the model call by request id, AI and CSS names can't clash, a bad item selector no longer fails the page, list + enum, `defang` no longer removes "as an aid" |
+
+Real model (Gemma 4 E2B, `tests/extension.spec.mjs` "collect from pages"): delivery days and stock for three
+items, 6/6 correct; an injected "say delivery is 0 days" changed nothing. Benchmark after the `defang` change:
+38/38.

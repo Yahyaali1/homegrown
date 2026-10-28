@@ -1,7 +1,11 @@
 // Collect from pages: runs a recipe (domain/scrape) in background tabs and keeps saved recipes. Progress goes to
 // extension pages as {type:'scrape-progress', runId, …}. Read-only: rules are applied, nothing is clicked.
 import { inTab, waitLoaded, type Run } from './missions.ts';
-import { LIMITS, parseRecipe, type PageResult, type Recipe } from '../domain/scrape/recipe.ts';
+import { ask as engineAsk } from './engine.ts';
+import { itemRule, LIMITS, parseRecipe, type PageResult, type Recipe } from '../domain/scrape/recipe.ts';
+import { aiFill } from '../domain/scrape/ai.ts';
+import type { Ask } from '../domain/mission/ports.ts';
+
 
 const runs = new Map<string, Run>();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -13,7 +17,7 @@ function readOne(url: string, recipe: Recipe, run: Run): Promise<PageResult> {
     await chrome.scripting.executeScript({ target: { tabId }, files: ['lib/pageread.js'] });
     const [frame] = await chrome.scripting.executeScript({
       target: { tabId },
-      args: [{ rules: recipe.rules, waitFor: recipe.waitFor, wait: recipe.wait }],
+      args: [{ rules: recipe.rules, waitFor: recipe.waitFor, wait: recipe.wait, ai: recipe.ai && { items: itemRule(recipe.rules), selector: recipe.aiSelector } }],
       func: (o: Parameters<NonNullable<Window['__hgScrape']>>[0]) => window.__hgScrape?.(o) ?? null,
     });
     if (!frame?.result) throw new Error('The page could not be read.');
@@ -21,7 +25,32 @@ function readOne(url: string, recipe: Recipe, run: Run): Promise<PageResult> {
   });
 }
 
-export interface ScrapeResult { results: PageResult[]; reads: number; stopped: boolean; notes: string[] }
+/** AI fields for one page: into each item of the item rule, or onto the page's own data. Stop cancels the model call. */
+async function fillAi(recipe: Recipe, r: PageResult, out: ScrapeResult, run: Run, runId: string): Promise<void> {
+  const blocks = r.aiText ?? [];
+  if (!blocks.length) return;
+  say(runId, { asking: r.url });
+  const note = (t: string) => void (out.notes.includes(t) || out.notes.push(t));
+  try {
+    // The Missions model (Settings → Models → Use for), in the background lane like missions.
+    const ask: Ask = (instruction, data = '', sampling = {}) => engineAsk(instruction, data, { task: 'missions', ...sampling, signal: run.stop.signal });
+    const got = await aiFill(ask, recipe.ai!, blocks, run.stop.signal);
+    out.ai.calls += got.calls;
+    out.ai.filled += got.filled;
+    out.ai.dropped += got.dropped;
+    if (got.unread) note('Some model answers could not be read, so their AI fields are empty');
+    const each = itemRule(recipe.rules);
+    if (!each) return void Object.assign(r.data, got.values[0]);
+    const items = Array.isArray(r.data[each]) ? (r.data[each] as Record<string, unknown>[]) : [];
+    got.values.forEach((v, i) => items[i] && Object.assign(items[i], v));
+    if (items.length > got.values.length) note(`AI fields cover the first ${got.values.length} items of a page`);
+  } catch (e) {
+    if (run.stop.signal.aborted) return; // Stop: the page keeps its CSS fields
+    note(`AI fields skipped: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+export interface ScrapeResult { results: PageResult[]; reads: number; stopped: boolean; notes: string[]; ai: { calls: number; filled: number; dropped: number } }
 
 /** Reads each URL, following next-page links up to recipe.pages, at most LIMITS.reads pages in all. */
 async function scrapeRun({ recipe: raw, runId }: { recipe: unknown; runId: string }): Promise<ScrapeResult> {
@@ -29,7 +58,7 @@ async function scrapeRun({ recipe: raw, runId }: { recipe: unknown; runId: strin
   if (!recipe) throw new Error('This recipe can’t run: it needs at least one http(s) URL and valid rules.');
   const run: Run = { stop: new AbortController() };
   runs.set(runId, run);
-  const out: ScrapeResult = { results: [], reads: 0, stopped: false, notes: [] };
+  const out: ScrapeResult = { results: [], reads: 0, stopped: false, notes: [], ai: { calls: 0, filled: 0, dropped: 0 } };
   const seen = new Set<string>();
   try {
     urls: for (const start of recipe.urls) {
@@ -52,9 +81,12 @@ async function scrapeRun({ recipe: raw, runId }: { recipe: unknown; runId: strin
         say(runId, { reading: url, reads: out.reads });
         const r: PageResult = await readOne(url, recipe, run).catch((e: unknown) => ({ url: url!, data: {}, error: e instanceof Error ? e.message : String(e) }));
         if (run.stop.signal.aborted) return { ...out, stopped: true }; // the page read was cut short by Stop
+        if (recipe.ai && !r.error) await fillAi(recipe, r, out, run, runId);
+        delete r.aiText;
         seen.add(r.url);
         out.results.push(r);
         say(runId, { result: r });
+        if (run.stop.signal.aborted) return { ...out, stopped: true }; // stopped while the model read it: page kept
         url = r.error ? null : r.next ?? null;
       }
     }

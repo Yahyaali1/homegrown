@@ -1,4 +1,6 @@
 // Recipes: URLs plus extraction rules in ScrapingBee's extract_rules syntax, so rules copy between the two.
+import { parseAiRules, type AiRules } from './ai.ts';
+
 // Recipes come from the user, storage or a paste, so they are checked here once and the runner trusts them.
 
 export type Output = 'text' | 'html' | 'table_json' | 'table_array' | `@${string}` | Rules;
@@ -17,6 +19,10 @@ export interface Recipe {
   waitFor: string;
   /** Extra milliseconds to wait before reading (ScrapingBee wait). */
   wait: number;
+  /** Fields the local model fills (ScrapingBee ai_extract_rules), or null. */
+  ai: AiRules | null;
+  /** Where the model reads on a page without items (ScrapingBee ai_selector); empty = the main content. */
+  aiSelector: string;
 }
 
 export const LIMITS = { pages: 5, reads: 25, urls: 25, fields: 30, depth: 3, wait: 10000, recipes: 50 } as const;
@@ -73,6 +79,13 @@ export function parseRules(raw: unknown, depth = 0): Rules | null {
   return rules;
 }
 
+/** An AI field named like a CSS field would overwrite it: the top-level names, and the item rule's in item mode. */
+export function aiClash(rules: Rules, ai: AiRules): string | null {
+  const each = itemRule(rules);
+  const taken = new Set([...Object.keys(rules), ...(each ? Object.keys(rules[each]!.output as Rules) : [])]);
+  return Object.keys(ai).find((k) => taken.has(k)) ?? null;
+}
+
 const count = (v: unknown, fallback: number, max: number) => {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n >= 1 ? Math.min(n, max) : fallback;
@@ -83,6 +96,10 @@ export function parseRecipe(raw: unknown): Recipe | null {
   const r = obj(json(raw));
   if (!r) return null;
   const rules = parseRules(r.rules ?? r.extract_rules);
+  const rawAi = r.ai ?? r.ai_extract_rules;
+  const ai = rawAi == null || rawAi === '' ? null : parseAiRules(rawAi);
+  if (ai === null && !(rawAi == null || rawAi === '')) return null; // AI rules given but unusable: refuse, don't drop
+  if (ai && rules && aiClash(rules, ai)) return null;
   const list = Array.isArray(r.urls) ? r.urls : typeof r.url === 'string' ? [r.url] : [];
   const urls = [...new Set(list.map((u) => String(u).trim()).filter((u) => URL.canParse(u) && /^https?:$/.test(new URL(u).protocol)))].slice(0, LIMITS.urls);
   if (!rules || !urls.length) return null;
@@ -97,6 +114,8 @@ export function parseRecipe(raw: unknown): Recipe | null {
     pages: count(r.pages, 1, LIMITS.pages),
     waitFor: waitFor.slice(0, 200),
     wait: Math.min(Math.max(0, Math.floor(Number(r.wait)) || 0), LIMITS.wait),
+    ai,
+    aiSelector: String(r.aiSelector ?? r.ai_selector ?? '').trim().slice(0, 200),
   };
 }
 
@@ -112,20 +131,25 @@ export function toExtractRules(rules: Rules): Record<string, unknown> {
 }
 
 /** What one page gave: the rules' JSON, as ScrapingBee returns it. */
-export interface PageResult { url: string; data: Record<string, unknown>; next?: string | null; error?: string }
+export interface PageResult { url: string; data: Record<string, unknown>; next?: string | null; error?: string; aiText?: string[] }
 export type ScrapeRow = Record<string, string | number | null> & { _url: string };
 
 const cellOf = (v: unknown): string | number | null =>
   v == null ? null : typeof v === 'number' ? v : typeof v === 'string' ? v
     : Array.isArray(v) && v.every((x) => x === null || typeof x !== 'object') ? v.filter((x) => x !== null).join('; ') : JSON.stringify(v);
 
+/** The one list of nested rules, if the rules have exactly one: its items are the table's rows. */
+export function itemRule(rules: Rules): string | null {
+  const lists = Object.entries(rules).filter(([, r]) => r.type === 'list' && typeof r.output === 'object');
+  return lists.length === 1 ? lists[0]![0] : null;
+}
+
 /**
  * Rows for a table: when the rules have exactly one list of objects, each of its items is a row (with the page's
  * single values repeated); otherwise each page is one row.
  */
 export function toRows(results: PageResult[], rules: Rules): ScrapeRow[] {
-  const lists = Object.entries(rules).filter(([, r]) => r.type === 'list' && typeof r.output === 'object');
-  const each = lists.length === 1 ? lists[0]![0] : null;
+  const each = itemRule(rules);
   return results.filter((p) => !p.error).flatMap((p) => {
     const single = Object.fromEntries(Object.entries(p.data).filter(([k]) => k !== each && !k.startsWith('_')).map(([k, v]) => [k, cellOf(v)]));
     if (!each) return [{ ...single, _url: p.url } as ScrapeRow];

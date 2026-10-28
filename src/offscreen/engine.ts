@@ -31,6 +31,8 @@ const available = MODELS.filter((m) => RUNTIMES[m.runtime]);
 interface Loaded { name: string; maxTokens: number; loadMs: number; image: boolean }
 let loaded: (Loaded & { spec: ModelSpec; runtime: ModelRuntime }) | null = null;
 let current: AbortController | null = null;
+let currentId = '';
+const cancelled = new Set<string>(); // ids cancelled while still queued
 const lanes = new Lanes();
 
 const byName = (name: string) => {
@@ -104,6 +106,7 @@ async function describeForModel(id: string, turn: PageTurn): Promise<PageTurn> {
 interface GenerateRequest { id: string; turns: PageTurn[]; config?: Record<string, number>; model?: string; priority?: Lane }
 
 async function generateNow({ id, turns, config = {}, model }: GenerateRequest) {
+  if (cancelled.delete(id)) throw new DOMException('Stopped', 'AbortError');
   const m = await useModel(model);
   let imageReader: string | null = null;
   if (turns.at(-1)?.image && !m.image) {
@@ -128,6 +131,7 @@ async function generateNow({ id, turns, config = {}, model }: GenerateRequest) {
   for (;;) {
     const text = selection === undefined ? last.text : `${last.text}\n\n${selection}`;
     current = new AbortController();
+    currentId = id;
     try {
       b = await loaded!.runtime.generate([...turns.slice(0, -1).map((t) => toTurn(t)), toTurn(last, text)], sampling, onText, current.signal);
       break;
@@ -137,6 +141,7 @@ async function generateNow({ id, turns, config = {}, model }: GenerateRequest) {
       truncated = true;
     } finally {
       current = null;
+      currentId = '';
     }
   }
   const stats = { model: m.name, ...b, latencyMs: Math.round(performance.now() - t0), truncated, imageReader };
@@ -159,7 +164,12 @@ const handlers: Record<string, (msg: never) => unknown> = {
   ensureLoaded: () => lanes.schedule(ensureLoaded),
   generate: (msg: GenerateRequest) => lanes.schedule(() => generateNow(msg), msg.priority === 'background' ? 'background' : 'user'),
   queue: () => lanes.state,
-  cancel: () => current?.abort(),
+  // With an id, only that request: running → aborted, still queued → dropped when its turn comes. Without, whatever runs.
+  cancel: ({ id }: { id?: string }) => {
+    if (!id || id === currentId) return current?.abort();
+    if (cancelled.size > 200) cancelled.clear(); // ids of requests that had already finished
+    cancelled.add(id);
+  },
   ...embed.handlers,
   ...imagegen.handlers,
   ...stt.handlers,

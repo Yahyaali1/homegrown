@@ -26,7 +26,7 @@ the following:
     - `generate` (see below) → `{text, stats, userText}`. `userText` is the last turn's text without the
       selection.
     - `queue` → `Lanes.state`, `{running, user, background}`.
-    - `cancel`.
+    - `cancel({id?})`.
     - The commands from [`helpers/`](./helpers/README.md): `embed`, `generateImage`, `transcribe`,
       `liveStart`, `liveStop`, `livePause`, `ocrRegions`.
   - `generate` request, `GenerateRequest`: `{id, turns: PageTurn[], config?, model?, priority?}`.
@@ -86,7 +86,8 @@ the following:
     for a running generation, so they never swap or unload the model while it generates.
   - `status`, `download`, `pause`, `queue`, `cancel` and the helper commands do not go through the lanes.
     They can run during a generation.
-- `cancel` stops only the running generation, not the jobs in the queue.
+- `cancel` without an id stops the running generation, not the jobs in the queue. With an id it stops only
+  that request: running, it is aborted; still queued, it is dropped with an `AbortError` when its turn comes.
 - Model choice in `generate` (`useModel`): the engine loads the requested `model` only if the id is known,
   has a runtime adapter and is downloaded. In all other cases, and when no model is requested, it does not
   throw. It uses:
