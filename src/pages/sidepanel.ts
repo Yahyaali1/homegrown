@@ -524,7 +524,10 @@ function renderModels(): void {
     } else {
       actions.append(button(done ? 'Resume' : 'Download', () => {
         delete progress[s.name];
-        void act(engineCall('download', { name: s.name }));
+        void act(engineCall('download', { name: s.name }).catch((e: Error) => {
+          progress[s.name] = { done: 0, total: 0, error: e.message }; // shown on the row; the console alone hid it
+          throw e;
+        }));
         setTimeout(() => void refresh(), 300);
       }));
       if (done) actions.append(button('Delete', () => act(engineCall('remove', { name: s.name })), 'secondary'));
