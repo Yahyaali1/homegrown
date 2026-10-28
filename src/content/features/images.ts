@@ -207,8 +207,9 @@ export function install(): void {
     busy = false;
   }
   ui.onSettings((s) => {
-    if (s.autoAltText === !!observer) return;
-    if (!s.autoAltText) return void (observer?.disconnect(), (observer = null));
+    const on = s.autoAltText && ui.enabled(); // never on a site the user turned Homegrown off for
+    if (on === !!observer) return;
+    if (!on) return void (observer?.disconnect(), (observer = null));
     const obs = (observer = new IntersectionObserver((entries) => {
       for (const e of entries) {
         const img = e.target as HTMLImageElement;

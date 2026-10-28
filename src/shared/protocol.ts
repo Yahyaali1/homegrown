@@ -37,7 +37,8 @@ export async function bg<T = unknown>(cmd: string, args: Record<string, unknown>
 
 /** Calls the engine directly (embeddings, OCR), starting it first. */
 export async function engineCall<T = unknown>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
-  await chrome.runtime.sendMessage({ target: 'bg', cmd: 'ensure' });
+  const ready = await chrome.runtime.sendMessage({ target: 'bg', cmd: 'ensure' });
+  if (!ready?.ok) throw new Error(ready?.error || 'The engine could not start');
   const r = await chrome.runtime.sendMessage({ target: 'engine', cmd, ...args });
   if (!r?.ok) throw new Error(r?.error || 'The engine did not respond');
   return r.result as T;

@@ -172,7 +172,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.source === 'engine' && (msg.type === 'token' || msg.type === 'status')) streams.get(msg.id)?.postMessage({ type: msg.type, text: msg.text });
   if (msg.source === 'engine' && msg.type === 'progress') for (const p of downloads) p.postMessage(msg);
   if (msg.target === 'bg' && msg.cmd === 'ensure') {
-    ensureEngine().then(() => reply(true));
+    ensureEngine().then(() => reply({ ok: true, result: true }), (e: unknown) => reply({ ok: false, error: e instanceof Error ? e.message : String(e) }));
     return true;
   }
   const handler = msg.target === 'bg' ? handlers[msg.cmd] : undefined;

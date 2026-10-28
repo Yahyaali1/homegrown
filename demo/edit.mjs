@@ -46,7 +46,7 @@ const STORY = [
   ['title', { h: 'Homegrown', s: 'Free and open source.', small: 'github.com/Yahyaali1/homegrown', mark }],
 ];
 
-// ---- title cards: the HTML card recorded for 2.6 s ----
+// ---- title cards: the HTML card recorded (3.2 s for the first and last, 2.05 s for the rest) ----
 async function titles() {
   const b = await chromium.launch();
   const out = [];

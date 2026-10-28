@@ -164,7 +164,7 @@ export function install(): void {
     .pod p { margin: 4px 0; } .pod .now { background: var(--chip); border-radius: 6px; }
     .gist { position: absolute; width: 190px; font: italic 12px/1.35 system-ui, sans-serif; color: var(--muted); pointer-events: none; }
   `);
-  ui.onSettings((s) => s.gistMargins && window === top && mainEl().innerText.length > 6000 && startGists());
+  ui.onSettings((s) => s.gistMargins && ui.enabled() && window === top && mainEl().innerText.length > 6000 && startGists());
   ui.resultActions.push({ label: 'Mind map', run: (text) => mindMap(textReq(MAP, text)) });
   ui.actions.page.push(
     { label: 'Mind map', run: () => mindMap(pageReq(MAP)) },

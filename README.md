@@ -221,21 +221,91 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
 
 ## How it's built
 
+### System Overview
+
+Strict TypeScript in `src/`, bundled by esbuild into `extension/` (the folder Chrome loads). The extension runs in
+four Chrome contexts, and the pure logic shared between them lives in `src/domain/`:
+
 ```
-content/core.js  ── window.EG API ──  content/<feature>.js   (classic scripts in every frame)
-      │ port 'run'                         │ EG.bg(cmd)
-      ▼                                    ▼
-background.js (service worker) ────── bg/<feature>.js        (handlers, init, onAnswer, menus)
-      │ engine(cmd)
+src/content (two bundles in every frame:   ── ui: PageUI ── content/features/*  (17 features, each install())
+  content-start.js at document_start,
+  content.js at document_idle)
+      │ port 'run'  ·  bg(cmd) {target:'bg'}
       ▼
-offscreen.html (keeps models loaded) ── engine/<feature>.js  (Gemma via LiteRT-LM; Florence-2, MiniLM,
-                                                              Whisper, Janus via transformers.js)
-Pages: agent.html (Mission control), reader.html, library.html, settings.html, sidepanel.html
+src/background (service worker) ─────────── module handlers, menus, alarms, missions wired to Chrome
+      │ engine(cmd) {target:'engine'}
+      ▼
+src/offscreen (offscreen document) ──────── ModelRuntime (LiteRT-LM: Gemma) · helpers via transformers.js
+                                             (Florence-2, MiniLM, Whisper, Janus)
+src/pages: sidepanel, agent (Mission control, from mission.ts), library, settings, reader
 ```
 
-Each feature lives in its own files and plugs into small registries (`EG.actions`, `EG.resultActions`,
-`handlers`). Implementation plans, contracts and per-feature status for handing work to another
-developer or agent: [`docs/plan/`](docs/plan/README.md).
+`scripts/build.mjs` also builds three classic scripts that the diagram does not show:
+
+- `content/youtube-main.js` (`src/content/youtube-main.ts`): runs in YouTube's own page world. The worker
+  registers it for `*.youtube.com` at `document_start`.
+- `lib/pageread.js` (`src/content/pageread.ts`): the page reader. The worker injects it into pages that a
+  mission reads.
+- `ui/theme.js` (`src/ui/theme-early.ts`): applies the theme in each extension page's `<head>` before the
+  first paint.
+
+Each feature lives in its own module and plugs into small registries (`ui.actions`, `ui.resultActions`,
+worker `handlers`). The design decisions and the argument behind each are in
+[`docs/architecture.md`](docs/architecture.md) and [`docs/design-review.md`](docs/design-review.md). Older
+implementation plans: [`docs/plan/`](docs/plan/README.md).
+
+### Subdirectories & System Boundaries
+
+- `src`: [./src/README.md](./src/README.md) - the extension's TypeScript source, by runtime context:
+  - [background](./src/background/README.md) - the service worker: message handlers, the `run` port to the model, menus, alarms, missions, web search, memory (IndexedDB), monitors, tabs, live captions, image generation and screenshots (`capture.ts`), messages to tabs with content-script injection (`pagesend.ts`) and the PDF reader menus (`reader.ts`).
+  - [offscreen](./src/offscreen/README.md) - the model engine: one generation at a time in user and background lanes, model files in OPFS (`store.ts`), fitting page text into the context (`fit.ts`) and engine events to every context (`broadcast.ts`) ([runtimes](./src/offscreen/runtimes/README.md): LiteRT-LM; [helpers](./src/offscreen/helpers/README.md): image reader, embeddings, speech, image generation).
+  - [content](./src/content/README.md) - the in-page UI in a shadow root and the page reader for missions ([features](./src/content/features/README.md): the 17 feature modules).
+  - [pages](./src/pages/README.md) - side panel, Mission control (`mission.ts`, built as `agent`), library, settings, reader. `savings.ts` and `shell.ts` are shared helpers, not entry points.
+  - [domain](./src/domain/README.md) - pure logic with no `chrome.*` and no DOM ([mission](./src/domain/mission/README.md): goal to brief to workflow, and the act-check-revise loop).
+  - [shared](./src/shared/README.md) - message and port types, tasks, the page model.
+  - [ui](./src/ui/README.md) - the typed DOM helper, the flower mark, the theme.
+- `scripts`: [./scripts/README.md](./scripts/README.md) - the build (`npm run build`) and the GPU test-slot runner (`gpu.sh`).
+- `bench`: [./bench/README.md](./bench/README.md) - engine speed comparisons and the mission benchmarks (brief reading, page extraction).
+- `demo`: [./demo/README.md](./demo/README.md) - records the README demo from the real extension and cuts it into `docs/demo/`.
+- `static`: manifest, HTML, CSS and icons, copied as they are into `extension/`.
+- `tests`: unit tests (`tests/unit`, no browser), the browser suite on the real model (`extension.spec.mjs`, `harness.mjs`, configured by `playwright.config.mjs` in the repo root), the GPU typing check `typing.mjs` (run with `./scripts/gpu.sh node tests/typing.mjs`) and test pages and files in `tests/fixtures/`.
+
+### Global Invariants
+
+- Messages are routed by `target`: `'bg'` to the service worker, `'engine'` to the offscreen document. Every `bg` command replies `{ok: true, result}` or `{ok: false, error}`.
+- `src/domain` has no `chrome.*` and no DOM; missions reach the browser only through `MissionPorts`.
+- Model output and page text are untrusted. Text is escaped before it becomes HTML (`domain/markdown.ts`), model JSON is validated, and page text loses instruction-like sentences (`defang`) before the model sees it. Page text is not put in a fence.
+- One language-model generation runs at a time, and a person's request goes before background work. Model `load`, `unload`, `remove` and `ensureLoaded` wait behind a running generation in the same lanes.
+- Settings reads go through `parseSettings` (`domain/settings.ts`): a stored value of the wrong type falls back to its default. Readers: `background/engine.ts` (`modelFor`), `background/livecaptions.ts`, `content/core.ts`, `content/features/memory.ts`, `pages/settings.ts` and `pages/sidepanel.ts`.
+  - Exception: `ui/theme.ts` reads `theme` itself and checks it with its own `asTheme`.
+  - Writes are not checked against the schema. Some features write keys directly, for example `content/features/livecaptions.ts` (`captionLang`) and `content/features/voice.ts`.
+- Everything runs on this device. No model call leaves the machine.
+
+### Global Side Effects
+
+- `chrome.storage`:
+  - `sync`: settings and tasks. When there are no `tasks` yet, the worker seeds the default tasks, adds any legacy `customPrompts` as text tasks, and removes `customPrompts`.
+  - `local`: `priceBook` (price memory), `monitors`, `schedules`, `scheduledResults`, `missions` (saved missions), `flashcards`, `savings`, `tabNotes`, `captionSize` and `voiceSamples`.
+  - `session`: `liveMissions`, `pending` (a menu request handed to the side panel) and `notifUrls` (notification targets).
+- IndexedDB `eg-memory` with the stores `history`, `highlights`, `kb` (saved pages) and `snapshots`; OPFS (model files); Cache Storage (helper models).
+- Network:
+  - Model downloads from Hugging Face.
+  - Search by `fetch` in `background/web.ts`: `html.duckduckgo.com`, Bing and the Wikipedia API.
+  - Mission search: Bing, DuckDuckGo and Brave result pages opened in tabs (`background/missions.ts`).
+  - Pages that missions, research and link previews read.
+  - Monitors fetch pages with `credentials: 'include'`.
+  - The YouTube feature fetches the watch page and the timedtext captions.
+  - The reader fetches the document URL it opens.
+- Tabs and windows:
+  - Background tabs in a collapsed "Mission" group while a mission reads pages.
+  - `tidyTabs` groups the user's own tabs into new, uncollapsed groups.
+  - `chrome.tabs.captureVisibleTab` for screenshots, and `scripting.executeScript` to inject content scripts and the page reader.
+- Context menus (task menus, live captions, the PDF reader), `chrome.alarms` for monitors and schedules, and `chrome.notifications` for their results.
+- Microphone and tab audio for voice and live captions.
+
+### System Verification
+
+- Run: `npm run check` (types), `npm test` (unit tests), `npm run test:e2e` (build, then the browser suite on the real model).
 
 ## Known limits
 

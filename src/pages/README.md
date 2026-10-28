@@ -1,0 +1,118 @@
+# pages
+
+## Overview
+
+The entry scripts for the extension's own pages. `scripts/build.mjs` bundles these files:
+
+| Source | Bundle |
+|---|---|
+| `sidepanel.ts` | `sidepanel.js` |
+| `mission.ts` | `agent.js` |
+| `library.ts` | `library.js` |
+| `settings.ts` | `settings.js` |
+| `reader.ts` | `reader.js` |
+
+The pages of these scripts (`sidepanel.html`, `agent.html`, `library.html`, `settings.html` and
+`reader.html` in `static/`) load `ui/theme.js` in the `<head>`. `static/offscreen.html` is not one of them:
+it loads only `offscreen.js`.
+
+`reader.html` also loads `content-start.js`, `content.js` and `vendor/reading/mammoth.browser.min.js`
+before `reader.js`. The first two put the in-page UI on the reader, and mammoth reads DOCX files.
+
+`shell.ts` and `savings.ts` are shared helpers. The pages are thin UIs:
+
+- Models, chat, missions and memory go through the worker (`bg()` and `engineCall()`).
+- Settings, tasks and flashcards are read and written in `chrome.storage`.
+
+## Interface
+
+- `shell.ts`: `$<T>(selector)`, a `querySelector` that throws when nothing matches. Importing the module
+  also runs `markPage()`: at once if the document has already loaded, else on `DOMContentLoaded`.
+- `savings.ts`: `Savings`, `savingsLine(s, tokens?)`. The sentence for the savings meter.
+- `sidepanel.ts` (`sidepanel.html`): the side panel, and the home for everything. It imports `settings.ts`
+  and `library.ts` for their tabs. It contains:
+  - Chat, with images, Prompt Lab and sampling.
+  - `proposeSetting`, which changes a setting from chat.
+  - Right-click actions queued in `storage.session`.
+  - "This page" controls, sent to the active tab's in-page UI with `bg('toPage', {msg})`:
+    - `#page-actions` ("All actions…") sends `{type: 'launcher'}`.
+    - The task chips in `#page-tasks` send `{type: 'menu', task}` for each page task.
+  - The task editor, with import, export, copy and paste.
+  - Schedules, monitors and missions (`schedule`, `runScheduleNow`, `unschedule`, `checkNow`, `unwatch`,
+    `agentOpen`, `missionsLive`, `missionOpen`, `missionsList`, `missionDelete`).
+  - Model pickers for each task, and the model manager.
+- `mission.ts` (`agent.html`): Mission control.
+  - It plans with `bg('agentPlan')`, edits the brief and the steps, and runs with `bg('missionStart')`.
+  - It shows `agent-progress` and `agent-done`. Stop sends `bg('agentCancel', {runId})`.
+  - It attaches to a run with `bg('missionState', {id})`.
+  - It saves with `bg('missionSave')`. The saved-missions list uses `bg('missionsList')`, with Open and
+    Delete (`bg('missionDelete')`).
+  - It downloads the results as `mission.csv` and opens the best result.
+  - URL parameters: `?goal=&run=1&context=&urls=`, or `?run=<id>` to attach to a run.
+- `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
+  library", flashcard spaced repetition and the savings meter.
+- `settings.ts` (`settings.html`, and the Settings tab of the side panel):
+  - Switches: every `[data-key]` checkbox whose key is in `SWITCHES` (`domain/settings.ts`) is bound to
+    `chrome.storage.sync`. Both `settings.html` and `sidepanel.html` have a checkbox for every switch:
+    `toolbar`, `fab`, `ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `linkPreview`,
+    `useVoice`, `replyButtons`, `priceChip` (on by default) and `shoppingSense`.
+  - The `translateTo` language, sites that are turned off, and savings.
+- `reader.ts` (`reader.html`): shows a document as DOM in `#doc`, so the in-page UI works on it. Input
+  comes from a file, drag and drop, or `?url=`.
+  - PDF (pdfjs-dist): text by page.
+  - ePub: chapters in spine order.
+  - DOCX (mammoth): its HTML.
+  - MD: rendered with `markdown()`.
+  - HTML: reduced to plain-text paragraphs. It is not shown as DOM.
+  - CSV and JSON: raw text in a `<pre>`.
+  - Anything else: plain-text paragraphs.
+
+## Invariants
+
+- Each script uses `$` from `shell.ts`, so its HTML must contain every id that the script uses.
+  `settings.ts` and `library.ts` must also work inside `sidepanel.html`.
+- `ui/theme.js` applies the theme in the `<head>` before the first paint, not these modules.
+- Settings are always read through `parseSettings`. A setting changed from chat is written only after the
+  user clicks Apply, and only if `checkChoice` accepts it.
+- A switch works in a page only if that page has a `[data-key]` checkbox for it.
+- Chat history in `sidepanel.ts`:
+  - The history is kept in memory. A chat message sends all of it, plus the new turn, with `generate`.
+  - `proposeSetting` sends `generate` with only one routing turn, not the history.
+  - `runAction` (a queued right-click action) clears the history before it runs.
+  - Streams are keyed by a `crypto.randomUUID` id.
+- `ensureModel()` loads the first downloaded model when no model is loaded. It throws when no model is
+  downloaded.
+- `engineCall()` first sends the worker command `ensure`, which replies `{ok: true, result: true}` or
+  `{ok: false, error}`. `engineCall()` throws when `ensure` is not ok, and when the engine reply is not ok.
+- `mission.ts` ignores messages for a different `runId`. Missions run in the worker, and the page only
+  shows them.
+- `reader.ts` chooses the format like this:
+  - PDF by its first bytes (`%PDF`), the `.pdf` extension or a PDF MIME type.
+  - ePub by its first bytes (`PK` plus the epub mimetype), the `.epub` extension or an epub MIME type.
+  - DOCX, MD, HTML, CSV and JSON by extension (HTML also by MIME type).
+  - DOCX and HTML are parsed with `DOMParser`, so their scripts do not run. Markdown goes through
+    `markdown()`, which escapes first.
+- Links are clickable only for `http(s)` URLs (`library.ts` also allows `file:`). Other URLs become `#`.
+
+## Side Effects
+
+- `chrome.storage`:
+  - `sync`: the switches, `translateTo`, `disabledSites`, `tasks`, `taskVars`, `taskModels`.
+  - `local`: `flashcards` (read and written). `schedules`, `scheduledResults` and `monitors` are read and
+    watched. `missions` is only watched; the list comes from `bg('missionsList')`.
+  - `session`: `pending` actions (read and removed) and `liveMissions` (watched).
+- Worker messages through `bg()`: memory, missions, schedules, monitors and `toPage`. Engine messages
+  through `engineCall()` (`status`, `load`, `generate`, `cancel`, `download`, `pause`, `remove`).
+- Listens for engine broadcasts and for `agent-progress` and `agent-done`.
+- Writes `localStorage.tab` and calls `history.replaceState`.
+- Fetches images and documents, using the extension's host permissions.
+- File pickers and drag and drop.
+- Downloads: a Blob of the task export (`homegrown-tasks.json`) and a CSV Blob of mission results
+  (`mission.csv`).
+- Clipboard: `sidepanel.ts` writes the tasks JSON.
+- `confirm`, `alert`, `window.open` (the best mission result) and `document.startViewTransition`.
+
+## Verification
+
+- E2E: `npm run test:e2e`
+- Type check: `npm run check`

@@ -6,7 +6,7 @@ import { extractRows } from './extract.ts';
 import { throwIfStopped, Stopped, type MissionPorts } from './ports.ts';
 import { applyFilter, mergeRows, rankRows, relevantResults } from './rows.ts';
 import { columns, type LoopResult, type MissionResult, type RoundRecord, type Row, type SearchResult, type StepOf, type Verdict, type Workflow } from './types.ts';
-import { parseJsonObject, hostOf } from '../text.ts';
+import { parseJsonObject, hostOf, defang } from '../text.ts';
 import type { PageModel } from '../../shared/pagemodel.ts';
 
 export const MAX_ROUNDS = 4;
@@ -135,8 +135,9 @@ export async function runWorkflow(ports: MissionPorts, wf: Workflow, state: Loop
           throw new Error('No usable results: the pages could not be read or had none of the fields.');
         }
         // Prices go in with their currency attached, so the answer can't turn kronor into dollars.
-        const cell = (k: string, v: unknown, r: Row) => (/price|cost/.test(k) && typeof v === 'number' && r._currency ? `${v} ${r._currency}` : v);
-        const table = rows.map((r, n) => `[${n + 1}] ${columns(r).map(([k, v]) => `${k}: ${cell(k, v, r)}`).join('; ')} (source: ${r._source}, ${r._url})`).join('\n');
+        // Row values come from pages: injection sentences are removed before the model reads them.
+        const cell = (k: string, v: unknown, r: Row) => (/price|cost/.test(k) && typeof v === 'number' && r._currency ? `${v} ${r._currency}` : v == null ? v : defang(v));
+        const table = rows.map((r, n) => `[${n + 1}] ${columns(r).map(([k, v]) => `${k}: ${cell(k, v, r)}`).join('; ')} (source: ${defang(r._source)}, ${r._url})`).join('\n');
         answer = await ports.ask(`Goal: ${goal}\n${step.question}${brief ? ` The user wants ${describe(brief)}.` : ''}\nUse only the numbered rows below and cite them like [1]. Quote prices with the currency shown in the row. If no row fully meets what the user wants, say which part is missing. Two to four sentences.`, table);
         say(i, { status: 'done', detail: 'written', answer });
         break;
@@ -163,7 +164,7 @@ export async function check(ports: MissionPorts, wf: Workflow, r: MissionResult,
   if (usable.length < want && r.pool.length > usable.length) {
     return { achieved: false, why: `only ${usable.length} of ${r.pool.length} results have ${deciding.join(', ')}`, next: incomplete.length ? 'follow' : 'search', incomplete };
   }
-  const table = r.rows.slice(0, 6).map((x, i) => `[${i + 1}] ${fields.map((f) => `${f}: ${x[f]}`).join('; ')}`).join('\n');
+  const table = r.rows.slice(0, 6).map((x, i) => `[${i + 1}] ${fields.map((f) => `${f}: ${x[f] == null ? x[f] : defang(x[f])}`).join('; ')}`).join('\n');
   const v = parseJsonObject(await ports.ask(
     `Goal: ${wf.goal}\n${wf.brief ? `What the user wants: ${describe(wf.brief)}\n` : ''}Answer so far: ${r.answer}\n` +
       'Do these results contain what the goal asks for? Say achieved: true when the answer is supported by the rows, even if more sources ' +

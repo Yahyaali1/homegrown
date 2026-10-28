@@ -1,6 +1,7 @@
 // The service worker's line to the engine in the offscreen document: start it once, send it commands, and ask
 // one-shot questions with the model the user chose for the task. Built to bg/engine.js (shared by bg/*).
 import { TASKS, type Sampling, type TaskId } from '../domain/model.ts';
+import { parseSettings } from '../domain/settings.ts';
 
 export { TASKS };
 
@@ -27,9 +28,7 @@ export async function engine<T = unknown>(cmd: string, args: Record<string, unkn
 
 /** The model chosen for a task (settings.taskModels), or '' for whichever is loaded. Nothing switches on its own. */
 export async function modelFor(task: TaskId): Promise<string> {
-  const { taskModels } = await chrome.storage.sync.get('taskModels');
-  const chosen = taskModels && typeof taskModels === 'object' ? (taskModels as Record<string, unknown>)[task] : '';
-  return typeof chosen === 'string' ? chosen : '';
+  return parseSettings(await chrome.storage.sync.get('taskModels')).taskModels[task] ?? '';
 }
 
 /**

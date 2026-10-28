@@ -86,7 +86,7 @@ export function install(): void {
   document.addEventListener('input', (e) => {
     const el = e.composedPath()[0];
     dismiss();
-    if (!ui.settings.ghostText || !isBox(el) || e.composedPath().includes(ui.root.host)) return;
+    if (!ui.settings.ghostText || !ui.enabled() || !isBox(el) || e.composedPath().includes(ui.root.host)) return;
     timer = setTimeout(() => suggest(el), 900);
   }, true);
 

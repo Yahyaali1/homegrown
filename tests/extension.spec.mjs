@@ -830,3 +830,59 @@ test('jargon lens: after Alt+K in the palette, moving the mouse over words shows
   await expect(ui(page).locator('.eg-tip')).toBeHidden();
   await page.close();
 });
+
+// ---- fixes from the drift review ----
+
+test('engine: unloading the model while an answer streams waits for the answer to finish', async () => {
+  const { answer, unloaded, order } = await sw.evaluate(async () => {
+    await self.ensureEngine();
+    const order = [];
+    const gen = chrome.runtime.sendMessage({ target: 'engine', cmd: 'generate', id: 'swap-test', turns: [{ role: 'user', text: 'Count from one to twenty in words.' }], config: { temperature: 0 } })
+      .then((r) => (order.push('answer'), r));
+    await new Promise((r) => setTimeout(r, 150)); // the generation is running now
+    const un = chrome.runtime.sendMessage({ target: 'engine', cmd: 'unload' }).then((r) => (order.push('unload'), r));
+    const [answer, unloaded] = await Promise.all([gen, un]);
+    return { answer, unloaded, order };
+  });
+  expect(answer.ok).toBe(true);
+  expect(answer.result.text).toMatch(/twenty|20/i);
+  expect(unloaded.ok).toBe(true);
+  expect(order).toEqual(['answer', 'unload']); // the unload waited its turn
+  await engine(sw, 'ensureLoaded'); // leave a model loaded for the tests after this one
+});
+
+test('engine start: the ensure command answers like every other command', async () => {
+  const page = await ctx.newPage(); // the worker can't message itself: ask from a page, as the panel does
+  await page.goto(`chrome-extension://${id}/library.html`);
+  const r = await page.evaluate(() => chrome.runtime.sendMessage({ target: 'bg', cmd: 'ensure' }));
+  expect(r).toEqual({ ok: true, result: true });
+  await page.close();
+});
+
+test('a site turned off gets no ghost text, even with ghost text switched on', async () => {
+  await sw.evaluate((host) => chrome.storage.sync.set({ ghostText: true, disabledSites: [host] }), new URL(siteA.url).hostname);
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/form.html`);
+  await page.waitForTimeout(1200);
+  await page.click('#notes');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' On weekends I usually', { delay: 20 });
+  await page.waitForTimeout(4000); // well past the 900 ms pause and a short answer
+  expect(await page.evaluate(() => !!document.querySelector('edge-gallery')?.shadowRoot?.querySelector('.eg-ghost:not([hidden])'))).toBe(false);
+  await sw.evaluate(() => chrome.storage.sync.set({ ghostText: false, disabledSites: [] }));
+  await page.close();
+});
+
+test('the price memory switch in Settings turns the price chips off', async () => {
+  const settings = await ctx.newPage();
+  await settings.goto(`chrome-extension://${id}/settings.html`);
+  const box = settings.locator('[data-key=priceChip]');
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  const page = await ctx.newPage();
+  await page.goto(`${siteA.url}/shop/a.html`);
+  await page.waitForTimeout(4000); // chips appear after 2.5 s when on
+  expect(await page.evaluate(() => !!document.querySelector('edge-gallery')?.shadowRoot?.querySelector('.price-chips'))).toBe(false);
+  await box.check();
+  await Promise.all([page.close(), settings.close()]);
+});

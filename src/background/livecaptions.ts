@@ -3,13 +3,14 @@
 // caption bar in the tab (content/livecaptions.js). Chrome hands out a tab's audio only after the user invokes the
 // extension (shortcut, right-click menu or toolbar icon), so the in-page button tells people to use those instead.
 import { engine, ask } from './engine.ts';
+import { parseSettings } from '../domain/settings.ts';
 
 const isEnglish = (lang: string) => /^(en\b|en-|english)/i.test(lang);
 const send = (tabId: number, msg: object) => chrome.tabs.sendMessage(tabId, { type: 'livecaption', ...msg }).catch(() => {});
 
 async function target(): Promise<string> {
-  const { captionLang, translateTo } = await chrome.storage.sync.get(['captionLang', 'translateTo']);
-  return String(captionLang || translateTo || navigator.language);
+  const { captionLang, translateTo } = parseSettings(await chrome.storage.sync.get(['captionLang', 'translateTo']));
+  return captionLang || translateTo || navigator.language;
 }
 
 async function start(tabId: number): Promise<true> {

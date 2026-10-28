@@ -26,7 +26,8 @@ export function liteRtLm(wasmUrl: string): ModelRuntime {
     id: 'litert-lm',
     async load(s, contextTokens, weights) {
       await this.unload();
-      await (ready ??= loadLiteRtLm(wasmUrl));
+      // A failed load is forgotten, so the next attempt retries instead of failing forever.
+      await (ready ??= loadLiteRtLm(wasmUrl).catch((e: unknown) => ((ready = null), Promise.reject(e))));
       engine = await Engine.create({ model: await weights(), benchmarkEnabled: true, mainExecutorSettings: { maxNumTokens: contextTokens } });
       spec = s;
     },

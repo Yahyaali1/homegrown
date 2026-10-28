@@ -149,13 +149,14 @@ const handlers: Record<string, (msg: never) => unknown> = {
   status,
   download: ({ name, url }: { name: string; url?: string }) => store.download(byName(name), (p) => broadcast({ type: 'progress', ...p }), url),
   pause: ({ name }: { name: string }) => store.pause(byName(name)),
-  remove: async ({ name }: { name: string }) => {
+  // Model changes queue behind a generation in progress, so an answer never loses its model mid-stream.
+  remove: ({ name }: { name: string }) => lanes.schedule(async () => {
     if (loaded?.name === name) await unload();
     await store.removeFiles(byName(name));
-  },
-  load: ({ name, maxTokens }: { name: string; maxTokens?: number }) => load(name, maxTokens),
-  unload,
-  ensureLoaded,
+  }),
+  load: ({ name, maxTokens }: { name: string; maxTokens?: number }) => lanes.schedule(() => load(name, maxTokens)),
+  unload: () => lanes.schedule(unload),
+  ensureLoaded: () => lanes.schedule(ensureLoaded),
   generate: (msg: GenerateRequest) => lanes.schedule(() => generateNow(msg), msg.priority === 'background' ? 'background' : 'user'),
   queue: () => lanes.state,
   cancel: () => current?.abort(),

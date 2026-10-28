@@ -1,6 +1,6 @@
-// How well Gemma reads a mission goal into a brief (bg/agent.js PLAN → bg/brief.js normalizeBrief).
-// Each goal lists what a correct reading must contain; a check passes only if all its facts hold.
-// Run: ./scripts/gpu.sh node bench/brief-eval.mjs  → bench/brief-eval.json
+// How well the model reads a mission goal into a brief (src/domain/mission/plan.ts and brief.ts, via the bg command
+// agentPlan). Each goal lists what a correct reading must contain; a check passes only if all its facts hold.
+// Run: ./scripts/gpu.sh node bench/brief-eval.mjs [fresh]  → bench/brief-eval[-fresh]-<model>.json
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, ROOT } from '../tests/harness.mjs';
@@ -60,7 +60,14 @@ await page.goto(`chrome-extension://${id}/agent.html`);
 // The model is pinned through the Missions setting (the planner runs as a mission task): EG_MODEL, else E2B.
 // Never trust what happens to be loaded or set in the profile.
 const MODEL = process.env.EG_MODEL || 'Gemma-4-E2B-it';
-await page.evaluate((m) => chrome.storage.sync.set({ taskModels: { missions: m } }), MODEL);
+// Only the Missions choice changes; the profile's other per-task choices are put back afterwards, even on a failure.
+const before = await page.evaluate(async (m) => {
+  const { taskModels } = await chrome.storage.sync.get('taskModels');
+  await chrome.storage.sync.set({ taskModels: { ...taskModels, missions: m } });
+  return taskModels ?? null;
+}, MODEL);
+const restore = () => page.evaluate((t) => (t ? chrome.storage.sync.set({ taskModels: t }) : chrome.storage.sync.remove('taskModels')), before);
+process.on('uncaughtException', async (e) => (await restore().catch(() => {}), console.error(e), process.exit(1)));
 const used = async () => page.evaluate(async () => (await chrome.runtime.sendMessage({ target: 'engine', cmd: 'status' })).result.loaded?.name);
 const results = [];
 const SET = process.argv[2] === 'fresh' ? FRESH : GOALS;
@@ -76,5 +83,5 @@ for (const [goal, want] of SET) {
 const pass = results.filter((r) => r.ok).length;
 console.log(`\n${pass}/${results.length} goals read correctly`);
 fs.writeFileSync(path.join(ROOT, `bench/brief-eval${SET === FRESH ? '-fresh' : ''}-${MODEL}.json`), JSON.stringify(results, null, 2));
-await page.evaluate(() => chrome.storage.sync.remove('taskModels')); // leave the profile as it was
+await restore(); // leave the profile as it was
 await ctx.close();
