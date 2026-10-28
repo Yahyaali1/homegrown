@@ -39,6 +39,15 @@ The other files are separate bundles or pure helpers:
   - `readPage(opts): Promise<PageModel>`: a layered page reader. It uses JSON-LD, microdata and Open Graph,
     then Readability markdown, tables, lists and plain text.
   - `window.__hgReadPage`: the same reader, set for `chrome.scripting.executeScript`.
+  - `window.__hgScrape`: `scrape.ts` `scrape({ rules, waitFor, wait })`, bundled into the same file.
+- `scrape.ts`: `extract(root, rules)`, `nextPage()`, `scrape(opts)`. Applies ScrapingBee extract rules to the
+  live DOM (CSS or XPath, `text`, `html`, `@attr`, `table_json`, `table_array`, `item`/`list`, nested).
+  XPath is used when `selectorType` is `xpath`, or on `auto` when the selector starts with `/`, `./` or `(`;
+  attribute and text nodes (`//a/@href`, `//h1/text()`) give their text. `@href` and `@src` resolve against
+  `document.baseURI` and come back only as http(s). A selector that does not parse sets that field
+  to null and adds `_errors[field]`. `nextPage` takes `rel=next`, then a link in a `nav`, pagination or
+  navigation block whose whole label (its `aria-label` if it has one, else its text; a leading "Go to" is ignored) is "Next", "Next page", "More results" or arrows (› » → >), on the same
+  host and never the current page. "Next.js" and "Next day delivery" don't count. It never clicks, fills or runs code from the recipe.
 - `keyguard.ts`, `youtube-main.ts`: no exports. They run only for their side effects.
 - [`features/`](./features/README.md): the 17 on-page feature modules.
 
@@ -106,7 +115,7 @@ The other files are separate bundles or pure helpers:
   (`execCommand('insertText')`).
 - Other browser APIs: the clipboard (the card's Copy button), `window.prompt` (task placeholders) and
   `window.open` (the nudge's Open button).
-- Sets `window.__edgeGallery` and `window.__hgReadPage`.
+- Sets `window.__edgeGallery`, `window.__hgReadPage` and `window.__hgScrape`.
 - `keyguard.ts` adds capture-phase `keydown`, `keyup` and `keypress` listeners. For a trusted event that
   comes from our UI, it stops the event and sends a copy that does not bubble to the same target. If the
   copy is `preventDefault`ed, the original is too. On an Escape `keyup` it also sends a window

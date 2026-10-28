@@ -8,8 +8,11 @@ import { stepsForBrief } from '../domain/mission/plan.ts';
 import { parseWorkflow } from '../domain/mission/workflow.ts';
 import { columns, type Brief, type Row, type Step, type Workflow } from '../domain/mission/types.ts';
 import { hostOf } from '../domain/text.ts';
+import { toCsv } from '../domain/csv.ts';
+import { parseRecipe, parseRules, toExtractRules, toRows, type PageResult, type Recipe, type Rules } from '../domain/scrape/recipe.ts';
 import { bg } from '../shared/protocol.ts';
 import type { LiveMission } from '../background/missions.ts';
+import type { ScrapeResult } from '../background/scrape.ts';
 
 const EXAMPLES = [
   'Find the cheapest 27-inch 4K monitor',
@@ -24,6 +27,8 @@ const PLANNERS: Record<string, string> = { model: 'planned by the model', templa
 let workflow: (Workflow & { id?: string }) | null = null;
 let runId: string | null = null;
 let rows: Row[] = [];
+let mode: 'find' | 'collect' = 'find';
+let collected: { results: PageResult[]; rules: Rules } | null = null; // Collect mode's last run, kept apart from a mission's rows
 let sort: { key: string; dir: 1 | -1 } | null = null;
 const params = new URLSearchParams(location.search);
 const goalBox = $<HTMLTextAreaElement>('#goal');
@@ -166,15 +171,19 @@ function resetRun(): void {
 $('#run').onclick = async () => {
   if (!workflow) return;
   resetRun();
+  const asked = detached;
   const { id } = await bg<{ id: string }>('missionStart', { goal: workflow.goal, workflow });
-  void attach(id);
+  if (asked === detached) void attach(id); // New or Open while it started: it runs on, unwatched
 };
 $('#stop').onclick = () => void (runId && bg('agentCancel', { runId }));
 
 async function attach(id: string): Promise<void> {
   runId = id;
+  $('#log').replaceChildren(); // attach replays the log and rounds: start from empty
+  $('#rounds').replaceChildren();
   history.replaceState(null, '', `?run=${id}`);
   const m = await bg<LiveMission | null>('missionState', { id });
+  if (runId !== id) return; // detached while asking
   if (!m) return void ($('#answer').textContent = 'This mission is no longer here: missions are kept until the browser closes.');
   goalBox.value = m.goal;
   $('#results').hidden = false;
@@ -240,7 +249,7 @@ function progress(m: { step: number; status: string; detail?: string }): void {
 type RoundEvent = { round: number } & ({ phase: 'start'; note: string } | { phase: 'checking' } | { phase: 'verdict'; achieved: boolean; why: string });
 interface Progress { type: string; runId: string; workflow?: Workflow; step?: number; status?: string; detail?: string; log?: string[]; rows?: Row[]; answer?: string; round?: number; phase?: string; note?: string; why?: string; achieved?: boolean; mission?: LiveMission }
 chrome.runtime.onMessage.addListener((m: Progress) => {
-  if (m.runId !== runId) return;
+  if (m.runId !== runId || mode === 'collect') return; // back in Find, attach() catches up
   if (m.type === 'agent-done' && m.mission) return finish(m.mission);
   if (m.type !== 'agent-progress') return;
   if (m.workflow) return showWorkflow(m.workflow);
@@ -313,10 +322,17 @@ function renderAnswer(text: string): void {
 }
 
 $('#csv').onclick = () => {
-  const keys = [...cols(), 'url'];
-  const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const csv = [keys.join(','), ...rows.map((r) => keys.map((k) => q(k === 'url' ? r._url : r[k])).join(','))].join('\n');
-  h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: 'mission.csv' }).click();
+  // The page's address gets a name no scraped field is likely to have ("url" often is one).
+  // A field may be called source_url: then the page column is _source_url (no column starts with _).
+  const src = cols().includes('source_url') ? '_source_url' : 'source_url';
+  const csv = toCsv([...cols(), src], rows.map((r) => ({ ...r, [src]: r._url })));
+  h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: mode === 'collect' ? 'collected.csv' : 'mission.csv' }).click();
+};
+$('#json').onclick = async () => {
+  await navigator.clipboard.writeText(JSON.stringify(mode === 'collect' && collected ? collected.results.map(({ url, data }) => ({ ...data, _url: url })) : rows, null, 2));
+  const b = $('#json');
+  b.textContent = 'Copied ✓';
+  setTimeout(() => (b.textContent = 'Copy JSON'), 1500);
 };
 $('#best').onclick = () => void (rows[0]?._url && open(rows[0]._url, '_blank'));
 
@@ -344,16 +360,25 @@ $('#save-btn').onclick = async () => {
 };
 
 async function renderSaved(): Promise<void> {
-  const list = await bg<Saved[]>('missionsList');
-  $('#saved').replaceChildren(...(list.length ? list.map((m) => h('li', {},
+  const [list, recipes] = await Promise.all([bg<Saved[]>('missionsList'), bg<Recipe[]>('recipesList')]);
+  const missions = list.map((m) => h('li', {},
     h('b', { textContent: m.name }),
     h('span', { className: 'muted small', textContent: [m.every ? `every ${m.every}` : 'manual', m.lastBest && `best: ${m.lastBest}`].filter(Boolean).join(' · ') }),
     h('div', { className: 'acts' },
       h('button', { textContent: 'Open', onclick: () => load(m) }),
-      h('button', { textContent: 'Delete', onclick: async () => (await bg('missionDelete', { id: m.id }), void renderSaved()) }))))
-    : [h('li', { className: 'muted small empty' }, flower(28, 'stage-0'), 'Saved missions grow here.')])); // an empty pot
+      h('button', { textContent: 'Delete', onclick: async () => (await bg('missionDelete', { id: m.id }), void renderSaved()) }))));
+  const saved = recipes.map((r) => h('li', {},
+    h('b', { textContent: r.name }),
+    h('span', { className: 'muted small', textContent: `recipe · ${r.urls.length} URL${r.urls.length > 1 ? 's' : ''}${r.pages > 1 ? ` · ${r.pages} pages each` : ''}` }),
+    h('div', { className: 'acts' },
+      h('button', { textContent: 'Open', onclick: () => loadRecipe(r) }),
+      h('button', { textContent: 'Delete', onclick: async () => (await bg('recipeDelete', { id: r.id }), void renderSaved()) }))));
+  const all = [...missions, ...saved];
+  $('#saved').replaceChildren(...(all.length ? all : [h('li', { className: 'muted small empty' }, flower(28, 'stage-0'), 'Saved missions grow here.')])); // an empty pot
 }
 function load(m: Saved): void {
+  detach(); // the opened mission replaces the attached run
+  setMode('find');
   const wf = parseWorkflow(m);
   if (!wf) return void alert('This saved mission can’t be opened: it has no search step.');
   workflow = { ...wf, id: m.id };
@@ -364,11 +389,151 @@ function load(m: Saved): void {
   $<HTMLInputElement>('#name').value = m.name;
   $<HTMLSelectElement>('#every').value = m.every ?? '';
 }
+// Lets go of the attached run (it keeps going in the worker): Run is back, its rounds and log are gone, and a
+// reload won't re-attach.
+let detached = 0; // counts detaches, so a start or attach still in flight knows it was let go
+function detach(): void {
+  detached++;
+  runId = null;
+  $('#run').hidden = false;
+  $('#stop').hidden = $('#loop').hidden = true;
+  $('#log').replaceChildren();
+  $('#rounds').replaceChildren();
+  history.replaceState(null, '', location.pathname);
+}
 $('#new').onclick = () => {
+  detach();
+  setMode('find');
   workflow = null;
   goalBox.value = '';
+  // A fresh start: not from the old tabs or context, not under the opened mission's name or schedule.
+  for (const k of ['goal', 'context', 'urls']) params.delete(k);
+  $('#context').hidden = true;
+  $<HTMLInputElement>('#name').value = '';
+  $<HTMLSelectElement>('#every').value = '';
   $('#workflow').hidden = $('#results').hidden = $('#save').hidden = true;
   goalBox.focus();
+};
+
+// ---- collect from pages: a recipe (URLs + ScrapingBee extract_rules) run in background tabs ----
+
+// Each mode keeps its own results: switching back shows that mode's table again.
+function setMode(to: 'find' | 'collect'): void {
+  const from = mode;
+  mode = to;
+  for (const b of document.querySelectorAll<HTMLElement>('.modes [role=tab]')) b.setAttribute('aria-selected', String(b.dataset.mode === to));
+  $('#compose').hidden = to !== 'find';
+  $('#collect').hidden = to !== 'collect';
+  $('#workflow').hidden = $('#save').hidden = to !== 'find' || !workflow;
+  $('#best').hidden = to === 'collect';
+  if (to === 'collect') $('#verdict').hidden = true; // finish() shows it for a mission
+  rows = [];
+  $('#results').hidden = true;
+  if (to === 'collect') {
+    if (collected) showCollected();
+  } else {
+    recipeId = ''; // saving after New never overwrites the recipe opened before
+    if (from === 'collect' && runId) void attach(runId);
+  }
+}
+function showCollected(): void {
+  if (!collected) return;
+  rows = toRows(collected.results, collected.rules) as Row[];
+  sort = null;
+  $('#answer').textContent = '';
+  $('#results').hidden = false;
+  renderTable(false); // no "best" row: collected rows aren't ranked
+}
+for (const b of document.querySelectorAll<HTMLElement>('.modes [role=tab]')) b.onclick = () => setMode(b.dataset.mode === 'collect' ? 'collect' : 'find');
+
+let recipeId = '';
+const recipeFromForm = () => ({
+  id: recipeId || undefined,
+  name: $<HTMLInputElement>('#c-name').value,
+  urls: $<HTMLTextAreaElement>('#c-urls').value.split(/\s+/).filter(Boolean),
+  extract_rules: $<HTMLTextAreaElement>('#c-rules').value,
+  pages: $<HTMLInputElement>('#c-pages').value,
+  wait_for: $<HTMLInputElement>('#c-wait-for').value,
+  wait: Number($<HTMLInputElement>('#c-wait').value) * 1000,
+});
+// Says what is wrong with the form, in words a user can act on; null when it can run.
+function recipeProblem(): string | null {
+  const f = recipeFromForm();
+  if (!f.urls.some((u) => /^https?:\/\//.test(u))) return 'Add at least one page address starting with http:// or https://.';
+  if (!parseRules(f.extract_rules)) return 'The rules need to be JSON in ScrapingBee extract_rules form, e.g. {"title": "h1", "link": "a@href"}.';
+  return null;
+}
+function loadRecipe(r: Recipe): void {
+  setMode('collect');
+  recipeId = r.id;
+  $<HTMLInputElement>('#c-name').value = r.name;
+  $<HTMLTextAreaElement>('#c-urls').value = r.urls.join('\n');
+  $<HTMLTextAreaElement>('#c-rules').value = JSON.stringify(toExtractRules(r.rules), null, 2);
+  $<HTMLInputElement>('#c-wait').value = String(r.wait / 1000);
+  $<HTMLInputElement>('#c-pages').value = String(r.pages);
+  $<HTMLInputElement>('#c-wait-for').value = r.waitFor;
+}
+
+let collectRun: string | null = null;
+let partial: PageResult[] = []; // pages read so far: shown if the run breaks off
+chrome.runtime.onMessage.addListener((m: { type?: string; runId?: string; reading?: string; reads?: number; result?: PageResult }) => {
+  if (m.type !== 'scrape-progress' || m.runId !== collectRun) return;
+  if (m.reading) $('#c-status').textContent = `Reading page ${m.reads}: ${hostOf(m.reading)}…`;
+  if (m.result) partial.push(m.result);
+});
+$('#c-run').onclick = async () => {
+  const problem = recipeProblem();
+  const status = $('#c-status');
+  if (problem) return void (status.textContent = problem);
+  const recipe = parseRecipe(recipeFromForm());
+  if (!recipe) return void (status.textContent = 'This recipe can’t run. Check the page addresses and the rules.');
+  collectRun = crypto.randomUUID();
+  partial = [];
+  const life = chrome.runtime.connect({ name: `scrape:${collectRun}` }); // closing or reloading this page stops the run
+  $('#c-run').hidden = true;
+  $('#c-stop').hidden = false;
+  status.textContent = 'Opening pages in the background…';
+  let summary: string;
+  try {
+    const r = await bg<ScrapeResult>('scrapeRun', { recipe, runId: collectRun });
+    collected = { results: r.results, rules: recipe.rules };
+    const n = toRows(r.results, recipe.rules).length;
+    const failed = r.results.filter((p) => p.error);
+    const fieldErrors = [...new Set(r.results.flatMap((p) => Object.values((p.data._errors ?? {}) as Record<string, string>)))];
+    summary = [
+      `${n} row${n === 1 ? '' : 's'} from ${r.reads} page${r.reads === 1 ? '' : 's'}${r.stopped ? ' (stopped)' : ''}.`,
+      failed.length && `${failed.length} page${failed.length === 1 ? '' : 's'} could not be read: ${failed[0]!.error}`,
+      ...fieldErrors,
+      ...r.notes,
+      !n && !failed.length && 'No element matched the rules. Check the selectors on one of the pages.',
+    ].filter(Boolean).join(' ');
+  } catch (e) {
+    // The worker restarted or the run broke off: keep what arrived.
+    collected = { results: partial, rules: recipe.rules };
+    summary = `The run was interrupted after ${partial.length} page${partial.length === 1 ? '' : 's'}: ${(e as Error).message}`;
+  } finally {
+    life.disconnect();
+    collectRun = null;
+    $('#c-run').hidden = false;
+    $('#c-stop').hidden = true;
+  }
+  status.textContent = summary;
+  if (mode === 'collect') showCollected(); // in Find mode it waits until Collect is shown again
+};
+$('#c-stop').onclick = () => collectRun && void bg('scrapeStop', { runId: collectRun });
+$('#c-save').onclick = async () => {
+  const problem = recipeProblem();
+  if (problem) return void ($('#c-status').textContent = problem);
+  try {
+    const saved = await bg<Recipe>('recipeSave', { recipe: recipeFromForm() });
+    recipeId = saved.id;
+    const b = $('#c-save');
+    b.textContent = 'Saved ✓';
+    setTimeout(() => (b.textContent = 'Save recipe'), 1500);
+    void renderSaved();
+  } catch (e) {
+    $('#c-status').textContent = (e as Error).message;
+  }
 };
 
 // ---- start: ?goal=…&run=1&context=… from the address bar, launcher or product chip; ?run=<id> to attach ----

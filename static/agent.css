@@ -125,3 +125,10 @@ td a { color: var(--link); text-decoration: none; }
 .bf input, .bf select { width: 100%; font-size: var(--t-md); color: var(--fg); background: var(--card); }
 .bf .row2 { display: flex; gap: 6px; }
 .bf .row2 > :first-child { flex: none; width: auto; }
+
+.modes { display: flex; gap: 6px; margin-bottom: var(--s4); }
+.modes button { height: 30px; border-radius: var(--r-pill); font-size: var(--t-sm); color: var(--muted); }
+.modes button[aria-selected=true] { color: var(--fg); box-shadow: 0 0 0 1px var(--line-strong); }
+#collect textarea { width: 100%; resize: vertical; padding: 10px 12px; margin: 6px 0 var(--s3); }
+#collect textarea.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-sm); }
+#collect .sub { display: block; }

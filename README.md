@@ -109,6 +109,7 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Across my open tabs | Compare the tabs you already have open, no web search | ✅ |
 | Find it cheaper / Alert me if it drops | Chips on product pages (from the page's product data) | ✅ |
 | Saved and scheduled missions | Hourly or daily, with a notification when the best result changes or crosses a value | ✅ |
+| Collect from pages (rules) | Mission control → **Collect from pages**: paste page addresses and ScrapingBee-style `extract_rules` (CSS or XPath, `@href`, item or list, nested, tables), wait for an element, follow next-page links up to 5 pages. Table, Copy JSON, formula-safe CSV, saved recipes. No model, no clicks | ✅ fixture site: 3 pages, late content, a loop back to page 1 |
 | Address-bar keyword `eg` | Starts a mission from anywhere | ○ can't be typed in headless tests |
 
 ### Web, tabs and automation
@@ -261,7 +262,7 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
   - [offscreen](./src/offscreen/README.md) - the model engine: one generation at a time in user and background lanes, model files in OPFS (`store.ts`), fitting page text into the context (`fit.ts`) and engine events to every context (`broadcast.ts`) ([runtimes](./src/offscreen/runtimes/README.md): LiteRT-LM; [helpers](./src/offscreen/helpers/README.md): image reader, embeddings, speech, image generation).
   - [content](./src/content/README.md) - the in-page UI in a shadow root and the page reader for missions ([features](./src/content/features/README.md): the 17 feature modules).
   - [pages](./src/pages/README.md) - side panel, Mission control (`mission.ts`, built as `agent`), library, settings, reader. `savings.ts` and `shell.ts` are shared helpers, not entry points.
-  - [domain](./src/domain/README.md) - pure logic with no `chrome.*` and no DOM ([mission](./src/domain/mission/README.md): goal to brief to workflow, and the act-check-revise loop).
+  - [domain](./src/domain/README.md) - pure logic with no `chrome.*` and no DOM ([mission](./src/domain/mission/README.md): goal to brief to workflow, and the act-check-revise loop; [scrape](./src/domain/scrape/README.md): recipes for Collect from pages).
   - [shared](./src/shared/README.md) - message and port types, tasks, the page model.
   - [ui](./src/ui/README.md) - the typed DOM helper, the flower mark, the theme.
 - `scripts`: [./scripts/README.md](./scripts/README.md) - the build (`npm run build`) and the GPU test-slot runner (`gpu.sh`).
@@ -285,14 +286,14 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
 
 - `chrome.storage`:
   - `sync`: settings and tasks. When there are no `tasks` yet, the worker seeds the default tasks, adds any legacy `customPrompts` as text tasks, and removes `customPrompts`.
-  - `local`: `priceBook` (price memory), `monitors`, `schedules`, `scheduledResults`, `missions` (saved missions), `flashcards`, `savings`, `tabNotes`, `captionSize` and `voiceSamples`.
+  - `local`: `priceBook` (price memory), `monitors`, `schedules`, `scheduledResults`, `missions` (saved missions), `recipes` (saved Collect from pages recipes, `{v: 1}`), `flashcards`, `savings`, `tabNotes`, `captionSize` and `voiceSamples`.
   - `session`: `liveMissions`, `pending` (a menu request handed to the side panel) and `notifUrls` (notification targets).
 - IndexedDB `eg-memory` with the stores `history`, `highlights`, `kb` (saved pages) and `snapshots`; OPFS (model files); Cache Storage (helper models).
 - Network:
   - Model downloads from Hugging Face.
   - Search by `fetch` in `background/web.ts`: `html.duckduckgo.com`, Bing and the Wikipedia API.
   - Mission search: Bing, DuckDuckGo and Brave result pages opened in tabs (`background/missions.ts`).
-  - Pages that missions, research and link previews read.
+  - Pages that missions, recipes, research and link previews read.
   - Monitors fetch pages with `credentials: 'include'`.
   - The YouTube feature fetches the watch page and the timedtext captions.
   - The reader fetches the document URL it opens.
@@ -305,7 +306,7 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
 
 ### System Verification
 
-- Run: `npm run check` (types), `npm test` (unit tests), `npm run test:e2e` (build, then the browser suite on the real model).
+- Run: `npm run check` (types), `npm test` (unit tests), `npm run test:e2e` (build, then the browser suite on the real model; `tests/scrape.spec.mjs` needs no model).
 
 ## Known limits
 

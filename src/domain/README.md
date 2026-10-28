@@ -42,9 +42,13 @@ runtime adapters and storage live outside `domain/`.
   removal of prompt-injection sentences, a check that a value appears on the page, required terms, the host
   name, and cleanup of ghost-text continuations. `requiredTerms` returns at most 5 terms. `cleanContinuation`
   keeps at most 15 words.
+- `csv.ts`: `csvCell`, `toCsv(keys, rows)`. Quotes every cell and prefixes `'` to a cell that starts like a
+  spreadsheet formula (`= + - @`, tab, CR) unless it is a plain number.
 - `zip.ts`: `Zip`, `unzip`. Reads the zip central directory and returns a lazy reader for each entry.
 - [`mission/`](./mission/README.md): planning, running, checking and revising missions through injected
   ports.
+- [`scrape/`](./scrape/README.md): recipes for Collect from pages (ScrapingBee `extract_rules` syntax) and
+  the rows they give.
 
 ## Invariants
 
@@ -88,5 +92,5 @@ contract. Where it differs, this list says so.
 ## Verification
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
-  `reading`, `settings`, `tasks` and `zip`)
+  `reading`, `settings`, `tasks`, `zip` and `csv`, in `scrape.test.ts`)
 - Type check: `npm run check`

@@ -20,6 +20,10 @@
   </aside>
 
   <main>
+    <div class="modes" role="tablist" aria-label="Mode">
+      <button role="tab" data-mode="find" aria-selected="true">Find an answer</button>
+      <button role="tab" data-mode="collect" aria-selected="false">Collect from pages</button>
+    </div>
     <section id="compose">
       <label for="goal" class="lead">What should I find out?</label>
       <div class="goal-row">
@@ -28,6 +32,29 @@
       </div>
       <div id="examples" class="chips" aria-label="Example goals"></div>
       <p id="context" class="muted small" hidden></p>
+    </section>
+
+    <section id="collect" hidden>
+      <label for="c-urls" class="lead">Which pages?</label>
+      <textarea id="c-urls" rows="2" spellcheck="false" placeholder="One URL per line"></textarea>
+      <label for="c-rules" class="sub">Rules <span class="muted small">ScrapingBee extract_rules, e.g. {"title": "h1", "links": {"selector": "a", "type": "list", "output": "@href"}}</span></label>
+      <textarea id="c-rules" rows="6" spellcheck="false" class="code"></textarea>
+      <div class="save-row">
+        <label class="muted small" for="c-pages">Pages per URL</label>
+        <input id="c-pages" type="number" min="1" max="5" value="1" size="3">
+        <label class="muted small" for="c-wait-for">Wait for</label>
+        <input id="c-wait-for" placeholder="CSS selector (optional)">
+        <label class="muted small" for="c-wait">then wait</label>
+        <input id="c-wait" type="number" min="0" max="10" value="0" size="3"><span class="muted small">s</span>
+        <span class="grow"></span>
+        <button id="c-run" class="primary">Collect</button>
+        <button id="c-stop" class="secondary" hidden>Stop</button>
+      </div>
+      <p id="c-status" class="muted small" role="status"></p>
+      <div class="save-row">
+        <input id="c-name" placeholder="Recipe name" aria-label="Recipe name">
+        <button id="c-save" class="secondary">Save recipe</button>
+      </div>
     </section>
 
     <section id="workflow" hidden>
@@ -51,6 +78,7 @@
       <div class="bar">
         <h2>Results <span id="verdict" class="badge" hidden></span></h2>
         <span class="grow"></span>
+        <button id="json" class="secondary">Copy JSON</button>
         <button id="csv" class="secondary">Export CSV</button>
         <button id="best" class="secondary">Open best</button>
       </div>

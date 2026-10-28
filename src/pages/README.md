@@ -47,7 +47,15 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - It attaches to a run with `bg('missionState', {id})`.
   - It saves with `bg('missionSave')`. The saved-missions list uses `bg('missionsList')`, with Open and
     Delete (`bg('missionDelete')`).
-  - It downloads the results as `mission.csv` and opens the best result.
+  - It downloads the results as `mission.csv` (formula-safe, `domain/csv.ts`; the page address is the
+    `source_url` column, or `_source_url` when a field has that name), copies them as JSON, and opens the best result.
+  - **Collect from pages** mode: URLs, ScrapingBee `extract_rules`, pages per URL, wait for, then wait. Runs
+    with `bg('scrapeRun', {recipe, runId})`, shows `scrape-progress`, and keeps the pages that arrived if the
+    run breaks off. Stop sends `bg('scrapeStop')`. While a run goes, the page holds a
+    `chrome.runtime.connect({name: 'scrape:<runId>'})` port, so closing, reloading or leaving the page stops it. Saved recipes share the Saved list (`bg('recipesList')`,
+    `recipeSave`, `recipeDelete`) with a "recipe" label. Copy JSON gives the rules' JSON per page with `_url`;
+    the CSV is `collected.csv`, with the page address in `source_url` (`_source_url` when a field has that
+    name).
   - URL parameters: `?goal=&run=1&context=&urls=`, or `?run=<id>` to attach to a run.
 - `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
   library", flashcard spaced repetition and the savings meter.
@@ -86,6 +94,12 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   `{ok: false, error}`. `engineCall()` throws when `ensure` is not ok, and when the engine reply is not ok.
 - `mission.ts` ignores messages for a different `runId`. Missions run in the worker, and the page only
   shows them.
+- Each Mission control mode keeps its own results. Mission messages are ignored while Collect is shown, and
+  switching back attaches to the mission again. A finished collection shows again when Collect is shown.
+  Collected rows are never marked "best". New and opening a saved mission detach from the current run: it
+  keeps going in the worker, Run shows again and the URL drops `?run=`. New also forgets the `goal`,
+  `context` and `urls` it was opened with, and the name and schedule of a mission opened before. Switching to Find, or New, forgets the opened recipe's id, so a save
+  after that makes a new recipe.
 - `reader.ts` chooses the format like this:
   - PDF by its first bytes (`%PDF`), the `.pdf` extension or a PDF MIME type.
   - ePub by its first bytes (`PK` plus the epub mimetype), the `.epub` extension or an epub MIME type.
@@ -103,13 +117,13 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - `session`: `pending` actions (read and removed) and `liveMissions` (watched).
 - Worker messages through `bg()`: memory, missions, schedules, monitors and `toPage`. Engine messages
   through `engineCall()` (`status`, `load`, `generate`, `cancel`, `download`, `pause`, `remove`).
-- Listens for engine broadcasts and for `agent-progress` and `agent-done`.
+- Listens for engine broadcasts and for `agent-progress`, `agent-done` and `scrape-progress`.
 - Writes `localStorage.tab` and calls `history.replaceState`.
 - Fetches images and documents, using the extension's host permissions.
 - File pickers and drag and drop.
 - Downloads: a Blob of the task export (`homegrown-tasks.json`) and a CSV Blob of mission results
-  (`mission.csv`).
-- Clipboard: `sidepanel.ts` writes the tasks JSON.
+  (`mission.csv`) or of collected rows (`collected.csv`).
+- Clipboard: `sidepanel.ts` writes the tasks JSON; Mission control's Copy JSON writes the results.
 - `confirm`, `alert`, `window.open` (the best mission result) and `document.startViewTransition`.
 
 ## Verification

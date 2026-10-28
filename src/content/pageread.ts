@@ -5,6 +5,7 @@
 import { Readability } from '@mozilla/readability';
 import type { PageList, PageModel, PageRecord, PageTable, ReadOptions } from '../shared/pagemodel.ts';
 import { money, rating, toNumber } from './money.ts';
+import { scrape } from './scrape.ts';
 
 const clean = (s: unknown): string => String(s ?? '').replace(/\s+/g, ' ').trim();
 const abs = (u: string | null | undefined): string => {
@@ -351,6 +352,7 @@ export async function readPage({ scroll = true, shadow = false, terms = [] }: Re
 
 // Injected entry: one reader per frame, callable by chrome.scripting.executeScript({ func }).
 declare global {
-  interface Window { __hgReadPage?: typeof readPage }
+  interface Window { __hgReadPage?: typeof readPage; __hgScrape?: typeof scrape }
 }
 window.__hgReadPage ??= readPage;
+window.__hgScrape ??= scrape;

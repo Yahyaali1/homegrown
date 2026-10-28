@@ -13,6 +13,7 @@ import * as tabs from './tabs.ts';
 import * as monitors from './monitors.ts';
 import * as memory from './memory.ts';
 import * as livecaptions from './livecaptions.ts';
+import * as scrape from './scrape.ts';
 
 type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
 /** A feature module: its handlers become bg commands; the hooks are optional. */
@@ -24,7 +25,7 @@ interface BackgroundModule {
   /** Called after every answer to a page request. */
   onAnswer?(req: unknown, result: { text: string }, sender?: chrome.runtime.MessageSender): unknown;
 }
-const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions];
+const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape];
 const handlers: Record<string, Handler> = Object.assign({}, ...modules.map((m) => m.handlers ?? {}));
 // The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
 handlers.toPage = async ({ msg }: { msg: object }) => {

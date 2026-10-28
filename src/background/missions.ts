@@ -34,11 +34,11 @@ const ENGINES: readonly SearchEngine[] = [
 ];
 
 /** A running mission's handles: Stop, and the tab group its tabs live in. */
-interface Run { stop: AbortController; group?: number | undefined }
+export interface Run { stop: AbortController; group?: number | undefined }
 const runs = new Map<string, Run>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function waitLoaded(tabId: number, ms: number): Promise<void> {
+export async function waitLoaded(tabId: number, ms: number): Promise<void> {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     const t = await chrome.tabs.get(tabId).catch(() => null);
@@ -47,15 +47,29 @@ async function waitLoaded(tabId: number, ms: number): Promise<void> {
   }
 }
 
-/** Opens url in a background tab inside the run's "❀ Mission" group, runs `use`, and always closes the tab. */
-async function inTab<T>(url: string, run: Run, use: (tabId: number) => Promise<T>): Promise<T> {
+/**
+ * Opens url in a background tab inside the run's "❀ Mission" group, runs `use`, and always closes the tab. Stop, or
+ * a page that hangs for `timeoutMs`, ends the wait at once: a busy or hostile page can't hold the run.
+ */
+export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Promise<T>, timeoutMs = 90000): Promise<T> {
+  run.stop.signal.throwIfAborted();
   const tab = await chrome.tabs.create({ url, active: false });
   const tabId = tab.id!;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort = () => {};
   try {
     run.group = await chrome.tabs.group({ tabIds: tabId, ...(run.group !== undefined && { groupId: run.group }) }).catch(() => run.group);
     if (run.group !== undefined) chrome.tabGroups.update(run.group, { title: '❀ Mission', collapsed: true }).catch(() => {});
-    return await use(tabId);
+    const cut = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${new URL(url).hostname} took too long to read.`)), timeoutMs);
+      onAbort = () => reject(new DOMException('Stopped', 'AbortError'));
+      run.stop.signal.addEventListener('abort', onAbort, { once: true });
+      if (run.stop.signal.aborted) onAbort(); // Stop pressed while the tab was opening
+    });
+    return await Promise.race([use(tabId), cut]);
   } finally {
+    clearTimeout(timer);
+    run.stop.signal.removeEventListener('abort', onAbort);
     chrome.tabs.remove(tabId).catch(() => {});
   }
 }
@@ -396,6 +410,11 @@ export function init(): void {
     if (id.startsWith('mission:')) chrome.tabs.create({ url: id.split(':').slice(2).join(':') });
     if (id.startsWith('live:')) openMission(id.slice(5));
   });
+  // A restarted worker owns no run yet, so tabs left in "❀ Mission" groups are orphans of the old one: close them.
+  chrome.tabGroups.query({ title: '❀ Mission' }).then(async (groups) => {
+    const tabs = (await Promise.all(groups.map((g) => chrome.tabs.query({ groupId: g.id })))).flat().flatMap((t) => (t.id === undefined ? [] : [t.id]));
+    if (tabs.length) await chrome.tabs.remove(tabs);
+  }).catch(() => {});
   // A restarted service worker can't resume a run: list what was running as interrupted.
   chrome.storage.session.get('liveMissions').then(({ liveMissions }) => {
     for (const s of (Array.isArray(liveMissions) ? liveMissions : []) as ReturnType<typeof summary>[]) {

@@ -52,6 +52,9 @@ It also owns these parts:
 - `missions.ts` handlers: `agentPlan`, `agentRun`, `agentCancel`, `agentOpen`, `missionStart`,
   `missionState`, `missionsLive`, `missionOpen`, `missionForget`, `missionsList`, `missionSave`,
   `missionDelete`, `priceSeen`, `shopCheck`.
+  - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
+  - It exports `inTab`, `waitLoaded` and `Run` for `scrape.ts`. `inTab` gives up on a page after 90 s, and
+    Stop ends the wait at once; the tab is always closed.
   - It implements the `domain/mission` ports with real background tabs. Search tries Bing, then DuckDuckGo,
     then Brave in tabs, and `web.ts` `search` last.
   - Exports the `LiveMission` interface.
@@ -86,7 +89,7 @@ It also owns these parts:
 ## Invariants
 
 - The handlers of all modules are merged into one namespace with `Object.assign`. The order is reader,
-  web, capture, tabs, monitors, memory, livecaptions, missions. A duplicate command name silently replaces
+  web, capture, tabs, monitors, memory, livecaptions, missions, scrape. A duplicate command name silently replaces
   the earlier one.
 - Routing: `target:'bg'` goes to the worker and `target:'engine'` to the offscreen document. Engine
   broadcasts have `source:'engine'`.
@@ -129,13 +132,20 @@ It also owns these parts:
     30 price points for each. `shopCheck` runs once a day for each product and needs a price at least 3%
     lower.
 
+- `scrape.ts` handlers: `scrapeRun({ recipe, runId })`, `scrapeStop`, `recipesList`, `recipeSave`,
+  `recipeDelete`. `scrapeRun` reads each URL in a background tab with `__hgScrape` and follows next-page
+  links up to `recipe.pages`, at most 25 pages per run, one second apart when following next links, never a page twice. Closing the
+  page that started it, reloading it or leaving it stops the run: the page holds a `scrape:<runId>` port. Progress goes
+  out as `{type: 'scrape-progress', runId, reading | result}`.
+
 ## Side Effects
 
 - `chrome.offscreen.createDocument('offscreen.html')` with the reasons WORKERS and USER_MEDIA.
 - `chrome.storage`:
   - `sync`: `tasks`, `taskModels`, `captionLang`, `translateTo`. `seedTasks` reads and removes the v0.1 key
     `customPrompts`.
-  - `local`: `savings`, `monitors`, `schedules`, `scheduledResults`, `missions`, `priceBook`, `tabNotes`.
+  - `local`: `savings`, `monitors`, `schedules`, `scheduledResults`, `missions`, `priceBook`, `tabNotes`, `recipes`
+    (each `{v: 1, …}`, checked by `parseRecipe` on every read, at most 50).
   - `session`: the pending side-panel request (`pending`), `notifUrls`, `liveMissions`.
 - IndexedDB `eg-memory` v2, with the stores `history`, `highlights`, `kb` and `snapshots`. `onAnswer` adds
   `history`, updates `savings`, adds `kb` entries and saves `snapshots`.
