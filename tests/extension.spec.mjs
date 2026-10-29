@@ -4,6 +4,7 @@
 // in the page or frame.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
+import fs from 'node:fs';
 import { serve, launch, engine, ROOT } from './harness.mjs';
 import { modelById } from '../src/domain/model.ts';
 const byName = (id) => { const s = modelById(id); return s && { name: s.id, modelFile: s.source.file }; };
@@ -753,6 +754,80 @@ test('image generation @slow: a prompt becomes an image on this device, with pro
   await expect(card.locator('.meta')).toContainText('On this device');
   await expect(card.getByRole('button', { name: 'Download' })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Regenerate' })).toBeVisible();
+  await page.close();
+});
+
+test('FLUX.2 klein and living photos @slow: pick the model in Settings, 512² image, a 4 s WebM, offline after the first run', async () => {
+  test.setTimeout(60 * 60 * 1000); // the first run downloads 5.6 GB
+  const createWith = async (page, prompt) => {
+    await palette(page, 'Create image');
+    const card = ui(page).locator('.card').last();
+    await card.getByLabel('Describe the image').fill(prompt);
+    await card.getByRole('button', { name: 'Create' }).click();
+    await expect(card.locator('img.eg-img')).toHaveCount(1, { timeout: 55 * 60 * 1000 });
+    return card;
+  };
+  // Settings: the picture-model picker writes the choice.
+  const settings = await ctx.newPage();
+  await settings.goto(`chrome-extension://${id}/settings.html`);
+  await settings.getByLabel('Model for Create image').selectOption('flux');
+  await expect.poll(() => sw.evaluate(async () => (await chrome.storage.sync.get('imageModel')).imageModel)).toBe('flux');
+  await settings.close();
+
+  const page = await openPage('article.html');
+  const t0 = Date.now();
+  const card = await createWith(page, 'a red fox sitting in fresh snow, golden hour, photo');
+  console.log(`  [flux] first image ${(Date.now() - t0) / 1000} s`);
+  await expect(card.locator('.meta')).toContainText('FLUX.2 klein');
+  const stats = await card.locator('img.eg-img').evaluate((img) => {
+    const c = document.createElement('canvas');
+    [c.width, c.height] = [img.naturalWidth, img.naturalHeight];
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let sum = 0, sq = 0;
+    for (let i = 0; i < d.length; i += 4) (sum += d[i]), (sq += d[i] * d[i]);
+    const n = d.length / 4;
+    return { w: c.width, h: c.height, sd: Math.sqrt(sq / n - (sum / n) ** 2), src: img.src };
+  });
+  expect([stats.w, stats.h]).toEqual([512, 512]);
+  expect(stats.sd).toBeGreaterThan(20); // not a flat or black image
+  fs.writeFileSync(path.join(ROOT, 'test-results', 'flux-fox.png'), Buffer.from(stats.src.split(',')[1], 'base64')); // checked by hand
+
+  // Living photo from the created image.
+  await card.getByRole('button', { name: 'Animate' }).click();
+  const live = ui(page).locator('.card').last();
+  await expect(live.locator('video.eg-img')).toHaveCount(1, { timeout: 10 * 60 * 1000 });
+  const clip = await live.locator('video.eg-img').evaluate(async (v) => {
+    const blob = await (await fetch(v.src)).blob();
+    // Chrome's MediaRecorder WebM has no duration; seeking past the end makes the player find it.
+    if (!Number.isFinite(v.duration)) await new Promise((r) => ((v.ondurationchange = r), (v.currentTime = 1e9)));
+    return { size: blob.size, type: blob.type, duration: v.duration };
+  });
+  console.log(`  [living photo] ${JSON.stringify(clip)}`);
+  expect(clip.type).toBe('video/webm');
+  expect(clip.size).toBeGreaterThan(50_000);
+  expect(clip.duration).toBeGreaterThan(3);
+  expect(clip.duration).toBeLessThan(6);
+  fs.writeFileSync(path.join(ROOT, 'test-results', 'living-photo.webm'), Buffer.from(await live.locator('video.eg-img').evaluate(async (v) => [...new Uint8Array(await (await fetch(v.src)).arrayBuffer())])));
+
+  // Offline: FLUX again from the cache, timed warm.
+  await ctx.setOffline(true);
+  try {
+    const t1 = Date.now();
+    const again = await createWith(page, 'a lighthouse on a cliff at dusk, oil painting');
+    const warm = (Date.now() - t1) / 1000;
+    console.log(`  [flux] warm, offline ${warm} s`);
+    await expect(again.locator('.meta')).toContainText('FLUX.2 klein');
+    expect(warm).toBeLessThan(90);
+  } finally {
+    await ctx.setOffline(false);
+  }
+
+  // Back to Janus in the same session: FLUX left the memory free.
+  await sw.evaluate(() => chrome.storage.sync.set({ imageModel: 'janus' }));
+  const janus = await createWith(page, 'a honeybee on a sunflower, simple flat illustration');
+  await expect(janus.locator('.meta')).toContainText('Janus-Pro-1B');
   await page.close();
 });
 

@@ -77,9 +77,9 @@ It also owns these parts:
 - `monitors.ts` handlers: `watchPage`, `unwatch`, `listMonitors`, `checkNow`, `schedule`, `unschedule`,
   `runScheduleNow`.
 - `tabs.ts` handlers: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`.
-- `capture.ts` handlers: `generateImage`, `capture`.
+- `capture.ts` handlers: `generateImage` (passes Settings' `imageModel`), `depthMap` (passes `depthModel`), `capture`.
   - `capture` crops a region of `tabs.captureVisibleTab` and returns a PNG data URL.
-  - `init` relays engine `status` broadcasts for a `generateImage` request to the asking tab as
+  - `init` relays engine `status` broadcasts for a `generateImage` or `depthMap` request to the asking tab as
     `{type:'eg-status', id, text}`.
 - `livecaptions.ts` handlers: `liveStart`, `liveStop`, `livePause`, `liveStartFile`.
   - Messages to the tab are `{type:'livecaption', started|status|error|text}`.

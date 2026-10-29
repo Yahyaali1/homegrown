@@ -13,7 +13,12 @@ a `handlers` object, and `../engine.ts` adds these handlers to its command table
   - `Progress`: the type of a transformers.js progress callback.
 - `embed.ts`: `handlers.embed({texts})` returns normalised vectors (`number[][]`) from all-MiniLM-L6-v2.
   The dot product of two vectors is their cosine.
-- `imagegen.ts`: `handlers.generateImage({id, prompt})` returns a PNG data URL made with Janus-Pro-1B.
+- `imagegen.ts`: `handlers.generateImage({id, prompt, model?})` returns `{url, model}`: a PNG data URL and the
+  model's name. `model` is `janus` (Janus-Pro-1B, default) or `flux` (`flux.ts`); Janus is released before FLUX runs.
+- `flux.ts`: FLUX.2 klein 4B with onnxruntime-web on WebGPU, three graphs loaded one at a time, weights cached in
+  Cache Storage (`homegrown-flux`). 512×512, 4 steps.
+- `depth.ts`: `handlers.depthMap({id, src, model?})` returns a grayscale PNG data URL (near = white) from Depth
+  Anything V2 `small` (default) or `base`.
   It throws `The image model returned nothing.` when no image comes back.
 - `stt.ts` (Whisper base)
   - `handlers.transcribe({audio, sampleRate?, language?})` returns `{text}`.

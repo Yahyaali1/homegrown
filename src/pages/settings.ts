@@ -3,6 +3,7 @@
 import { $ } from './shell.ts';
 import { h } from '../ui/dom.ts';
 import { parseSettings, SWITCHES, type SwitchKey } from '../domain/settings.ts';
+import { DEPTH_MODELS, IMAGE_MODELS } from '../domain/imagegen.ts';
 import { bg } from '../shared/protocol.ts';
 import { savingsLine, type Savings } from './savings.ts';
 
@@ -20,6 +21,25 @@ const defaultLang = new Intl.DisplayNames(['en'], { type: 'language' }).of(navig
 const lang = $<HTMLInputElement>('#translateTo');
 void sync().then((s) => (lang.value = s.translateTo || defaultLang));
 lang.onchange = () => void chrome.storage.sync.set({ translateTo: lang.value.trim() || defaultLang });
+
+// Picture models per use case. Each downloads the first time its feature runs.
+const MEDIA = [
+  { key: 'imageModel', label: 'Create image', models: IMAGE_MODELS },
+  { key: 'depthModel', label: 'Animate image (living photo)', models: DEPTH_MODELS },
+] as const;
+async function renderMediaModels(): Promise<void> {
+  const box = document.querySelector('#media-models');
+  if (!box) return;
+  const s = await sync();
+  box.replaceChildren(...MEDIA.map(({ key, label, models }) => {
+    const sel = h('select', { attrs: { 'aria-label': `Model for ${label}` } }, ...Object.entries(models).map(([id, m]) => new Option(`${m.label} · ${m.note}`, id)));
+    sel.value = s[key];
+    sel.onchange = () => void chrome.storage.sync.set({ [key]: sel.value });
+    return h('label', { className: 'row' }, h('span', { className: 'grow', textContent: label }), sel);
+  }));
+}
+void renderMediaModels();
+chrome.storage.sync.onChanged.addListener((c) => (c.imageModel || c.depthModel) && void renderMediaModels());
 
 async function renderSites(): Promise<void> {
   const { disabledSites } = await sync();

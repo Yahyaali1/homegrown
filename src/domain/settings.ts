@@ -2,6 +2,7 @@
 // values (chrome.storage.sync) are merged over the defaults; a value of the wrong type falls back to the default
 // instead of breaking a feature. Tasks have their own module (shared/actions.ts).
 import { TASKS, type TaskId } from './model.ts';
+import { DEPTH_MODELS, IMAGE_MODELS, type DepthModel, type ImageModel } from './imagegen.ts';
 
 export type Theme = 'system' | 'light' | 'dark';
 
@@ -40,6 +41,10 @@ export type Settings = { [K in SwitchKey]: boolean } & {
   taskVars: Record<string, string>;
   /** The model chosen per task; '' or missing means whichever is loaded. */
   taskModels: Partial<Record<TaskId, string>>;
+  /** The model for Create image. */
+  imageModel: ImageModel;
+  /** The depth model for Animate image (living photos). */
+  depthModel: DepthModel;
 };
 
 export const DEFAULTS: Settings = {
@@ -56,6 +61,8 @@ export const DEFAULTS: Settings = {
   disabledSites: [],
   taskVars: {},
   taskModels: {},
+  imageModel: 'janus',
+  depthModel: 'small',
 };
 
 const stringMap = (v: unknown): Record<string, string> =>
@@ -71,6 +78,8 @@ export function parseSettings(raw: Record<string, unknown>): Settings {
     else if (key === 'disabledSites') out[key] = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : def;
     else if (key === 'taskVars') out[key] = stringMap(v);
     else if (key === 'taskModels') out[key] = Object.fromEntries(Object.entries(stringMap(v)).filter(([t]) => t in TASKS));
+    else if (key === 'imageModel') out[key] = typeof v === 'string' && v in IMAGE_MODELS ? v : def;
+    else if (key === 'depthModel') out[key] = typeof v === 'string' && v in DEPTH_MODELS ? v : def;
     else if (typeof v === typeof def && (typeof v !== 'number' || Number.isFinite(v))) out[key] = v;
   }
   return out as Settings;
@@ -86,6 +95,8 @@ export function chatSettings(s: Settings, downloadedModels: string[]): SettingCh
     { id: 'theme', label: 'Theme', values: ['system', 'light', 'dark'], current: s.theme },
     { id: 'translateTo', label: 'Translate into', values: null, current: s.translateTo },
     ...Object.entries(TASKS).map(([task, label]) => ({ id: `model.${task}`, label: `Model for ${label.toLowerCase()}`, values: ['automatic', ...downloadedModels], current: s.taskModels[task as TaskId] || 'automatic' })),
+    { id: 'imageModel', label: 'Model for creating images', values: Object.keys(IMAGE_MODELS), current: s.imageModel },
+    { id: 'depthModel', label: 'Model for animating images', values: Object.keys(DEPTH_MODELS), current: s.depthModel },
     ...Object.entries(SWITCHES).map(([key, sw]) => ({ id: key, label: sw.label, values: ['on', 'off'], current: s[key as SwitchKey] ? 'on' : 'off' })),
   ];
 }

@@ -12,6 +12,7 @@ import { broadcast, downloadStatus } from './broadcast.ts';
 import { readImage, IMAGE_READER, handlers as vision } from './helpers/vision.ts';
 import * as embed from './helpers/embed.ts';
 import * as imagegen from './helpers/imagegen.ts';
+import * as depth from './helpers/depth.ts';
 import * as stt from './helpers/stt.ts';
 
 // LiteRT's native logging goes to stderr, which Emscripten sends to console.error: INFO lines and harmless warnings
@@ -171,7 +172,9 @@ const handlers: Record<string, (msg: never) => unknown> = {
     cancelled.add(id);
   },
   ...embed.handlers,
-  ...imagegen.handlers,
+  // Pictures share the GPU with the LLM, so they wait their turn like a generation.
+  generateImage: (m: Parameters<typeof imagegen.handlers.generateImage>[0]) => lanes.schedule(() => imagegen.handlers.generateImage(m)),
+  depthMap: (m: Parameters<typeof depth.handlers.depthMap>[0]) => lanes.schedule(() => depth.handlers.depthMap(m)),
   ...stt.handlers,
   ...vision,
 };

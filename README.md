@@ -90,7 +90,8 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 |---|---|---|
 | Describe, extract text, ask about an image | Florence-2 reads the pixels on-device, Gemma answers | ✅ |
 | Ask about an area | Drag a box over the page | ✅ |
-| Create image | Janus-Pro-1B on-device (~2.4 GB, ~12 s per image), with Download and Copy | ✅ |
+| Create image | Pick the model in Settings → Picture models: Janus-Pro-1B (~2.4 GB, ~12 s, 384 px) or FLUX.2 klein 4B (~5.6 GB, sharper, 512 px). Download and Copy | ✅ Janus · ✅ FLUX: ~43 s per image on an M4 once cached (first run downloads 5.6 GB) |
+| Living photo | **Animate** on a created image: Depth Anything V2 (small or base, in Settings) reads depth, then a 4 s camera move with parallax, saved as WebM. The camera moves; the scene doesn't (no video model runs in a browser yet) | ✅ 4.1 s, 1.2 MB WebM |
 | Illustrate this | Gemma writes the prompt from your selection, Janus draws it | ✅ |
 | Drop an image file | On the launcher or card to ask about it | ✅ |
 | Alt text for the web | Writes alt text for images that have none (opt-in) | ✅ |

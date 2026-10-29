@@ -1,7 +1,9 @@
-// Images: create images on this device (Janus-Pro), illustrate a selection, ask about any area of the page (drag a
+// Images: create images on this device (Janus-Pro or FLUX.2 klein, per Settings), animate them into living photos,
+// illustrate a selection, ask about any area of the page (drag a
 // box), write alt text, and drop an image file onto the toolbar or card to ask about it.
 import { ui, type Rect } from '../core.ts';
 import { h } from '../../ui/dom.ts';
+import { animate, SECONDS } from './livephoto.ts';
 
 const btn = (label: string, onclick: () => unknown, primary = false) => h('button', { textContent: label, onclick: () => void onclick(), className: primary ? 'primary' : '' });
 const status = new Map<string, HTMLElement>(); // request id → the card's meta line (progress relayed by the worker)
@@ -13,8 +15,8 @@ async function createImage(prompt: string, rect: Rect): Promise<void> {
   const id = crypto.randomUUID();
   status.set(id, card.meta);
   const t0 = performance.now();
-  // ponytail: a soft cancel. Janus can't be interrupted mid-image, so Cancel drops the result while the GPU finishes
-  // (~12 s). Add an engine abort if that matters.
+  // ponytail: a soft cancel. The image models can't be interrupted mid-image, so Cancel drops the result while the
+  // GPU finishes (~12 s Janus, longer for FLUX). Add an engine abort if that matters.
   let cancelled = false;
   card.actions.replaceChildren(btn('Cancel', () => {
     cancelled = true;
@@ -23,11 +25,12 @@ async function createImage(prompt: string, rect: Rect): Promise<void> {
     card.actions.replaceChildren(btn('Start again', () => createImage(prompt, rect)));
   }));
   try {
-    const url = await ui.bg<string>('generateImage', { id, prompt });
+    const { url, model } = await ui.bg<{ url: string; model: string }>('generateImage', { id, prompt });
     if (cancelled) return;
     card.body.append(h('img', { className: 'eg-img', src: url, alt: prompt }));
-    card.meta.textContent = `Janus-Pro-1B · ${((performance.now() - t0) / 1000).toFixed(0)} s · On this device`;
+    card.meta.textContent = `${model} · ${((performance.now() - t0) / 1000).toFixed(0)} s · On this device`;
     card.actions.replaceChildren(
+      btn('Animate', () => livePhoto(url, prompt, rect), true),
       btn('Download', () => h('a', { href: url, download: 'homegrown.png' }).click()),
       btn('Copy', async () => navigator.clipboard.write([new ClipboardItem({ 'image/png': await (await fetch(url)).blob() })])),
       btn('Regenerate', () => createImage(prompt, rect)),
@@ -37,6 +40,31 @@ async function createImage(prompt: string, rect: Rect): Promise<void> {
     if (cancelled) return;
     card.meta.textContent = '';
     card.actions.replaceChildren(btn('Try again', () => createImage(prompt, rect)));
+    card.body.append(h('div', { className: 'err', textContent: (e as Error).message }));
+  } finally {
+    status.delete(id);
+  }
+}
+
+/** A living photo of a created image: depth from the local depth model, then a 4 s camera move, as WebM. */
+async function livePhoto(url: string, prompt: string, rect: Rect): Promise<void> {
+  const card = ui.openCard('Living photo', rect);
+  const id = crypto.randomUUID();
+  status.set(id, card.meta);
+  card.meta.textContent = 'Reading depth…';
+  try {
+    const depth = await ui.bg<string>('depthMap', { id, src: url });
+    card.meta.textContent = `Recording ${SECONDS} s…`;
+    const clip = await animate(url, depth);
+    const href = URL.createObjectURL(clip);
+    // A page's CSP may block blob: video; the still stays as the preview then, and Download still works.
+    const video = h('video', { className: 'eg-img', src: href, autoplay: true, loop: true, muted: true, playsInline: true, attrs: { 'aria-label': prompt } });
+    video.onerror = () => video.replaceWith(h('img', { className: 'eg-img', src: url, alt: prompt }));
+    card.body.append(video);
+    card.meta.textContent = `Living photo · ${(clip.size / 1e6).toFixed(1)} MB WebM · On this device`;
+    card.actions.replaceChildren(btn('Download', () => h('a', { href, download: 'homegrown.webm' }).click()), btn('Again', () => livePhoto(url, prompt, rect)));
+  } catch (e) {
+    card.meta.textContent = '';
     card.body.append(h('div', { className: 'err', textContent: (e as Error).message }));
   } finally {
     status.delete(id);

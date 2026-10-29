@@ -156,7 +156,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 
 ### Worker and engine commands by module
 
-- `images.ts`: `generateImage`, `capture`
+- `images.ts`: `generateImage`, `depthMap`, `capture`. `livephoto.ts`: WebGL parallax + MediaRecorder → WebM
 - `links.ts`: `fetchText`
 - `livecaptions.ts`: `liveStart`, `livePause`, `liveStop`
 - `memory.ts`: `memHighlightSave`, `memHighlights`, `memChanged`, `memSnapshot`, `memSimilar`

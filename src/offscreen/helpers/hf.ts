@@ -7,11 +7,20 @@ if (env.backends.onnx.wasm) env.backends.onnx.wasm.wasmPaths = chrome.runtime.ge
 
 export type Progress = (p: { status: string; file?: string; progress?: number }) => void;
 
-/** Loads once; a failed load (offline) is forgotten, so the next use retries. */
-export function lazily<T>(load: (onProgress?: Progress) => Promise<T>): (onProgress?: Progress) => Promise<T> {
+/** Loads once; a failed load (offline) is forgotten, so the next use retries. `release` frees it (models with a
+ * `dispose`), so a big model can make room for another. */
+export function lazily<T>(load: (onProgress?: Progress) => Promise<T>): ((onProgress?: Progress) => Promise<T>) & { release(): Promise<void> } {
   let ready: Promise<T> | null = null;
-  return (onProgress) => (ready ??= load(onProgress).catch((e: unknown) => {
+  const get = (onProgress?: Progress) => (ready ??= load(onProgress).catch((e: unknown) => {
     ready = null;
     throw e;
   }));
+  return Object.assign(get, {
+    async release() {
+      const was = ready;
+      ready = null;
+      const v = (await was?.catch(() => null)) as { model?: { dispose?(): Promise<unknown> } } | null;
+      await v?.model?.dispose?.();
+    },
+  });
 }
