@@ -29,7 +29,10 @@ runtime adapters and storage live outside `domain/`.
   prompt helpers. `RuntimeId` is `'litert-lm' | 'webllm' | 'prompt-api'`, but every `MODELS` entry uses
   `'litert-lm'`.
 - `reading.ts`: `OutlineNode`, `Question`, `parseOutline`, `parseQuiz`, `parseFlashcards`, `parseDialogue`,
-  `parseNumbered`, `chunks`, `sentences`, `bestPassages`, `fuzzy`. Parsers for fixed-format model output,
+  `parseNumbered`, `chunks`, `sentences`, `bestPassages`, `fuzzy`, and for many files (plan T9) `DocFile`, `Passage`,
+  `READER_FILES` (10), `citeLabel` ("file p.N"), `filePassages` (each file's best passages by keyword overlap),
+  `CITE_NOTE`, `CITE_ANSWER`, `keepCited` (drops a citation whose page doesn't hold the sentence's words, by
+  `grounded`), `citeFiles(ask, question, files, budget)` (map per file, reduce, `keepCited`). Parsers for fixed-format model output,
   paragraph chunking and passage selection for retrieval, sentence splitting for read-aloud, and the
   palette's fuzzy match. Defaults: `chunks` uses `size = 800`; `bestPassages` uses `max = 6, within = 0.6`.
 - `settings.ts`: `Theme`, `SWITCHES`, `SwitchKey`, `Settings`, `DEFAULTS`, `parseSettings`,
@@ -54,11 +57,21 @@ runtime adapters and storage live outside `domain/`.
   characters each, defanged) for the model's choice; `parsePick(reply)` (anything unusable is a skip; up to 6
   slugged fields); `pickRules(fields)`; `labelPairs(text)` and `factsRow(pairs)` (3 pairs or more);
   `SCROLL_LIMITS` (25 blocks, 40 model requests and 5 per list per page, 20 items a request).
-- `research.ts`: `isTerm(text)` (1–8 words, at most 80 characters), `termQuery(ask, term, context, title)` and
+- `research.ts`: `reportPrompt(q, evidence)` (the research report's instruction; with `evidence`, two headed
+  sections), `moveCited(report)` (a line with `[n]` under Assumptions moves to Evidence), `isTerm(text)` (1–8 words, at most 80 characters), `termQuery(ask, term, context, title)` and
   `termReport` (a fixed instruction). The term, title and sentence go to the model as data, defanged; the query is the
   reply's first line without quotes or a "Query:" label, at most 100 characters. A query that doesn't name
   the term, or a failed call, falls back to the term plus up to 3 longer title words.
-- `zip.ts`: `Zip`, `unzip`. Reads the zip central directory and returns a lazy reader for each entry.
+- `zip.ts`: `Zip`, `unzip`, `zipWrite`, `crc32`. Reads the zip central directory and returns a lazy reader for each
+  entry; `zipWrite(entries)` packs stored entries (CRC-32, UTF-8 names), which every unzip reads.
+- `outputs.ts` (plan T9): `Artifact` (`table`, `chart`, `deck`, `brief`, `onepager`, `brand`; `v: 1`), `Table`,
+  `Cell`, `Slide`, `Deck`, `Doc`, `Brand`, `parseArtifact` (per kind; null for a bad record or a newer `v`),
+  `parseTable`, `parseDeckData`, `parseBrand` (colours must be `rgb()`/hex, fonts plain, a logo only as an image
+  data URL), `DECK_MAX` (15), `deckFromBrief` (a title slide, then one per `##` heading with its lines as bullets),
+  `deckFromTable` (a title slide and a chart slide), `tableText`, `DECK_PROMPT`, `parseDeck` (a model's charts are
+  dropped), `writeDeck(ask, source, budget)` (one repair, then null).
+- `pptx.ts`: `pptx(deck, pictures, style)`: a .pptx of one master, one layout, one theme and one slide part per
+  slide (title, bullets, a chart PNG); `xml` (escapes text), `hex` (a CSS colour as `RRGGBB`).
 - [`mission/`](./mission/README.md): planning, running, checking and revising missions through injected
   ports.
 - [`scrape/`](./scrape/README.md): recipes for Collect from pages (ScrapingBee `extract_rules` syntax) and
@@ -126,8 +139,9 @@ contract. Where it differs, this list says so.
   - `resample` returns the input array (not a copy) when `from === to`.
   - `mission/extract.ts` `normalize()` changes the row passed to it.
   - `mission/rows.ts` `mergeRows` changes its own copies of the old rows, not the caller's rows.
+- `writeDeck` and `citeFiles` are async: they call the model through an injected `ask`.
 - These functions can throw on bad input:
-  - `linkWarnings`, `unzip`, `importTasks`, `fromJson3` and `jsonAfter`.
+  - `linkWarnings`, `unzip`, `importTasks`, `fromJson3`, `jsonAfter` and `pptx` (a deck with no slide).
   - `samplesOf` (`atob` on bad base64).
   - `parseBing` (`atob`) and `parseDuckDuckGo` (`decodeURIComponent`).
   - `decode` (`String.fromCodePoint` on an out-of-range `&#…;`), and so `htmlToText`, which calls it.
@@ -143,5 +157,6 @@ contract. Where it differs, this list says so.
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
   `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
-  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes` and `garden-plan`, 71 tests)
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes` and `garden-plan`, 71 tests; outputs, pptx, zip writing, evidence and cited passages in
+  `outputs`)
 - Type check: `npm run check`

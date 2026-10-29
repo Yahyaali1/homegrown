@@ -58,6 +58,7 @@ export const MODELS: readonly ModelSpec[] = [
     contextTokens: 4096,
     capabilities: ['text'],
     defaults: { temperature: 1, topK: 64, topP: 0.95 },
+    abilities: ['deck'], // bench/results/ability-deck-Gemma-4-E2B-it.json: 5/6 (twice); cite 2/4 and evidence 3/6 did not pass
     note: 'Small and fast; the default.',
   },
   {

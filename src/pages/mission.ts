@@ -9,6 +9,8 @@ import { parseWorkflow } from '../domain/mission/workflow.ts';
 import { columns, type Brief, type Row, type Step, type Workflow } from '../domain/mission/types.ts';
 import { hostOf } from '../domain/text.ts';
 import { toCsv } from '../domain/csv.ts';
+import { chart } from '../ui/chart.ts';
+import type { Artifact, Cell, Table } from '../domain/outputs.ts';
 import { parseAiRules, toAiExtractRules } from '../domain/scrape/ai.ts';
 import { needsDebugger, parsePageOptions, toPageParams } from '../domain/scrape/options.ts';
 import { describe, isAct, parseScenario } from '../domain/scrape/scenario.ts';
@@ -354,6 +356,25 @@ $('#json').onclick = async () => {
   setTimeout(() => (b.textContent = 'Copy JSON'), 1500);
 };
 $('#best').onclick = () => void (rows[0]?._url && open(rows[0]._url, '_blank'));
+// The rows as a table artifact's data, the page address last (as in the CSV).
+const asTable = (): Table => {
+  const keys = cols();
+  const src = keys.includes('source_url') ? '_source_url' : 'source_url';
+  return { columns: [...keys, src], rows: rows.map((r) => [...keys.map((k): Cell => (typeof r[k] === 'number' ? r[k] : r[k] == null ? null : String(r[k]))), r._url ?? null]) };
+};
+$('#chart-toggle').onclick = () => {
+  const on = $('#chart').hidden;
+  $('#chart').hidden = !on;
+  $('#table-wrap').hidden = on;
+  $('#chart-toggle').setAttribute('aria-pressed', String(on));
+  $('#chart-toggle').textContent = on ? 'Table' : 'Chart';
+  if (on) $('#chart').replaceChildren(chart(asTable(), 'bar'));
+};
+// Edits, charts, decks and exports happen on the output, so the run's own rows stay as found.
+$('#to-output').onclick = async () => {
+  const a = await bg<Artifact>('artifactSave', { artifact: { kind: 'table', title: (mode === 'find' && workflow?.goal) || 'Collected rows', data: asTable() } });
+  open(`outputs.html?id=${encodeURIComponent(a.id)}`, '_blank');
+};
 
 // ---- saved missions ----
 

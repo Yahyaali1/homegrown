@@ -1,0 +1,222 @@
+{
+  "ability": "deck",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 5,
+  "of": 6,
+  "violations": 0,
+  "passed": true,
+  "rule": "≥ 5/6 decks that parse, hold ≤ 15 slides, and state only facts in the source",
+  "cases": [
+    {
+      "id": "fern-care",
+      "ok": true,
+      "ms": 3090,
+      "calls": 1,
+      "deck": {
+        "slides": [
+          {
+            "title": "Light Requirements",
+            "bullets": [
+              "Boston ferns like bright, indirect light.",
+              "Direct sun burns the fronds."
+            ]
+          },
+          {
+            "title": "Watering Instructions",
+            "bullets": [
+              "Keep the soil moist but not wet.",
+              "Mist the leaves twice a week in winter."
+            ]
+          },
+          {
+            "title": "Feeding Schedule",
+            "bullets": [
+              "Feed once a month from April to September."
+            ]
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "moss-garden",
+      "ok": true,
+      "ms": 4966,
+      "calls": 1,
+      "deck": {
+        "slides": [
+          {
+            "title": "Moss Garden Requirements",
+            "bullets": [
+              "A moss garden needs shade, acid soil and steady moisture."
+            ]
+          },
+          {
+            "title": "Site Selection",
+            "bullets": [
+              "Pick a spot with at least 4 hours of shade."
+            ]
+          },
+          {
+            "title": "Soil Requirements",
+            "bullets": [
+              "Soil pH should be between 5.0 and 5.5."
+            ]
+          },
+          {
+            "title": "Planting",
+            "bullets": [
+              "Press moss pieces firmly into bare soil."
+            ]
+          },
+          {
+            "title": "Initial Watering",
+            "bullets": [
+              "Water every day for the first three weeks."
+            ]
+          },
+          {
+            "title": "Maintenance (Autumn)",
+            "bullets": [
+              "Remove fallen leaves each week in autumn."
+            ]
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "shop-quarter",
+      "ok": true,
+      "ms": 4360,
+      "calls": 1,
+      "deck": {
+        "slides": [
+          {
+            "title": "Quarterly Sales Summary",
+            "bullets": [
+              "Sales in the third quarter were £48,200",
+              "Sales were up 12% on the second quarter"
+            ]
+          },
+          {
+            "title": "What Sold",
+            "bullets": [
+              "Trowels were the best seller, with 1,140 sold",
+              "Copper watering cans sold out in August"
+            ]
+          },
+          {
+            "title": "Challenges Encountered",
+            "bullets": [
+              "Two suppliers delivered late in July",
+              "Returns rose to 3.1% of orders"
+            ]
+          },
+          {
+            "title": "Looking Ahead",
+            "bullets": [
+              "The shop will add a bulb range in October"
+            ]
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "pond",
+      "ok": false,
+      "ms": 5600,
+      "calls": 1,
+      "deck": {
+        "slides": [
+          {
+            "title": "Title Slide",
+            "bullets": [
+              "Information about a pond"
+            ]
+          },
+          {
+            "title": "Size",
+            "bullets": [
+              "A pond of 2 by 3 metres suits most gardens."
+            ]
+          },
+          {
+            "title": "Sloping End",
+            "bullets": [
+              "One end should slope gently so animals can climb out."
+            ]
+          },
+          {
+            "title": "Lining",
+            "bullets": [
+              "Use a 0.5 mm rubber liner on a layer of sand."
+            ]
+          },
+          {
+            "title": "Plants (Oxygenating)",
+            "bullets": [
+              "Add oxygenating plants such as hornwort."
+            ]
+          },
+          {
+            "title": "Lily Pads",
+            "bullets": [
+              "Cover no more than half the surface with lily pads."
+            ]
+          },
+          {
+            "title": "Timing",
+            "bullets": [
+              "Dig in early spring and fill with rainwater."
+            ]
+          }
+        ]
+      },
+      "fails": [
+        "not in the source: Information about a pond"
+      ]
+    },
+    {
+      "id": "trowel-table",
+      "ok": true,
+      "ms": 2076,
+      "calls": 1,
+      "deck": {
+        "slides": [
+          {
+            "title": "Trowel Data",
+            "bullets": [
+              "Ash Trowel: forged steel, 14.5 GBP",
+              "Birch Trowel: stainless, 11.25 GBP",
+              "Cedar Trowel: carbon steel, 12.99 GBP"
+            ]
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "visits-table",
+      "ok": true,
+      "ms": 2213,
+      "calls": 1,
+      "deck": {
+        "slides": [
+          {
+            "title": "Visitors and Events Data",
+            "bullets": [
+              "March: visitors 1200, events 2",
+              "April: visitors 1850, events 3",
+              "May: visitors 2400, events 5",
+              "June: visitors 2100, events 4"
+            ]
+          }
+        ]
+      },
+      "fails": []
+    }
+  ]
+}

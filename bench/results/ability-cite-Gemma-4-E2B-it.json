@@ -1,0 +1,55 @@
+{
+  "ability": "cite",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 2,
+  "of": 4,
+  "violations": 0,
+  "passed": false,
+  "rule": "≥ 3/4 answers right, every claim cited to a file and page that holds it",
+  "cases": [
+    {
+      "id": "fern-price",
+      "ok": true,
+      "ms": 2415,
+      "calls": 3,
+      "answer": "The Boston fern costs twelve pounds [catalogue.pdf p.2]. It needs to be watered twice a week [care.pdf p.1].",
+      "dropped": 0,
+      "fails": []
+    },
+    {
+      "id": "pond-depth",
+      "ok": true,
+      "ms": 1485,
+      "calls": 3,
+      "answer": "The pond should be 60 centimetres deep at its deepest point to prevent freezing [pond-guide.pdf p.2].",
+      "dropped": 0,
+      "fails": []
+    },
+    {
+      "id": "opening",
+      "ok": false,
+      "ms": 4349,
+      "calls": 4,
+      "answer": "The moss garden is open on Sundays from 10:00 to 16:00. The provided text does not mention the cost of entry.",
+      "dropped": 2,
+      "fails": [
+        "answer lacks \"five\"",
+        "2 citation(s) not held by their page",
+        "uncited: The moss garden is open on Sundays from 10:00 to 16:00.",
+        "uncited: The provided text does not mention the cost of entry."
+      ]
+    },
+    {
+      "id": "sales",
+      "ok": false,
+      "ms": 4096,
+      "calls": 4,
+      "answer": "Trowels were the best-selling product in the third quarter [q3-report.pdf p.2]. One,140 trowels were sold [q3-report.pdf p.2].",
+      "dropped": 0,
+      "fails": [
+        "answer lacks \"1,140\""
+      ]
+    }
+  ]
+}

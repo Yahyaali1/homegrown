@@ -136,3 +136,4 @@ td a { color: var(--link); text-decoration: none; }
 .shots img { max-width: 240px; max-height: 180px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--line); }
 .pipeline textarea.code { width: 100%; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-xs); resize: vertical; }
 .pipeline textarea.bad { box-shadow: 0 0 0 1px var(--danger, #c33); }
+.chart svg { max-width: 100%; height: auto; border-radius: var(--r-sm); }
