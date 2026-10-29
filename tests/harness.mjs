@@ -14,8 +14,10 @@ export function serve(dir, { cutAt } = {}) {
   const ranges = []; // Range headers seen, so tests can check that a download resumed
   const server = http.createServer((req, res) => {
     if (req.headers.range) ranges.push(req.headers.range);
+    // Echoes the request headers, so tests can see what a page was sent with.
+    if (req.url.startsWith('/echo-headers')) return res.writeHead(200, { 'Content-Type': 'text/html' }).end(`<!doctype html><pre id="h">${JSON.stringify(req.headers).replace(/</g, '&lt;')}</pre>`);
     const file = path.join(dir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
-    if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return res.writeHead(404).end();
+    if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return res.writeHead(404, { 'Content-Type': 'text/html' }).end('<!doctype html><h1>Not found</h1>'); // a page, as real 404s are
     const size = fs.statSync(file).size;
     const type = { '.html': 'text/html', '.png': 'image/png', '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.css': 'text/css', '.wav': 'audio/wav', '.svg': 'image/svg+xml', '.epub': 'application/epub+zip' }[path.extname(file)] || 'application/octet-stream';
     const m = /bytes=(\d+)-/.exec(req.headers.range || '');
@@ -48,7 +50,7 @@ export async function launch(opts = {}) {
   }
 }
 
-async function launchOnce({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [], contextOptions = {} } = {}) {
+async function launchOnce({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [], contextOptions = {}, ext = EXT } = {}) {
   // scripts/gpu.sh runs up to 3 checks at once, each with its own copy of the test profile.
   if (process.env.EG_PROFILE && userDataDir.endsWith('.profile-test')) userDataDir = process.env.EG_PROFILE;
   const port = await new Promise((r) => {
@@ -69,7 +71,7 @@ async function launchOnce({ headless = true, userDataDir = '', offline = false, 
     const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
     const ws = new WebSocket(webSocketDebuggerUrl);
     await new Promise((r) => (ws.onopen = r));
-    ws.send(JSON.stringify({ id: 1, method: 'Extensions.loadUnpacked', params: { path: EXT } }));
+    ws.send(JSON.stringify({ id: 1, method: 'Extensions.loadUnpacked', params: { path: ext } }));
     const res = JSON.parse(await new Promise((r) => (ws.onmessage = (e) => r(e.data))));
     ws.close();
     if (res.error) throw new Error(`loadUnpacked: ${res.error.message}`);

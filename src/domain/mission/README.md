@@ -22,7 +22,9 @@ it over web pages (or open tabs) with an act, check, revise loop.
 - `ports.ts`
   - `Ask`: one model call, `(instruction, data?, sampling?) => Promise<string>`.
   - `MissionPorts`: the injected I/O. It has `ask`, `search(query, n, engine)`, `engines`,
-    `readPage(url, terms)`, `progress(event)` and `signal: AbortSignal`.
+    `readPage(url, terms, scenario?)`, `progress(event)` and `signal: AbortSignal`. `scenario` is the Open step's
+    `js_scenario`, written by the user in Mission control (`parseWorkflow` keeps a valid one); the planner never
+    writes one.
   - `StepStatus`, `MissionEvent`: progress events of kind `planned`, `step` or `round`.
   - `Stopped`, `throwIfStopped`: the abort error class and the guard that throws it.
 - `types.ts`
@@ -87,9 +89,9 @@ it over web pages (or open tabs) with an act, check, revise loop.
 
 ## Invariants
 
-- All I/O goes through `MissionPorts` or `Ask`. Files here import only `../text.ts`, `../model.ts` and the
-  types from `shared/pagemodel.ts`. Do not use `chrome.*` or DOM APIs here.
-- The step order is search, open, extract, filter, (rank), answer. `parseWorkflow` rejects a workflow whose
+- All I/O goes through `MissionPorts` or `Ask`. Files here import only `../text.ts`, `../model.ts`,
+  `../scrape/scenario.ts` (the Open step's steps) and the types from `shared/pagemodel.ts`. Do not use `chrome.*` or DOM APIs here.
+- The step order is search, open, extract, filter, (rank), answer. `parseWorkflow` rejects a workflow with more than one Open step, and one whose
   first step is not search.
 - Limits:
   - `MAX_ROUNDS = 4` and `PARALLEL_PAGES = 3` (`runner.ts`).

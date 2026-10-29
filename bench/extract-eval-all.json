@@ -1,5 +1,5 @@
 {
- "date": "2026-10-28T14:28:15.979Z",
+ "date": "2026-10-29T07:00:28.911Z",
  "set": "all",
  "passed": 38,
  "total": 38,
@@ -67,7 +67,7 @@
   {
    "case": "scrapethissite: largest country by area (250-item list)",
    "pass": true,
-   "secs": "5",
+   "secs": "6",
    "via": "list",
    "rows": 5,
    "expected": {
@@ -115,16 +115,16 @@
   {
    "case": "Hacker News: story with the most points (title and points in separate rows)",
    "pass": true,
-   "secs": "6",
+   "secs": "4",
    "via": "list",
    "rows": 5,
    "expected": {
-    "name": "Ghostty 1.4",
-    "value": 1163
+    "name": "Apple's git still trusts the compromised eMudhra certificates",
+    "value": 1097
    },
    "got": {
-    "story": "Ghostty 1.4",
-    "points": 1163
+    "story": "Apple's git still trusts the compromised eMudhra certificates",
+    "points": 1097
    }
   },
   {
@@ -193,7 +193,7 @@
   {
    "case": "Wikipedia: elevation of Mount Everest (infobox)",
    "pass": true,
-   "secs": "3",
+   "secs": "5",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -222,7 +222,7 @@
   {
    "case": "scrapethissite: Boston Bruins best season by wins (filtered table)",
    "pass": true,
-   "secs": "3",
+   "secs": "4",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -252,7 +252,7 @@
   {
    "case": "Wikipedia: most populous city (large table)",
    "pass": true,
-   "secs": "4",
+   "secs": "6",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -285,7 +285,7 @@
   {
    "case": "Local: cheapest headphones in shadow-DOM product cards",
    "pass": true,
-   "secs": "7",
+   "secs": "8",
    "via": "model",
    "rows": 4,
    "expected": {
@@ -393,7 +393,7 @@
   {
    "case": "Wikipedia: year JavaScript first appeared (infobox date)",
    "pass": true,
-   "secs": "3",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -412,18 +412,18 @@
    "via": "list",
    "rows": 5,
    "expected": {
-    "name": "Median product \"lifespan\" has fallen from ~4y down to ~1.5y",
-    "value": 34
+    "name": "Ask HN: What do you believe or not believe about AI?",
+    "value": 38
    },
    "got": {
-    "post": "Median product \"lifespan\" has fallen from ~4y down to ~1.5y",
-    "comments": 34
+    "post": "Ask HN: What do you believe or not believe about AI?",
+    "comments": 38
    }
   },
   {
    "case": "Wikipedia: largest lake by area (table)",
    "pass": true,
-   "secs": "5",
+   "secs": "4",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -487,7 +487,7 @@
   {
    "case": "scrapethissite: Detroit season with most wins",
    "pass": true,
-   "secs": "4",
+   "secs": "3",
    "via": "table",
    "rows": 5,
    "expected": {
@@ -517,7 +517,7 @@
   {
    "case": "Wikipedia: length of the Amazon River (infobox)",
    "pass": true,
-   "secs": "3",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -535,7 +535,7 @@
   {
    "case": "Wikipedia: year Rust first appeared (infobox date)",
    "pass": true,
-   "secs": "3",
+   "secs": "5",
    "via": "table",
    "rows": 1,
    "expected": {
@@ -564,22 +564,22 @@
   {
    "case": "Hacker News Show: post with the most points",
    "pass": true,
-   "secs": "4",
+   "secs": "6",
    "via": "list",
    "rows": 5,
    "expected": {
     "name": "Show HN: TitleArt – Make text like it's 1997",
-    "value": 402
+    "value": 404
    },
    "got": {
     "post": "Show HN: TitleArt – Make text like it's 1997",
-    "points": 402
+    "points": 404
    }
   },
   {
    "case": "Wikipedia: total length of the Golden Gate Bridge (infobox)",
    "pass": true,
-   "secs": "3",
+   "secs": "4",
    "via": "table",
    "rows": 1,
    "expected": {

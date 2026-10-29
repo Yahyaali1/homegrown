@@ -10,6 +10,9 @@ import { columns, type Brief, type Row, type Step, type Workflow } from '../doma
 import { hostOf } from '../domain/text.ts';
 import { toCsv } from '../domain/csv.ts';
 import { parseAiRules, toAiExtractRules } from '../domain/scrape/ai.ts';
+import { needsDebugger, parsePageOptions, toPageParams } from '../domain/scrape/options.ts';
+import { describe, isAct, parseScenario } from '../domain/scrape/scenario.ts';
+import { riskOf } from '../domain/scrape/tools.ts';
 import { aiClash, parseRecipe, parseRules, toExtractRules, toRows, type PageResult, type Recipe, type Rules } from '../domain/scrape/recipe.ts';
 import { bg } from '../shared/protocol.ts';
 import type { LiveMission } from '../background/missions.ts';
@@ -125,7 +128,19 @@ function renderSteps(): void {
     switch (step.type) {
       case 'search': return step.urls?.length ? [small(`${step.urls.length} open tabs (no web search)`)]
         : [input(step, 'query', { attrs: { 'aria-label': 'Search query' } }), h('div', { className: 'row2' }, small('results'), input(step, 'n', { type: 'number', min: '1', max: '20' }))];
-      case 'open': return [h('div', { className: 'row2' }, small('top'), input(step, 'limit', { type: 'number', min: '1', max: '12' }))];
+      case 'open': {
+        // Optional ScrapingBee js_scenario run on each page before it is read: written by the user only.
+        const box = h('textarea', { className: 'code', rows: 2, spellcheck: false, placeholder: 'Before reading each page (js_scenario), e.g. {"instructions": [{"wait_for_and_click": "#accept"}]}', value: step.scenario ? JSON.stringify(step.scenario) : '', attrs: { 'aria-label': 'Before reading each page' },
+          oninput: () => {
+            const t = box.value.trim();
+            const sc = t ? parseScenario(t) : null;
+            box.classList.toggle('bad', !!t && !sc);
+            box.title = t && !sc ? 'Not a ScrapingBee js_scenario: every step must be one instruction (click, wait, wait_for, fill, …)' : '';
+            if (sc) step.scenario = sc;
+            else delete step.scenario;
+          } });
+        return [h('div', { className: 'row2' }, small('top'), input(step, 'limit', { type: 'number', min: '1', max: '12' })), box];
+      }
       case 'extract': return [
         h('input', { value: step.fields.join(', '), title: 'Comma-separated columns', attrs: { 'aria-label': 'Fields' },
           oninput: (e) => (step.fields = (e.target as HTMLInputElement).value.split(',').map((f) => f.trim().toLowerCase().replace(/\W+/g, '_')).filter(Boolean)), onchange: refreshKeepingFocus }),
@@ -171,6 +186,8 @@ function resetRun(): void {
 }
 $('#run').onclick = async () => {
   if (!workflow) return;
+  const acts = (workflow.steps.find((s) => s.type === 'open')?.scenario?.instructions ?? []).filter(isAct);
+  if (acts.length && !confirm(`Before reading each page, this mission will, in background tabs signed in as you:\n\n${acts.map((i) => `• ${describe(i)}`).join('\n')}\n\nRun it?`)) return;
   resetRun();
   const asked = detached;
   const { id } = await bg<{ id: string }>('missionStart', { goal: workflow.goal, workflow });
@@ -352,6 +369,13 @@ $('#save-btn').onclick = async () => {
     every: $<HTMLSelectElement>('#every').value,
     alert: field ? { field, op: $<HTMLSelectElement>('#alert-op').value, value: $<HTMLInputElement>('#alert-value').value } : null,
   };
+  // A schedule runs with nobody watching: steps that act need a yes for exactly these steps.
+  const scenario = workflow.steps.find((s) => s.type === 'open')?.scenario;
+  const acts = scenario?.instructions.filter(isAct) ?? [];
+  if (acts.length && mission.every) {
+    if (!confirm(`Every ${mission.every}, unattended, before reading each page this mission will, signed in as you:\n\n${acts.map((i) => `• ${describe(i)}`).join('\n')}\n\nSave it with this schedule?`)) return;
+    Object.assign(mission, { actsConfirmed: JSON.stringify(parseWorkflow(mission)!.steps) }); // every step: what it does, and where
+  }
   await bg('missionSave', { mission });
   workflow.id = mission.id;
   const b = $('#save-btn');
@@ -430,6 +454,7 @@ function setMode(to: 'find' | 'collect'): void {
   if (to === 'collect') $('#verdict').hidden = true; // finish() shows it for a mission
   rows = [];
   $('#results').hidden = true;
+  $('#shots').replaceChildren();
   if (to === 'collect') {
     if (collected) showCollected();
   } else {
@@ -439,6 +464,7 @@ function setMode(to: 'find' | 'collect'): void {
 }
 function showCollected(): void {
   if (!collected) return;
+  $('#shots').replaceChildren(...collected.results.flatMap((p) => (p.screenshot?.startsWith('data:image/png;base64,') ? [h('a', { href: p.screenshot, download: `${hostOf(p.url)}.png`, title: p.url }, h('img', { src: p.screenshot, alt: `Screenshot of ${p.url}` }))] : [])));
   rows = toRows(collected.results, collected.rules) as Row[];
   sort = null;
   $('#answer').textContent = '';
@@ -448,7 +474,18 @@ function showCollected(): void {
 for (const b of document.querySelectorAll<HTMLElement>('.modes [role=tab]')) b.onclick = () => setMode(b.dataset.mode === 'collect' ? 'collect' : 'find');
 
 let recipeId = '';
+const moreParams = (): Record<string, unknown> | null => {
+  const t = $<HTMLTextAreaElement>('#c-more').value.trim();
+  if (!t) return {};
+  try {
+    const v = JSON.parse(t);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+};
 const recipeFromForm = () => ({
+  ...moreParams(),
   id: recipeId || undefined,
   name: $<HTMLInputElement>('#c-name').value,
   urls: $<HTMLTextAreaElement>('#c-urls').value.split(/\s+/).filter(Boolean),
@@ -466,6 +503,8 @@ function recipeProblem(): string | null {
   if (!parseRules(f.extract_rules)) return 'The rules need to be JSON in ScrapingBee extract_rules form, e.g. {"title": "h1", "link": "a@href"}.';
   const ai = f.ai_extract_rules ? parseAiRules(f.ai_extract_rules) : null;
   if (f.ai_extract_rules && !ai) return 'The AI rules need to be JSON in ScrapingBee ai_extract_rules form, e.g. {"delivery": "delivery time in days"}; types are string, number, boolean or list.';
+  const more = moreParams();
+  if (!more || !parsePageOptions(more)) return 'The more parameters need to be a JSON object of ScrapingBee parameters; check js_scenario (every step must be one ScrapingBee instruction) and headers.';
   const clash = ai && aiClash(parseRules(f.extract_rules)!, ai);
   if (clash) return `"${clash}" is both a rule and an AI rule. Give the AI field another name.`;
   return null;
@@ -479,6 +518,8 @@ function loadRecipe(r: Recipe): void {
   $<HTMLInputElement>('#c-wait').value = String(r.wait / 1000);
   $<HTMLTextAreaElement>('#c-ai').value = r.ai ? JSON.stringify(toAiExtractRules(r.ai), null, 2) : '';
   $<HTMLInputElement>('#c-ai-selector').value = r.aiSelector;
+  const more = toPageParams(r.page);
+  $<HTMLTextAreaElement>('#c-more').value = Object.keys(more).length ? JSON.stringify(more, null, 2) : '';
   $<HTMLInputElement>('#c-pages').value = String(r.pages);
   $<HTMLInputElement>('#c-wait-for').value = r.waitFor;
 }
@@ -497,6 +538,11 @@ $('#c-run').onclick = async () => {
   if (problem) return void (status.textContent = problem);
   const recipe = parseRecipe(recipeFromForm());
   if (!recipe) return void (status.textContent = 'This recipe can’t run. Check the page addresses and the rules.');
+  // Steps that click, type or run code act on pages as you, signed in: say which, on which sites, before they run.
+  const acts = riskOf(recipe.page.js_scenario) === 'act' ? recipe.page.js_scenario!.instructions.filter(isAct) : [];
+  const sites = [...new Set(recipe.urls.map((u) => hostOf(u)))].join(', ');
+  if (acts.length && !confirm(`This recipe will, on ${sites}, in background tabs signed in as you:\n\n${acts.map((i) => `• ${describe(i)}`).join('\n')}\n\nRun it?`)) return void (status.textContent = 'Not run.');
+  if (needsDebugger(recipe.page) && !(await chrome.permissions.request({ permissions: ['debugger'] }))) return void (status.textContent = 'Screenshots, window size and device need the debugger permission.');
   collectRun = crypto.randomUUID();
   partial = [];
   const life = chrome.runtime.connect({ name: `scrape:${collectRun}` }); // closing or reloading this page stops the run
@@ -514,6 +560,12 @@ $('#c-run').onclick = async () => {
       `${n} row${n === 1 ? '' : 's'} from ${r.reads} page${r.reads === 1 ? '' : 's'}${r.stopped ? ' (stopped)' : ''}.`,
       failed.length && `${failed.length} page${failed.length === 1 ? '' : 's'} could not be read: ${failed[0]!.error}`,
       ...fieldErrors,
+      (() => {
+        const steps = r.results.flatMap((p) => p.js_scenario_report ?? []);
+        const bad = steps.filter((s) => !s.ok);
+        return steps.length ? `Steps: ${steps.length - bad.length} of ${steps.length} ran${bad.length ? `; ${bad[0]!.step} failed: ${bad[0]!.error}` : ''}.` : '';
+      })(),
+      ...[...new Set(r.results.flatMap((p) => (p.screenshotError ? [p.screenshotError] : [])))],
       r.ai.calls > 0 && `The model on this device filled ${r.ai.filled} value${r.ai.filled === 1 ? '' : 's'} in ${r.ai.calls} call${r.ai.calls === 1 ? '' : 's'}${r.ai.dropped ? `; ${r.ai.dropped} dropped as not on the page` : ''}.`,
       ...r.notes,
       !n && !failed.length && 'No element matched the rules. Check the selectors on one of the pages.',

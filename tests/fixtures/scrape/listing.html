@@ -1,0 +1,8 @@
+<!doctype html><html><head><title>Fern shop: all ferns</title></head>
+<body><main><h1>All ferns</h1><div id="grid"></div><button id="more">Load more</button></main>
+<script>
+let n = 0;
+const add = () => { for (let i = 0; i < 3; i++) { n++; const d = document.createElement('div'); d.className = 'product'; d.innerHTML = `<h3 class="name">Fern ${n}</h3><span class="price">$${10 + n}.00</span>`; document.getElementById('grid').append(d); } };
+add();
+document.getElementById('more').onclick = () => setTimeout(add, 200);
+</script></body></html>

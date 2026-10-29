@@ -697,6 +697,20 @@ test('collect from pages: AI rules are filled by the local model, one call per p
   expect(got).toEqual({ Fern: [2, true], Orchid: [5, false], Cactus: [3, true] }); // the injected "0 days" never lands
 });
 
+test('missions: the Open step runs the user\'s js_scenario on each page before reading it', async () => {
+  const url = `${siteA.url}/scrape/listing.html`;
+  const wf = (scenario) => ({ goal: 'list the ferns', brief: null, steps: [
+    { type: 'search', query: 'ferns', n: 1, urls: [url] }, { type: 'open', limit: 1, ...(scenario && { scenario }) },
+    { type: 'extract', fields: ['name', 'price'], require: [] }, { type: 'answer', question: 'List them.' }] });
+  const run = (w) => sw.evaluate((w) => self.bgHandlers.agentRun({ workflow: w, runId: crypto.randomUUID(), loop: false }), w);
+  const plain = await run(wf(null));
+  const more = await run(wf({ instructions: [{ click: '#more' }, { wait: 800 }] }));
+  const count = (r) => r.pool.filter((x) => /^Fern \d+$/.test(String(x.name))).length;
+  console.log(`  [mission scenario] without: ${count(plain)} rows, with "load more": ${count(more)} rows`);
+  expect(count(plain)).toBe(3);
+  expect(count(more)).toBe(6);
+});
+
 test('side panel missions: a mission over the open tabs runs in the background and shows up as done', async () => {
   const tabs = await Promise.all(['a', 'b', 'c'].map((s) => openPage(`shop/${s}.html`)));
   panel ??= await ctx.newPage();

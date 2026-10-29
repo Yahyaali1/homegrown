@@ -6,6 +6,7 @@ import { Readability } from '@mozilla/readability';
 import type { PageList, PageModel, PageRecord, PageTable, ReadOptions } from '../shared/pagemodel.ts';
 import { money, rating, toNumber } from './money.ts';
 import { scrape } from './scrape.ts';
+import { first, settle, step } from './scenario.ts';
 
 const clean = (s: unknown): string => String(s ?? '').replace(/\s+/g, ' ').trim();
 const abs = (u: string | null | undefined): string => {
@@ -107,13 +108,14 @@ function structured(): PageModel['structured'] {
 const cell = (c: Element): string => clean(((c as HTMLElement).innerText ?? c.textContent ?? '').replace(/\[(?:\d+|[a-z]|note \d+|citation needed)\]/gi, '')).slice(0, 200).replace(/\|/g, '/');
 const tableRows = (t: Element): string[][] => [...t.querySelectorAll('tr')].slice(0, 200).map((tr) => [...tr.children].map(cell));
 
-function toMarkdown(root: Node): string {
+/** `keepForms`: keep what forms and buttons contain (whole pages sit inside a <form> on some sites). */
+export function toMarkdown(root: Node, keepForms = false): string {
   const walk = (n: Node): string => {
     if (n.nodeType === Node.TEXT_NODE) return clean(n.textContent) ? (n.textContent ?? '').replace(/\s+/g, ' ') : '';
     if (n.nodeType !== Node.ELEMENT_NODE) return '';
     const el = n as Element;
     const tag = el.tagName.toLowerCase();
-    if (/^(script|style|noscript|svg|button|form|nav|footer)$/.test(tag)) return '';
+    if (/^(script|style|noscript|svg|nav|footer)$/.test(tag) || (!keepForms && /^(button|form)$/.test(tag))) return '';
     const inner = () => [...el.childNodes].map(walk).join('');
     if (/^h[1-6]$/.test(tag)) return `\n\n${'#'.repeat(Number(tag[1]))} ${clean(inner())}\n\n`;
     if (tag === 'p' || tag === 'div' || tag === 'section' || tag === 'article') return `\n\n${inner()}\n\n`;
@@ -352,7 +354,10 @@ export async function readPage({ scroll = true, shadow = false, terms = [] }: Re
 
 // Injected entry: one reader per frame, callable by chrome.scripting.executeScript({ func }).
 declare global {
-  interface Window { __hgReadPage?: typeof readPage; __hgScrape?: typeof scrape }
+  interface Window { __hgReadPage?: typeof readPage; __hgScrape?: typeof scrape; __hgStep?: typeof step; __hgSettle?: typeof settle; __hgFirst?: typeof first }
 }
 window.__hgReadPage ??= readPage;
 window.__hgScrape ??= scrape;
+window.__hgStep ??= step;
+window.__hgSettle ??= settle;
+window.__hgFirst ??= first;

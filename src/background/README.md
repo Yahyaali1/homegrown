@@ -53,8 +53,18 @@ It also owns these parts:
 - `missions.ts` handlers: `agentPlan`, `agentRun`, `agentCancel`, `agentOpen`, `missionStart`,
   `missionState`, `missionsLive`, `missionOpen`, `missionForget`, `missionsList`, `missionSave`,
   `missionDelete`, `priceSeen`, `shopCheck`.
+  - `agentRun`, `missionStart` and `missionSave` refuse an Open-step scenario that acts unless an extension page
+    sent it (`refuseActs`); a scheduled mission skips one whose workflow differs from the confirmation in
+    `trust.ts` (all its steps, so a rewritten search fails too) and says so in a notification that opens Mission
+    control. `missionSave` takes `actsConfirmed` only from an extension page and never
+    stores it with the mission.
+- `trust.ts`: `confirmed(id)`, `confirm(id, steps)`, `forget(id)` in IndexedDB `hg-trust` (store `confirmed`),
+  out of content scripts' reach, unlike `chrome.storage.local`.
   - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
-  - It exports `inTab`, `waitLoaded` and `Run` for `scrape.ts`. `inTab` gives up on a page after 90 s, and
+  - It exports `inTab`, `waitLoaded` and `Run`. `inTab(url, run, use, timeoutMs?, prepare?)`: with `prepare`, the
+    tab opens blank, `prepare(tabId)` sets it up and returns its cleanup, then the page loads.
+  - `readPage(url, terms, scenario?)`: the Open step's `js_scenario` runs first through `play`, never strict:
+    a failed step leaves the page as it is. `inTab` gives up on a page after 90 s, and
     Stop ends the wait at once; the tab is always closed.
   - It implements the `domain/mission` ports with real background tabs. Search tries Bing, then DuckDuckGo,
     then Brave in tabs, and `web.ts` `search` last.
@@ -137,7 +147,17 @@ It also owns these parts:
     30 price points for each. `shopCheck` runs once a day for each product and needs a price at least 3%
     lower.
 
-- `scrape.ts` handlers: `scrapeRun({ recipe, runId })`, `scrapeStop`, `recipesList`, `recipeSave`,
+- `pagerequest.ts`: `pageRequest(url, recipe, run)` and `play(tabId, scenario, run)`. One page, ScrapingBee
+  style: session `declarativeNetRequest` rules for this tab only (`block_resources`, `block_ads` from a short
+  host list, `headers`), device emulation through `chrome.debugger` (optional permission), then
+  `wait_browser`, `wait_for` and `wait`, then the steps (one `executeScript` each; after one, it waits for a
+  navigation the step started; `evaluate` through `chrome.userScripts.execute` in the MAIN world), then the
+  rules and page returns, then the screenshot (full page: a clip of the whole content).
+  `wait_browser: domcontentloaded` waits until the tab has left `about:blank` and its document is past
+  `loading`. Headers go only to the page's own site (`requestDomains`). Steps get 40 s in all; a strict failure makes the page an error
+  and keeps the report. The tab's rules and the debugger are removed when the tab closes.
+- `scrape.ts` handlers: `pageRequest({ url, params })` (ScrapingBee parameters → one page's JSON; steps that act are
+  refused unless an extension page asked), `pageTools` (the tool list), `scrapeRun({ recipe, runId })`, `scrapeStop`, `recipesList`, `recipeSave`,
   `recipeDelete`. `scrapeRun` reads each URL in a background tab with `__hgScrape` and follows next-page
   links up to `recipe.pages`, at most 25 pages per run, one second apart when following next links, never a page twice. Closing the
   page that started it, reloading it or leaving it stops the run: the page holds a `scrape:<runId>` port. Progress goes
@@ -157,6 +177,7 @@ It also owns these parts:
   - `local`: `savings`, `monitors`, `schedules`, `scheduledResults`, `missions`, `priceBook`, `tabNotes`, `recipes`
     (each `{v: 1, …}`, checked by `parseRecipe` on every read, at most 50).
   - `session`: the pending side-panel request (`pending`), `notifUrls`, `liveMissions`.
+- IndexedDB `hg-trust` v1 (store `confirmed`: the steps the user confirmed for each scheduled mission).
 - IndexedDB `eg-memory` v2, with the stores `history`, `highlights`, `kb` and `snapshots`. `onAnswer` adds
   `history`, updates `savings`, adds `kb` entries and saves `snapshots`.
 - On install, the content scripts are injected into every existing `http(s)` tab.
@@ -165,6 +186,9 @@ It also owns these parts:
   - `contextMenus`, `commands`, `sidePanel` and `omnibox`
   - `tabs`, `tabGroups` (the "Mission" group) and `windows` (`windows.getLastFocused`)
   - `scripting` (`executeScript` and `registerContentScripts`)
+  - `declarativeNetRequest` session rules (one tab each; ids from 1000, cleared at worker start), `userScripts`
+    (`evaluate`), `debugger` (optional; screenshots and emulation, shows Chrome's "started debugging" bar),
+    `permissions.contains`
   - `alarms` and `notifications`
   - `action.setBadgeText` and `tabCapture`
 - Network:

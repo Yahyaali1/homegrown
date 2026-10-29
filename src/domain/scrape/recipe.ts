@@ -1,9 +1,10 @@
 // Recipes: URLs plus extraction rules in ScrapingBee's extract_rules syntax, so rules copy between the two.
 import { parseAiRules, type AiRules } from './ai.ts';
+import { parsePageOptions, type PageOptions } from './options.ts';
 
 // Recipes come from the user, storage or a paste, so they are checked here once and the runner trusts them.
 
-export type Output = 'text' | 'html' | 'table_json' | 'table_array' | `@${string}` | Rules;
+export type Output = 'text' | 'text_relevant' | 'markdown_relevant' | 'html' | 'table_json' | 'table_array' | `@${string}` | Rules;
 export interface Rule { selector: string; selectorType: 'auto' | 'css' | 'xpath'; output: Output; type: 'item' | 'list'; clean: boolean }
 export type Rules = { [field: string]: Rule };
 
@@ -23,13 +24,15 @@ export interface Recipe {
   ai: AiRules | null;
   /** Where the model reads on a page without items (ScrapingBee ai_selector); empty = the main content. */
   aiSelector: string;
+  /** ScrapingBee page parameters: js_scenario, wait_browser, returns, blocking, headers, screenshots, ai_query. */
+  page: PageOptions;
 }
 
 export const LIMITS = { pages: 5, reads: 25, urls: 25, fields: 30, depth: 3, wait: 10000, recipes: 50 } as const;
 
 type Raw = Record<string, unknown>;
 const obj = (v: unknown): Raw | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null);
-const OUTPUTS = ['text', 'html', 'table_json', 'table_array'];
+const OUTPUTS = ['text', 'text_relevant', 'markdown_relevant', 'html', 'table_json', 'table_array'];
 
 function json(v: unknown): unknown {
   if (typeof v !== 'string') return v;
@@ -103,6 +106,8 @@ export function parseRecipe(raw: unknown): Recipe | null {
   const list = Array.isArray(r.urls) ? r.urls : typeof r.url === 'string' ? [r.url] : [];
   const urls = [...new Set(list.map((u) => String(u).trim()).filter((u) => URL.canParse(u) && /^https?:$/.test(new URL(u).protocol)))].slice(0, LIMITS.urls);
   if (!rules || !urls.length) return null;
+  const page = parsePageOptions(r.page ?? r); // saved recipes keep them under page; a ScrapingBee request has them at the top
+  if (!page || (page.ai_query && ('ai_query' in rules || (ai && 'ai_query' in ai)))) return null; // the answer lands in data.ai_query
   const waitFor = String(r.waitFor ?? r.wait_for ?? '').trim();
   const name = String(r.name ?? '').trim().slice(0, 80);
   return {
@@ -116,6 +121,7 @@ export function parseRecipe(raw: unknown): Recipe | null {
     wait: Math.min(Math.max(0, Math.floor(Number(r.wait)) || 0), LIMITS.wait),
     ai,
     aiSelector: String(r.aiSelector ?? r.ai_selector ?? '').trim().slice(0, 200),
+    page,
   };
 }
 
@@ -131,7 +137,26 @@ export function toExtractRules(rules: Rules): Record<string, unknown> {
 }
 
 /** What one page gave: the rules' JSON, as ScrapingBee returns it. */
-export interface PageResult { url: string; data: Record<string, unknown>; next?: string | null; error?: string; aiText?: string[] }
+export interface PageResult {
+  url: string;
+  data: Record<string, unknown>;
+  next?: string | null;
+  error?: string;
+  /** The navigation's HTTP status (transparent_status_code). */
+  status?: number | null;
+  aiText?: string[];
+  aiPage?: string;
+  /** ScrapingBee's page returns and scenario outputs, under their names. */
+  text?: string;
+  markdown?: string;
+  source?: string;
+  screenshot?: string;
+  screenshotError?: string;
+  js_scenario_report?: import('./scenario.ts').StepReport[];
+  evaluate_results?: unknown[];
+  /** Why something is missing (an AI step skipped), for pageRequest callers. */
+  notes?: string[];
+}
 export type ScrapeRow = Record<string, string | number | null> & { _url: string };
 
 const cellOf = (v: unknown): string | number | null =>

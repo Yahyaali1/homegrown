@@ -14,6 +14,10 @@ import { hostOf, num } from '../domain/text.ts';
 import { columns, type Row, type SearchResult, type Workflow } from '../domain/mission/types.ts';
 import type { Ask, MissionEvent, MissionPorts } from '../domain/mission/ports.ts';
 import { mergeFrames, type PageModel } from '../shared/pagemodel.ts';
+import { isExtensionPage, play, refuseActs } from './pagerequest.ts';
+import * as trust from './trust.ts';
+import { isAct } from '../domain/scrape/scenario.ts';
+import type { Scenario } from '../domain/scrape/scenario.ts';
 
 // Every model call in a mission uses the Missions model (Settings → Models → Use for).
 const ask: Ask = (instruction, data = '', sampling = {}) => engineAsk(instruction, data, { task: 'missions', ...sampling });
@@ -34,7 +38,23 @@ const ENGINES: readonly SearchEngine[] = [
 ];
 
 /** A running mission's handles: Stop, and the tab group its tabs live in. */
-export interface Run { stop: AbortController; group?: number | undefined }
+export interface Run { stop: AbortController; group?: number | undefined; regrouping?: Promise<number | undefined> | undefined }
+
+/**
+ * Puts a tab in the run's "❀ Mission" group. The group is gone once its last tab closed (the search tab, or the
+ * page before in Collect): then one new group, made by the first tab to find out; tabs opening alongside join it.
+ */
+async function joinGroup(run: Run, tabId: number): Promise<void> {
+  const into = (groupId: number) => chrome.tabs.group({ tabIds: tabId, groupId }).then(() => true, () => false);
+  if (run.group !== undefined && (await into(run.group))) return;
+  if (run.regrouping) {
+    const g = await run.regrouping;
+    if (g !== undefined && (await into(g))) return;
+  }
+  run.regrouping = chrome.tabs.group({ tabIds: tabId }).then((g) => (run.group = g), () => undefined);
+  await run.regrouping;
+  run.regrouping = undefined;
+}
 const runs = new Map<string, Run>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -49,17 +69,24 @@ export async function waitLoaded(tabId: number, ms: number): Promise<void> {
 
 /**
  * Opens url in a background tab inside the run's "❀ Mission" group, runs `use`, and always closes the tab. Stop, or
- * a page that hangs for `timeoutMs`, ends the wait at once: a busy or hostile page can't hold the run.
+ * a page that hangs for `timeoutMs`, ends the wait at once: a busy or hostile page can't hold the run. `prepare` runs
+ * on a blank tab before the page loads (request rules, device emulation) and returns its own cleanup.
  */
-export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Promise<T>, timeoutMs = 90000): Promise<T> {
+export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Promise<T>, timeoutMs = 90000, prepare?: (tabId: number) => Promise<() => Promise<void>>): Promise<T> {
   run.stop.signal.throwIfAborted();
-  const tab = await chrome.tabs.create({ url, active: false });
+  const tab = await chrome.tabs.create({ url: prepare ? 'about:blank' : url, active: false });
   const tabId = tab.id!;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let onAbort = () => {};
+  let cleanup = async () => {};
   try {
-    run.group = await chrome.tabs.group({ tabIds: tabId, ...(run.group !== undefined && { groupId: run.group }) }).catch(() => run.group);
+    // Grouped first: a worker that stops mid-setup leaves a tab the start-up cleanup can find.
+    await joinGroup(run, tabId);
     if (run.group !== undefined) chrome.tabGroups.update(run.group, { title: '❀ Mission', collapsed: true }).catch(() => {});
+    if (prepare) {
+      cleanup = await prepare(tabId);
+      await chrome.tabs.update(tabId, { url });
+    }
     const cut = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`${new URL(url).hostname} took too long to read.`)), timeoutMs);
       onAbort = () => reject(new DOMException('Stopped', 'AbortError'));
@@ -70,6 +97,7 @@ export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Pr
   } finally {
     clearTimeout(timer);
     run.stop.signal.removeEventListener('abort', onAbort);
+    await cleanup().catch(() => {});
     chrome.tabs.remove(tabId).catch(() => {});
   }
 }
@@ -91,10 +119,12 @@ function searchInTab(query: string, n: number, run: Run, engine: SearchEngine): 
 
 // Every frame is read, cross-origin iframes included (embedded shops, widgets). A background tab is ours to change:
 // lib/pageread.js may flatten shadow DOM and click controls named after the goal's terms.
-function readInTab(url: string, run: Run, terms: string[]): Promise<PageModel | null> {
+function readInTab(url: string, run: Run, terms: string[], scenario?: Scenario): Promise<PageModel | null> {
   return inTab(url, run, async (tabId) => {
     await waitLoaded(tabId, 20000);
     await sleep(1200); // late-rendered prices
+    // The user's steps before reading (Open step). A step that fails is skipped: the page is read as it is.
+    if (scenario) await play(tabId, { ...scenario, strict: false }, run);
     await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['lib/pageread.js'] });
     const frames = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
@@ -112,7 +142,7 @@ function portsFor(runId: string, run: Run): MissionPorts {
     // The tab engines first; the service worker's own fetch last (engines often challenge it, but it needs no tab).
     engines: ENGINES.length + 1,
     search: (q, n, e) => (ENGINES[e] ? searchInTab(q, n, run, ENGINES[e]) : webSearch({ q, n })),
-    readPage: (url, terms) => readInTab(url, run, terms),
+    readPage: (url, terms, scenario) => readInTab(url, run, terms, scenario),
     progress: (event) => say(runId, event),
     signal: run.stop.signal,
   };
@@ -336,17 +366,24 @@ async function shopDone(m: LiveMission, product: SeenProduct, key: string, tabId
 
 // ---- saved missions and schedules (chrome.storage.local 'missions') ----
 
-interface SavedMission extends Workflow { id: string; name: string; every?: 'hour' | 'day'; alert?: { field: string; op: '<' | '>' | 'contains' | '='; value: string }; lastBest?: string; lastRun?: number }
+interface SavedMission extends Workflow { id: string; name: string; every?: 'hour' | 'day'; /** Sent by Mission control, kept in trust.ts, never stored with the mission. */ actsConfirmed?: string; alert?: { field: string; op: '<' | '>' | 'contains' | '='; value: string }; lastBest?: string; lastRun?: number }
 const getMissions = async (): Promise<SavedMission[]> => {
   const { missions } = await chrome.storage.local.get({ missions: [] });
   return Array.isArray(missions) ? (missions as SavedMission[]) : [];
 };
 const setMissions = (missions: SavedMission[]) => chrome.storage.local.set({ missions });
 
-async function scheduled(id: string): Promise<void> {
+export async function scheduled(id: string): Promise<void> {
   const m = (await getMissions()).find((x) => x.id === id);
   const wf = parseWorkflow(m);
   if (!m || !wf) return;
+  // Unattended runs only do steps that act if the user confirmed exactly these steps for the schedule.
+  const scenario = wf.steps.find((s) => s.type === 'open')?.scenario;
+  // The whole workflow is what was confirmed: the same steps on other pages (a rewritten search) don't pass.
+  if (scenario?.instructions.some(isAct) && (await trust.confirmed(id)) !== JSON.stringify(wf.steps)) {
+    chrome.notifications.create(`unconfirmed:${id}`, { type: 'basic', iconUrl: 'icon128.png', title: `Mission: ${m.name}`, message: 'Not run: its steps before reading aren’t confirmed for unattended runs. Open it in Mission control and save it again.' });
+    return;
+  }
   const { rows } = await withRun(crypto.randomUUID(), (ports) => runWorkflow(ports, wf));
   const best = rows[0];
   if (!best) return;
@@ -357,17 +394,23 @@ async function scheduled(id: string): Promise<void> {
   if (hit) chrome.notifications.create(`mission:${id}:${best._url}`, { type: 'basic', iconUrl: 'icon128.png', title: `Mission: ${m.name}`, message: `Best now: ${label}` });
 }
 
-const valid = (raw: unknown): Workflow => {
+type Sender = chrome.runtime.MessageSender | null | undefined;
+const openScenario = (wf: Workflow) => wf.steps.find((s) => s.type === 'open')?.scenario;
+/** A runnable workflow; steps that act only from Homegrown's own pages (refuseActs). */
+const valid = (raw: unknown, sender?: Sender): Workflow => {
   const wf = parseWorkflow(raw);
   if (!wf) throw new Error('This mission can’t run: it needs a goal and a search step.');
+  refuseActs(sender, openScenario(wf));
   return wf;
 };
 
 export const handlers = {
   agentPlan: ({ goal, context = '' }: { goal: string; context?: string }) => plan(ask, goal, context),
   // loop: false runs the workflow once (benchmarks, schedules); missions from the page loop by default.
-  agentRun: ({ workflow, runId, loop = true }: { workflow: unknown; runId: string; loop?: boolean }) =>
-    withRun(runId, (ports) => (loop ? runMission(ports, valid(workflow)) : runWorkflow(ports, valid(workflow)))),
+  agentRun: ({ workflow, runId, loop = true }: { workflow: unknown; runId: string; loop?: boolean }, sender?: Sender) => {
+    const wf = valid(workflow, sender);
+    return withRun(runId, (ports) => (loop ? runMission(ports, wf) : runWorkflow(ports, wf)));
+  },
   agentCancel: ({ runId }: { runId: string }) => (runs.get(runId)?.stop.abort(), true),
   // tabs: true → the mission reads the current window's open web tabs instead of searching.
   // run: start it in the background and open Mission control on it; otherwise open Mission control to plan it.
@@ -382,7 +425,7 @@ export const handlers = {
     await chrome.tabs.create({ url: `${MISSION_PAGE()}?${new URLSearchParams({ goal, context, urls: urls.join('\n') })}` });
     return true;
   },
-  missionStart: ({ goal, workflow }: { goal: string; workflow: unknown }) => missionStart({ goal, workflow: valid(workflow) }),
+  missionStart: ({ goal, workflow }: { goal: string; workflow: unknown }, sender?: Sender) => missionStart({ goal, workflow: valid(workflow, sender) }),
   // Attaching marks it seen. Full state for Mission control; summaries for lists.
   missionState: ({ id }: { id: string }) => (unseen.delete(id), badge(), live.get(id) ?? null),
   missionsLive: () => [...live.values()].map(summary).reverse(),
@@ -391,7 +434,15 @@ export const handlers = {
   shopCheck,
   missionForget: ({ id }: { id: string }) => (live.delete(id), unseen.delete(id), badge(), persist(), true),
   missionsList: getMissions,
-  missionSave: async ({ mission }: { mission: SavedMission }) => {
+  missionSave: async ({ mission }: { mission: SavedMission }, sender?: Sender) => {
+    const wf = parseWorkflow(mission);
+    if (wf) refuseActs(sender, openScenario(wf));
+    // The confirmation for unattended runs lives where content scripts can't write it (trust.ts), and only an
+    // extension page may give one.
+    const { actsConfirmed, ...rest } = mission;
+    mission = rest;
+    if (actsConfirmed && isExtensionPage(sender)) await trust.confirm(mission.id, actsConfirmed);
+    else await trust.forget(mission.id);
     await setMissions([...(await getMissions()).filter((m) => m.id !== mission.id), mission]);
     await chrome.alarms.clear(`mission:${mission.id}`);
     if (mission.every) chrome.alarms.create(`mission:${mission.id}`, { periodInMinutes: mission.every === 'hour' ? 60 : 1440 });
@@ -399,6 +450,7 @@ export const handlers = {
   },
   missionDelete: async ({ id }: { id: string }) => {
     await setMissions((await getMissions()).filter((m) => m.id !== id));
+    await trust.forget(id); // a later mission with this id starts unconfirmed
     await chrome.alarms.clear(`mission:${id}`);
     return true;
   },
@@ -409,6 +461,7 @@ export function init(): void {
   chrome.notifications.onClicked.addListener((id) => {
     if (id.startsWith('mission:')) chrome.tabs.create({ url: id.split(':').slice(2).join(':') });
     if (id.startsWith('live:')) openMission(id.slice(5));
+    if (id.startsWith('unconfirmed:')) chrome.tabs.create({ url: MISSION_PAGE() });
   });
   // A restarted worker owns no run yet, so tabs left in "❀ Mission" groups are orphans of the old one: close them.
   chrome.tabGroups.query({ title: '❀ Mission' }).then(async (groups) => {

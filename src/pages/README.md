@@ -42,7 +42,8 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     `agentOpen`, `missionsLive`, `missionOpen`, `missionsList`, `missionDelete`).
   - Model pickers for each task, and the model manager.
 - `mission.ts` (`agent.html`): Mission control.
-  - It plans with `bg('agentPlan')`, edits the brief and the steps, and runs with `bg('missionStart')`.
+  - It plans with `bg('agentPlan')`, edits the brief and the steps (the Open step has a "Before reading each
+    page" `js_scenario` box; steps that act are confirmed before Run), and runs with `bg('missionStart')`.
   - It shows `agent-progress` and `agent-done`. Stop sends `bg('agentCancel', {runId})`.
   - It attaches to a run with `bg('missionState', {id})`.
   - It saves with `bg('missionSave')`. The saved-missions list uses `bg('missionsList')`, with Open and
@@ -51,7 +52,9 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     `source_url` column, or `_source_url` when a field has that name), copies them as JSON, and opens the best result.
   - **Collect from pages** mode: URLs, ScrapingBee `extract_rules` and optional `ai_extract_rules` (with
     "AI reads" for `ai_selector`), pages per URL, wait for, then wait. The status line says how many values the
-    model filled and dropped. Runs
+    model filled and dropped. A "More ScrapingBee parameters" box takes the page parameters as JSON
+    (`options.ts`); steps that act are listed for confirmation by site before the run, and options that need the
+    debugger ask for that permission on the click. Screenshots show under the table. Runs
     with `bg('scrapeRun', {recipe, runId})`, shows `scrape-progress`, and keeps the pages that arrived if the
     run breaks off. Stop sends `bg('scrapeStop')`. While a run goes, the page holds a
     `chrome.runtime.connect({name: 'scrape:<runId>'})` port, so closing, reloading or leaving the page stops it. Saved recipes share the Saved list (`bg('recipesList')`,
@@ -122,6 +125,8 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - Listens for engine broadcasts and for `agent-progress`, `agent-done` and `scrape-progress`.
 - Writes `localStorage.tab` and calls `history.replaceState`.
 - Fetches images and documents, using the extension's host permissions.
+- `chrome.permissions.request({permissions: ['debugger']})` on the Collect click when options need it, and
+  `confirm()` for steps that act (Run, Collect, and Save with a schedule).
 - File pickers and drag and drop.
 - Downloads: a Blob of the task export (`homegrown-tasks.json`) and a CSV Blob of mission results
   (`mission.csv`) or of collected rows (`collected.csv`).

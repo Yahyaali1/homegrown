@@ -110,7 +110,8 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Across my open tabs | Compare the tabs you already have open, no web search | ✅ |
 | Find it cheaper / Alert me if it drops | Chips on product pages (from the page's product data) | ✅ |
 | Saved and scheduled missions | Hourly or daily, with a notification when the best result changes or crosses a value | ✅ |
-| Collect from pages (rules) | Mission control → **Collect from pages**: paste page addresses and ScrapingBee-style `extract_rules` (CSS or XPath, `@href`, item or list, nested, tables), wait for an element, follow next-page links up to 5 pages. Optional `ai_extract_rules`: the local model fills described fields in one call per page, and keeps only values found in that item's text. Table, Copy JSON, formula-safe CSV, saved recipes. No clicks | ✅ fixture site: 3 pages, late content, a loop back to page 1; AI rules on Gemma 4 E2B: 6/6 values, injected '0 days' ignored |
+| Collect from pages (rules) | Mission control → **Collect from pages**: paste page addresses and ScrapingBee-style `extract_rules` (CSS or XPath, `@href`, item or list, nested, tables), wait for an element, follow next-page links up to 5 pages. Optional `ai_extract_rules`: the local model fills described fields (one call per page, or per few items), and keeps only values found in that item's text. Table, Copy JSON, formula-safe CSV, saved recipes. Steps that click or type: see the next row | ✅ fixture site: 3 pages, late content, a loop back to page 1; AI rules on Gemma 4 E2B: 6/6 values, injected '0 days' ignored |
+| ScrapingBee parameters and steps | Collect and missions take ScrapingBee's `js_scenario` (click, fill, wait, wait for and click, scroll, infinite scroll with "load more", `evaluate` through Chrome's user scripts), `wait_browser`, `text_relevant` / `markdown_relevant`, page text, Markdown and HTML, the HTTP status, `block_ads`, `block_resources`, headers, screenshots and a phone viewport. Steps that act are confirmed first; proxies, credits and cookies don't apply to your own browser ([plan](docs/plan/P-scrapingbee-tools.md)) | ✅ fixture shop: search form, three "load more" rounds, blocked image, header echo, 404, screenshots; a mission reading 6 rows instead of 3 |
 | Address-bar keyword `eg` | Starts a mission from anywhere | ○ can't be typed in headless tests |
 
 ### Web, tabs and automation
@@ -290,7 +291,7 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
   - `sync`: settings and tasks. When there are no `tasks` yet, the worker seeds the default tasks, adds any legacy `customPrompts` as text tasks, and removes `customPrompts`.
   - `local`: `priceBook` (price memory), `monitors`, `schedules`, `scheduledResults`, `missions` (saved missions), `recipes` (saved Collect from pages recipes, `{v: 1}`), `flashcards`, `savings`, `tabNotes`, `captionSize` and `voiceSamples`.
   - `session`: `liveMissions`, `pending` (a menu request handed to the side panel) and `notifUrls` (notification targets).
-- IndexedDB `eg-memory` with the stores `history`, `highlights`, `kb` (saved pages) and `snapshots`; OPFS (model files); Cache Storage (helper models).
+- IndexedDB `hg-trust` (confirmed steps for scheduled missions, out of content scripts' reach) and IndexedDB `eg-memory` with the stores `history`, `highlights`, `kb` (saved pages) and `snapshots`; OPFS (model files); Cache Storage (helper models).
 - Network:
   - Model downloads from Hugging Face.
   - Search by `fetch` in `background/web.ts`: `html.duckduckgo.com`, Bing and the Wikipedia API.
@@ -305,6 +306,10 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
   - `chrome.tabs.captureVisibleTab` for screenshots, and `scripting.executeScript` to inject content scripts and the page reader.
 - Context menus (task menus, live captions, the PDF reader), `chrome.alarms` for monitors and schedules, and `chrome.notifications` for their results.
 - Microphone and tab audio for voice and live captions.
+- Page tools (Collect, missions, `pageRequest`), only in Homegrown's background tabs:
+  - `js_scenario` steps the user wrote click, type into fields and scroll; `evaluate` runs through `chrome.userScripts` when Chrome's "Allow user scripts" is on.
+  - `declarativeNetRequest` session rules scoped to one tab (blocked resources and ad hosts, extra headers), removed when the tab closes.
+  - `chrome.debugger` (optional permission, asked for on first use) for screenshots and device or window size, detached when the tab closes; Chrome shows its "started debugging this browser" bar meanwhile.
 
 ### System Verification
 

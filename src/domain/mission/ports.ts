@@ -2,6 +2,7 @@
 // with tabs and the model engine; tests implement them with fixtures and a scripted model.
 import type { Sampling } from '../model.ts';
 import type { PageModel } from '../../shared/pagemodel.ts';
+import type { Scenario } from '../scrape/scenario.ts';
 import type { Row, SearchResult, Step, Workflow } from './types.ts';
 
 /** One model call: an instruction plus optional data (page text, a table), answered as text. */
@@ -14,7 +15,8 @@ export interface MissionPorts {
   /** How many engines `search` can try, in order. */
   readonly engines: number;
   /** Renders and reads a page; null when it can't be read. `terms` name in-page controls worth clicking. */
-  readPage(url: string, terms: string[]): Promise<PageModel | null>;
+  /** `scenario`: the user's js_scenario steps, run on the page before it is read. */
+  readPage(url: string, terms: string[], scenario?: Scenario): Promise<PageModel | null>;
   progress(event: MissionEvent): void;
   /** Stop asked for: every step checks it, and long calls should honour it. */
   signal: AbortSignal;

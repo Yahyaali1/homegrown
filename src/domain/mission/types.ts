@@ -1,3 +1,5 @@
+import type { Scenario } from '../scrape/scenario.ts';
+
 // The mission vocabulary. A mission turns a goal into a brief (what the user wants) and a workflow (how to find
 // it), runs the workflow over web pages, checks the result against the brief, and revises until it holds.
 
@@ -44,7 +46,7 @@ export interface Brief {
 
 export type Step =
   | { type: 'search'; query: string; n: number; urls?: string[] }
-  | { type: 'open'; limit: number }
+  | { type: 'open'; limit: number; scenario?: Scenario }
   | { type: 'extract'; fields: string[]; require: string[] }
   | { type: 'filter'; field: string; op: Op; value: string }
   | { type: 'rank'; by: string; order: Order; keep: number }

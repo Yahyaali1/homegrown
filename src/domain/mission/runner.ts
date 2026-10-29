@@ -41,7 +41,8 @@ async function search(ports: MissionPorts, step: StepOf<'search'>, wf: Workflow,
 }
 
 /** Opens up to `limit` results, a few at a time. Pages that can't be read or are empty are skipped. */
-async function open(ports: MissionPorts, index: number, results: SearchResult[], limit: number, terms: string[], state: LoopState | null): Promise<PageModel[]> {
+async function open(ports: MissionPorts, index: number, results: SearchResult[], step: StepOf<'open'>, terms: string[], state: LoopState | null): Promise<PageModel[]> {
+  const { limit, scenario } = step;
   const todo = results.slice(0, limit);
   const pages: PageModel[] = [];
   let next = 0;
@@ -50,7 +51,7 @@ async function open(ports: MissionPorts, index: number, results: SearchResult[],
       const r = todo[next++]!;
       state?.seen.add(r.url);
       ports.progress({ kind: 'step', index, status: 'running', log: [`reading ${hostOf(r.url)}`] });
-      const p = await ports.readPage(r.url, terms).catch(() => null);
+      const p = await ports.readPage(r.url, terms, scenario).catch(() => null);
       if (p && (p.text.length > 60 || p.structured.products.length || p.lists.length || p.tables.length)) pages.push(p);
       ports.progress({ kind: 'step', index, status: 'running', detail: `${pages.length}/${todo.length} pages read` });
     }
@@ -87,7 +88,7 @@ export async function runWorkflow(ports: MissionPorts, wf: Workflow, state: Loop
         // Terms an in-page control may be named after: must-haves plus numbers in the goal ("2015" year tabs).
         const require = stepsOf(wf, 'extract')?.require ?? [];
         const terms = [...new Set([...requiredTerms(goal), ...(goal.match(/\b\d{2,4}\b/g) ?? []), ...require])];
-        pages = await open(ports, i, results, step.limit, terms, state);
+        pages = await open(ports, i, results, step, terms, state);
         say(i, { status: 'done', detail: `${pages.length} pages read` });
         break;
       }

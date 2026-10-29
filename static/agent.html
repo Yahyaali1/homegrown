@@ -41,6 +41,8 @@
       <textarea id="c-rules" rows="6" spellcheck="false" class="code"></textarea>
       <label for="c-ai" class="sub">AI rules <span class="muted small">optional, filled by the model on this device: ScrapingBee ai_extract_rules, e.g. {"delivery": "delivery time in days", "in_stock": {"description": "is it available", "type": "boolean"}}</span></label>
       <textarea id="c-ai" rows="2" spellcheck="false" class="code"></textarea>
+      <label for="c-more" class="sub">More ScrapingBee parameters <span class="muted small">optional JSON: js_scenario, wait_browser, ai_query, return_page_text, return_page_markdown, return_page_source, block_ads, block_resources, headers, screenshot, screenshot_full_page, screenshot_selector, window_width, window_height, device, timeout</span></label>
+      <textarea id="c-more" rows="3" spellcheck="false" class="code" placeholder='{"js_scenario": {"instructions": [{"wait_for_and_click": "#load-more"}]}, "block_ads": true}'></textarea>
       <div class="save-row">
         <label class="muted small" for="c-pages">Pages per URL</label>
         <input id="c-pages" type="number" min="1" max="5" value="1" size="3">
@@ -88,6 +90,7 @@
       </div>
       <div id="answer" class="answer"></div>
       <div class="table-wrap"><table id="table"></table></div>
+      <div id="shots" class="shots"></div>
     </section>
 
     <section id="save" hidden>

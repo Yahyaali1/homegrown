@@ -196,4 +196,4 @@ for (const m of modules) m.init?.();
 chrome.storage.sync.onChanged.addListener((c) => c.tasks && buildMenus());
 
 // For tests that drive the worker directly (Playwright can't click native context menus).
-Object.assign(self, { ensureEngine, handleMenuClick, seedTasks, bgHandlers: handlers });
+Object.assign(self, { ensureEngine, handleMenuClick, seedTasks, bgHandlers: handlers, missionScheduled: missions.scheduled });

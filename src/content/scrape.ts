@@ -1,6 +1,7 @@
 // Rules-driven reading (domain/scrape): applies ScrapingBee-style extract rules to the live page and finds the
 // next-page link. Part of lib/pageread.js, injected into the top frame of a background tab; read-only, no clicks.
 import type { Rule, Rules } from '../domain/scrape/recipe.ts';
+import { markdownOf, status, textOf } from './scenario.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const tidy = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
@@ -30,6 +31,8 @@ function value(node: Node, rule: Rule): unknown {
   const out = rule.output;
   if (typeof out === 'object') return extract(el, out);
   if (out === 'html') return rule.clean ? el.innerHTML.trim() : el.innerHTML;
+  if (out === 'text_relevant') return textOf(el);
+  if (out === 'markdown_relevant') return markdownOf(el);
   if (out === 'table_json' || out === 'table_array') return table(el, out === 'table_json');
   if (out.startsWith('@')) {
     const raw = el.getAttribute(out.slice(1));
@@ -118,8 +121,13 @@ function aiText(rules: Rules, items: string | null, aiSelector: string): string[
   return [text(scope ?? document.querySelector('main, [role=main], article') ?? document.body).slice(0, 6000)];
 }
 
-/** The injected entry: waits as asked, then returns the rules' data and the next page (and text for AI rules). */
-export async function scrape({ rules, waitFor = '', wait = 0, ai = null }: { rules: Rules; waitFor?: string; wait?: number; ai?: { items: string | null; selector: string } | null }) {
+export interface Returns { text?: boolean; markdown?: boolean; source?: boolean; query?: boolean }
+
+/**
+ * The injected entry: waits as asked, then returns the rules' data, the next page, the HTTP status, text for AI
+ * rules and ai_query, and the page returns ScrapingBee calls return_page_text / _markdown / _source.
+ */
+export async function scrape({ rules, waitFor = '', wait = 0, ai = null, returns = {} }: { rules: Rules; waitFor?: string; wait?: number; ai?: { items: string | null; selector: string } | null; returns?: Returns }) {
   if (waitFor) {
     for (let t = 0; t < 10000; t += 200) {
       try {
@@ -131,5 +139,16 @@ export async function scrape({ rules, waitFor = '', wait = 0, ai = null }: { rul
     }
   }
   if (wait > 0) await sleep(Math.min(wait, 10000));
-  return { url: location.href, data: extract(document, rules), next: nextPage(), ...(ai && { aiText: aiText(rules, ai.items, ai.selector) }) };
+  const page = document.body ?? document.documentElement;
+  return {
+    url: location.href,
+    data: extract(document, rules),
+    next: nextPage(),
+    status: status(),
+    ...(ai && { aiText: aiText(rules, ai.items, ai.selector) }),
+    ...(returns.query && { aiPage: aiText(rules, null, ai?.selector ?? '')[0] ?? '' }),
+    ...(returns.text && { text: textOf(page).slice(0, 200000) }),
+    ...(returns.markdown && { markdown: markdownOf(page).slice(0, 200000) }),
+    ...(returns.source && { source: document.documentElement.outerHTML.slice(0, 2000000) }),
+  };
 }

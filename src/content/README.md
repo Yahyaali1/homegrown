@@ -39,10 +39,20 @@ The other files are separate bundles or pure helpers:
   - `readPage(opts): Promise<PageModel>`: a layered page reader. It uses JSON-LD, microdata and Open Graph,
     then Readability markdown, tables, lists and plain text.
   - `window.__hgReadPage`: the same reader, set for `chrome.scripting.executeScript`.
-  - `window.__hgScrape`: `scrape.ts` `scrape({ rules, waitFor, wait, ai })`, bundled into the same file. With
+  - `window.__hgScrape`: `scrape.ts` `scrape({ rules, waitFor, wait, ai, returns })`, bundled into the same
+    file. It returns `{ url, data, next, status }`, plus `text`, `markdown` and `source` when `returns` asks,
+    and `aiPage` (the page block) for `ai_query`. With
     `ai: { items, selector }` it also returns `aiText`: the text of each item the item rule matched (at most
     20, 1500 characters each), or one block for the page: the `ai_selector` element, else `main`, `[role=main]`,
     `article` or the body (6000 characters).
+- `scenario.ts` (in `lib/pageread.js`): `step(instruction, ms)` runs one `js_scenario` step (not `evaluate`,
+  which the worker runs through `userScripts`); `settle({ waitBrowser, waitFor, wait })` waits in ScrapingBee's
+  order (network idle: no new resource for 500 ms, at most 10 s; `wait_for` gives up after 10 s and reads
+  what is there); `first(selector, type)`; `status()` (the navigation's HTTP status); `relevant(el)`,
+  `markdownOf(el)`, `textOf(el)` (script, style, header, footer, nav, hidden removed; what forms and buttons
+  contain is kept, unlike the mission reader's Markdown). `fill` uses the native
+  value setter, then `input` and `change`. `infinite_scroll` scrolls to the end until the height stops growing,
+  then clicks `end_click` if it is there. Set as `window.__hgStep`, `__hgSettle` and `__hgFirst`.
 - `scrape.ts`: `extract(root, rules)`, `nextPage()`, `scrape(opts)`. Applies ScrapingBee extract rules to the
   live DOM (CSS or XPath, `text`, `html`, `@attr`, `table_json`, `table_array`, `item`/`list`, nested).
   XPath is used when `selectorType` is `xpath`, or on `auto` when the selector starts with `/`, `./` or `(`;
@@ -118,7 +128,9 @@ The other files are separate bundles or pure helpers:
   (`execCommand('insertText')`).
 - Other browser APIs: the clipboard (the card's Copy button), `window.prompt` (task placeholders) and
   `window.open` (the nudge's Open button).
-- Sets `window.__edgeGallery`, `window.__hgReadPage` and `window.__hgScrape`.
+- Sets `window.__edgeGallery`, `window.__hgReadPage`, `__hgScrape`, `__hgStep`, `__hgSettle` and `__hgFirst`.
+- `scenario.ts` clicks, types into fields, scrolls and waits, but only in Homegrown's background tabs, and only
+  steps the user wrote.
 - `keyguard.ts` adds capture-phase `keydown`, `keyup` and `keypress` listeners. For a trusted event that
   comes from our UI, it stops the event and sends a copy that does not bubble to the same target. If the
   copy is `preventDefault`ed, the original is too. On an Escape `keyup` it also sends a window

@@ -22,6 +22,7 @@
   "permissions": [
     "alarms",
     "contextMenus",
+    "declarativeNetRequestWithHostAccess",
     "notifications",
     "offscreen",
     "scripting",
@@ -30,7 +31,8 @@
     "tabCapture",
     "tabGroups",
     "tabs",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "userScripts"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -101,5 +103,8 @@
         "<all_urls>"
       ]
     }
+  ],
+  "optional_permissions": [
+    "debugger"
   ]
 }

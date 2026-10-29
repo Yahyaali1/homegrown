@@ -1,6 +1,7 @@
 // Workflows from outside the runner (saved missions, Mission control edits, older versions) are checked here, once,
 // so the runner can trust every field. Missing numbers get the defaults older versions assumed.
 import type { Brief, Op, Step, Workflow } from './types.ts';
+import { parseScenario } from '../scrape/scenario.ts';
 
 type Raw = Record<string, unknown>;
 const obj = (v: unknown): Raw | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null);
@@ -19,7 +20,11 @@ function step(raw: unknown): Step | null {
       const urls = texts(s.urls).filter((u) => /^https?:/.test(u));
       return { type: 'search', query: text(s.query), n: count(s.n, 8), ...(urls.length && { urls }) };
     }
-    case 'open': return { type: 'open', limit: count(s.limit, 6) };
+    case 'open': {
+      // Steps before reading come only from the user (Mission control, a saved mission); the planner never writes them.
+      const scenario = s.scenario == null ? null : parseScenario(s.scenario);
+      return { type: 'open', limit: count(s.limit, 6), ...(scenario && { scenario }) };
+    }
     case 'extract': {
       const fields = texts(s.fields);
       return fields.length ? { type: 'extract', fields, require: texts(s.require) } : null;
@@ -56,7 +61,8 @@ export function parseWorkflow(raw: unknown): Workflow | null {
   const w = obj(raw);
   const goal = text(w?.goal).trim();
   const steps = (Array.isArray(w?.steps) ? w.steps : []).map(step).filter((s): s is Step => !!s);
-  if (!w || !goal || steps[0]?.type !== 'search') return null;
+  // One Open step at most: its steps before reading are what the user confirms, so there is one place to look.
+  if (!w || !goal || steps[0]?.type !== 'search' || steps.filter((s) => s.type === 'open').length > 1) return null;
   const planner = w.planner === 'gemma' ? 'model' : w.planner; // saved before planners were model-neutral
   return {
     goal,
