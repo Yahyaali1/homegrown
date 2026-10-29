@@ -66,10 +66,11 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`), `Message`, `Turn`, `Step`, `Request` (`questions?`,
+  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`), `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (`questions?`,
     `editedFrom?`, `noEdit?`, `answer.args?`), `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
     `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
-    `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`. Every record has `v: 1`; a parser returns `null` for
+    `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`, `historyGroup` (Needs you, Unread: ended after `seenAt`,
+    routine, by hand). Every record has `v: 1`; a parser returns `null` for
     a bad record or a newer `v`. A site is a bare host and matches its subdomains; a single label or a shared-hosting
     suffix is refused. A look never has 10 petals (the Homegrown mark's).
   - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `localInstant`, `claim(routine, runs, now)`, `expired`,
@@ -86,7 +87,8 @@ runtime adapters and storage live outside `domain/`.
     and has the page left the call's hosts. Bundled into the in-page step runner (`content/scenario.ts`), so the
     check and the step run in one call on the same element.
   - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
-    `refusal`, `parsePlan`, `answerPlan`, `answeredBy`, `parseEdit`, `stopRequest`, `OPEN_REFUSED`, `PLAN_REFUSED`,
+    `refusal`, `parsePlan`, `answerPlan`, `answeredBy`, `parseEdit`, `stopRequest`, `retryStep`, `autoRetry`,
+    `AUTO_RETRY_MS`, `earlierOf`, `followUpRun`, `queuedFollowUp`, `OPEN_REFUSED`, `PLAN_REFUSED`,
     `BAD_REPLY`, `TOO_LONG`. An answer with edited `args` makes the edited call a new call: a `noEdit` follow-up
     (`editedFrom`) settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
     unless it is sensitive now. Unused Steer messages end every think's instruction part ("The person adds: …"). Direct work
@@ -94,7 +96,14 @@ runtime adapters and storage live outside `domain/`.
     choose → repair → call … → answer → check; plan work (`plan`, only with the `plan` ability or `agent.loop`) runs
     plan → repair → the person's yes → each planned call → one `sum` think (ADR-18). A plan's `fromPlan` yes counts
     only where `decide` asks and the call isn't sensitive now. Notes go in the data, never the prompt. `answerPlan`
-    changes the run it is given (as the worker's `updateRun` does).
+    changes the run it is given (as the worker's `updateRun` does), as does `retryStep`: an ended run of direct work
+    loses the failed step, every later step, the turns after it and the requests about them (an act is asked again,
+    and only after a did-it-happen No), and is queued. `autoRetry(step)`: a `read_page` or `search` that failed on a
+    timeout or network error, not yet retried. A follow-up's data starts with `ctx.earlier` (`earlierOf`: the
+    earlier answer and step digests, no page text); a follow-up of a tainted run starts tainted. Queued messages
+    (`steer: false`) are in no think; `queuedFollowUp` turns the oldest into a follow-up run when the run ends.
+  - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
+    step outputs, turns and the answer only with `withText`.
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
     `read_my_tab`, `propose_routine`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
     `parseArgs`, `toolsFor` (`propose_routine` only with `agent.loop` or in a plan), `mentionsOf`, `mentionedTab`,
@@ -151,5 +160,5 @@ contract. Where it differs, this list says so.
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
   `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
-  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan` and `garden-steer`)
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan`, `garden-steer` and `garden-runlog`)
 - Type check: `npm run check`

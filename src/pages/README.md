@@ -44,8 +44,11 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     `agentOpen`, `missionsLive`, `missionOpen`, `missionsList`, `missionDelete`).
   - Model pickers for each task, and the model manager.
 - `garden.ts` (the side panel's Garden tab): gardeners, routines (a paused routine with `by` other than `person`
-  says "Proposed by <name>. Turn on?" and its button is Turn on), runs (an active run has a Steer box:
-  `runMessage({ id, text, steer: true })`), and the two request trays. `showRequests()` re-renders the trays when
+  says "Proposed by <name>. Turn on?" and its button is Turn on), runs in groups (Needs you, Unread, each routine,
+  by hand). A run's Open view reads top to bottom: the request, each step (Retry step where `retryStep` allows),
+  drafts, created cards with Open, "How it worked" (turns and outputs), and Report (`homegrown-report-<id>.json`,
+  page text only when ticked). Opening it sends `runSeen`. An active run has a Steer box with Queue
+  (`runMessage` with `steer` true or false); an ended one has Ask a follow-up (`gardenRun({ followUp, work })`), and the two request trays. `showRequests()` re-renders the trays when
   the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen.
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan and question cards; an

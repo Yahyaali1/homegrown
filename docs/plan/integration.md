@@ -22,6 +22,8 @@ Done after the group agents report. Owner: the main session.
   gains `contextChars(maxTokens)`. DONE in c4cbc5e.
 - T2 (plan T): `static/sidepanel.html` gains `#chat-requests` (the request tray above the chat input) and the class
   `tray` on both trays; `static/sidepanel.css` styles `.tray`. DONE.
+- T3 (plan T): `static/sidepanel.css` styles the run history's group heads (`li.group-head`), a failed run's `why`,
+  step and created-card rows, and the run view's buttons. DONE.
 
 ## Known issues
 

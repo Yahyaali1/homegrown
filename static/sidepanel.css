@@ -175,3 +175,8 @@ footer b { color: var(--muted); font-weight: 600; }
 .notebook .result { white-space: pre-wrap; overflow-wrap: anywhere; }
 #chat-requests .wait-bar, #garden-requests .wait-bar { height: 2px; border-radius: 2px; background: var(--fg); opacity: .5; transform-origin: left; animation: hg-wait linear forwards; }
 @keyframes hg-wait { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+#garden-runs li.group-head { background: none; box-shadow: none; padding: 8px 2px 0; color: var(--muted); font-size: var(--t-sm); font-weight: 600; }
+#garden-runs .result.why { color: var(--fg); font-weight: 600; }
+#garden-runs .step, #garden-runs .created { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+#garden-runs .step button, #garden-runs .created button, #garden-runs .run-view .row button { height: 24px; padding: 0 8px; flex: none; }
+#garden-runs .how .result { white-space: pre-wrap; }

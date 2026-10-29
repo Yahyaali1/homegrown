@@ -18,7 +18,7 @@ import type { Check } from '../domain/garden/classify.ts';
 import type { Recipe } from '../domain/scrape/recipe.ts';
 import { mentionedTab, mentionsOf, pageLinks } from '../domain/garden/tools.ts';
 import { proposedRoutine } from '../domain/garden/schedule.ts';
-import { LIMITS, type Gardener, type GardenRun, type Seen, type When, type Work } from '../domain/garden/records.ts';
+import { LIMITS, type Created, type Gardener, type GardenRun, type Seen, type When, type Work } from '../domain/garden/records.ts';
 
 export const MODEL_CHANGED = 'The model changed during the run.';
 const SNAPSHOT_CHARS = 20000; // as monitors.ts keeps
@@ -42,6 +42,8 @@ export interface ToolResult {
   /** URLs that join `seen`, and where they came from. */
   seen?: { urls: string[]; from: Seen['from'] };
   taint?: boolean;
+  /** Something the call made, shown as a card on the run. */
+  created?: Created;
 }
 
 /** The run's pinned model on the background lane; a reply from any other model throws. */
@@ -107,7 +109,8 @@ async function mission({ goal }: { goal: string }, c: ToolCtx): Promise<ToolResu
   return { output: [r.answer, ...lines].join('\n').slice(0, LIMITS.output), n: r.rows.length, unit: 'rows', seen: { urls: rows.flatMap((x) => (x._url ? [x._url] : [])), from: 'search' } };
 }
 
-const draft = async ({ title, text }: { title: string; text: string }): Promise<ToolResult> => ({ output: `${title}\n\n${text}`, n: text.length, unit: 'chars' });
+const draft = async ({ title, text }: { title: string; text: string }, c: ToolCtx): Promise<ToolResult> =>
+  ({ output: `${title}\n\n${text}`, n: text.length, unit: 'chars', created: { kind: 'draft', title, ref: String(c.i) } });
 
 async function notify({ text }: { text: string }, c: ToolCtx): Promise<ToolResult> {
   gardenNotice(c.gardener.name, text);
@@ -118,8 +121,8 @@ async function notify({ text }: { text: string }, c: ToolCtx): Promise<ToolResul
 async function note({ text }: { text: string }, c: ToolCtx): Promise<ToolResult> {
   // The tab's final URL of the last page the run loaded; none when it loaded none (a named tab's URL isn't stored).
   const url = c.run.steps.findLast((s) => s.state === 'done' && s.url)?.url ?? '';
-  await addNote({ gardenerId: c.gardener.id, text, by: { runId: c.run.id, url } });
-  return { output: 'Saved.', n: text.length, unit: 'chars' };
+  const n = await addNote({ gardenerId: c.gardener.id, text, by: { runId: c.run.id, url } });
+  return { output: 'Saved.', n: text.length, unit: 'chars', created: { kind: 'note', title: text.slice(0, 80), ref: n.id } };
 }
 
 /** The page stopped the call on a sensitive step before any act ran: ask the person about that step. */
@@ -201,10 +204,10 @@ async function proposeRoutine({ name, when, work }: { name: string; when: When; 
   // Its id comes from the run and step, so a call run again after a restart doesn't store it twice or undo a turn-on.
   const id = `${c.run.id}.${c.i}`;
   const old = await idb.get<{ name: string }>(c.db, 'routines', id);
-  if (old) return { output: `Proposed “${old.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results' };
+  if (old) return { output: `Proposed “${old.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results', created: { kind: 'routine', title: old.name, ref: id } };
   const r = proposedRoutine({ id, gardenerId: c.gardener.id, name, when, work, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, now: Date.now() });
   await idb.put(c.db, 'routines', r);
-  return { output: `Proposed “${r.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results' };
+  return { output: `Proposed “${r.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results', created: { kind: 'routine', title: r.name, ref: id } };
 }
 
 // Args are already checked against their specs (parseArgs, or the routine's own work).

@@ -117,6 +117,23 @@ export interface GardenRun {
   skipped?: number[];
   /** The person's messages to the run. A Steer message goes into the next think's instruction part, once (`usedAt`). */
   inbox?: Message[];
+  /** Asked as a follow-up to this earlier run: its answer and step digests start the data. */
+  followUp?: string;
+  /** When the person last opened it: a run that ended after is Unread. */
+  seenAt?: number;
+  /** What the run made, each a card with Open. */
+  created?: Created[];
+  /** The step the person last retried, and how many tries it has had: its re-run keeps the count. */
+  retry?: { i: number; tries: number };
+}
+
+export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact'; title: string; ref: string }
+
+/** Where a run sits in the history: Needs you, Unread (ended after it was last opened), then by routine, then by hand. */
+export function historyGroup(r: GardenRun): 'needs' | 'unread' | 'routine' | 'hand' {
+  if (r.status === 'waiting') return 'needs';
+  if (r.endedAt !== undefined && (r.seenAt ?? -1) < r.endedAt) return 'unread';
+  return r.routineId ? 'routine' : 'hand';
 }
 
 export interface Message { id: string; text: string /* ≤ 1000 */; at: number; steer: boolean; usedAt?: number }
@@ -140,6 +157,8 @@ export interface Step {
   url?: string;
   error?: string;
   at: number;
+  /** Tries after the first: an automatic retry of a read, or the person's Retry step. */
+  tries?: number;
 }
 
 export interface Request {

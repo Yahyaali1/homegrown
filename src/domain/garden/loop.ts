@@ -6,13 +6,17 @@ import { contextChars, defang, parseJsonObject } from '../text.ts';
 import { jsonArray } from '../html.ts';
 import { actOf, addSeen, argsKey, callKey, decide, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
 import { expired } from './schedule.ts';
-import type { Gardener, GardenRun, PlannedCall, Request, Routine, Step, Turn } from './records.ts';
+import { newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
 import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
 import { notesBlock, type Note } from './notes.ts';
 
-/** `notes`: the gardener's notes the worker retrieved, best first; as many as fit go into the data, never the prompt. */
-export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[] }
+/**
+ * `notes`: the gardener's notes the worker retrieved, best first; as many as fit go into the data, never the prompt.
+ * `earlier`: a follow-up's earlier run (`earlierOf`), which starts its data; `earlierTainted`: that run is tainted
+ * now (read fresh: a retry may have tainted it since), so a think that reads it taints this run first.
+ */
+export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[]; earlier?: string; earlierTainted?: boolean }
 
 export type Action =
   /**
@@ -38,7 +42,7 @@ export const TOO_LONG = 'The instructions are too long for this model.';
 const WORD = 'Here is what changed on each page since the last check (lines with + were added, − removed). In two or three sentences, say what changed that matters. If nothing did, say so.';
 const REPAIR = 'Your reply was not one valid JSON object for a listed tool or an answer. Reply with only the JSON.';
 const PLAN_REPAIR = 'Your reply was not one JSON array of calls to listed tools with valid args. Reply with only the array.';
-const SUM = (request: string) => `The task: ${request}. Below are the results of the planned steps. Answer the task from them in a few sentences. If they don't answer it, say what is missing.`;
+const SUM = (request: string, followUp: boolean) => `The task: ${request}. Below are ${followUp ? 'an earlier answer and ' : ''}the results of the planned steps. Answer the task from them in a few sentences. If they don't answer it, say what is missing.`;
 const GREEDY = { temperature: 0 };
 const HOUR = 3_600_000;
 
@@ -281,7 +285,7 @@ function open(run: GardenRun, ctx: Ctx, request: string): Action {
   }
   const choose = (purpose: 'choose' | 'repair', tools: ToolSpec[]) => {
     const prompt = choosePrompt(ctx.gardener, request, tools, purpose);
-    const d = chooseData(run, missing, ctx.notes, budget(run) - prompt.length);
+    const d = chooseData(run, missing, ctx, budget(run) - prompt.length);
     return think(run, purpose, prompt, d.data, d.taint);
   };
   if (!last) return choose('choose', ctx.tools);
@@ -337,15 +341,16 @@ function planned(run: GardenRun, ctx: Ctx, request: string): Action {
     const t = run.turns.find((x) => x.purpose === 'sum');
     if (t) return { done: { answer: t.reply.trim() } };
     // Each step's result gets an equal share of the room, as `word` gives each page.
-    const prompt = SUM(request);
-    const per = Math.floor((budget(run) - prompt.length) / Math.max(1, j)) - 2;
-    const data = run.steps.map((s) => `[${s.i}] ${s.digest ?? s.tool}\n${defang(s.output ?? s.error ?? '')}`.slice(0, Math.max(0, per))).join('\n\n');
-    return think(run, 'sum', prompt, data);
+    const prompt = SUM(request, !!ctx.earlier);
+    const head = ctx.earlier ? `${ctx.earlier}\n\n` : '';
+    const per = Math.floor((budget(run) - prompt.length - head.length) / Math.max(1, j)) - 2;
+    const data = head + run.steps.map((s) => `[${s.i}] ${s.digest ?? s.tool}\n${defang(s.output ?? s.error ?? '')}`.slice(0, Math.max(0, per))).join('\n\n');
+    return think(run, 'sum', prompt, data, !!(ctx.earlier && ctx.earlierTainted));
   }
   const max = run.agent!.maxSteps;
   const write = (purpose: 'plan' | 'repair') => {
     const prompt = planPrompt(ctx.gardener, request, ctx.tools, max, purpose);
-    const d = chooseData(run, '', ctx.notes, budget(run) - prompt.length);
+    const d = chooseData(run, '', ctx, budget(run) - prompt.length);
     return think(run, purpose, prompt, d.data, d.taint);
   };
   const last = run.turns.findLast((x) => x.purpose === 'plan' || x.purpose === 'repair');
@@ -381,19 +386,20 @@ export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 
 }
 
 /**
- * Steps so far, the notes that fit (whole, after the head is measured), then the newest outputs first; whole older
+ * A follow-up's earlier run, if any, then steps so far, the notes that fit (whole, after the head is measured), then the newest outputs first; whole older
  * outputs are left out when they don't fit. `taint`: notes went in.
  */
-function chooseData(run: GardenRun, missing: string, notes: Note[] | undefined, room: number): { data: string; taint: boolean } {
+function chooseData(run: GardenRun, missing: string, ctx: Ctx, room: number): { data: string; taint: boolean } {
   // The named tabs' titles are page text: here, in the data, never in the instructions.
   const tabs = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : [];
   const head = [
+    ...(ctx.earlier ? [ctx.earlier, ''] : []),
     ...(missing ? [`Still missing: ${missing}`, ''] : []),
     ...(tabs.length ? ['Tabs the person named (read_my_tab):', ...tabs.map((m) => `- ${m.url} (${defang(m.title).slice(0, 100)})`), ''] : []),
     'Steps so far:',
     ...(run.steps.length ? run.steps.map((s) => `${s.i}. ${s.tool} ${JSON.stringify(s.args)} → ${s.digest ?? s.error ?? s.state}`) : ['none']),
   ].join('\n');
-  const block = notesBlock(notes ?? [], Math.min(Math.floor(Math.max(0, room) / 3), room - head.length - 2));
+  const block = notesBlock(ctx.notes ?? [], Math.min(Math.floor(Math.max(0, room) / 3), room - head.length - 2));
   let data = block ? `${head}\n\n${block}` : head;
   room -= data.length;
   const outputs = run.steps.filter((s) => s.output).reverse();
@@ -404,7 +410,57 @@ function chooseData(run: GardenRun, missing: string, notes: Note[] | undefined, 
     data += entry;
     room -= entry.length;
   }
-  return { data, taint: !!block };
+  return { data, taint: !!block || !!(ctx.earlier && ctx.earlierTainted) };
+}
+
+const RETRY_OPEN = 'An open request can’t retry one step: ask a follow-up instead.';
+
+/**
+ * The person's Retry step on call `i` of an ended run of direct work: that step, every later one, every turn made
+ * after it, and the requests about them go (an act is asked again), and the run is queued so next() re-issues it.
+ * An act only after the person said it did not happen. Returns why it can't be retried.
+ */
+export function retryStep(run: GardenRun, i: number): string | null {
+  if (run.work.kind === 'ask') return RETRY_OPEN;
+  if (run.status === 'queued' || run.status === 'running' || run.status === 'waiting') return 'It’s still working.';
+  const step = run.steps.find((s) => s.i === i);
+  if (step?.state !== 'failed') return 'That step didn’t fail.';
+  if (step.effect === 'act' && !run.requests.some((q) => q.kind === 'did-it-happen' && q.step === i && q.answer?.value === 'no')) {
+    return 'An action can be retried only after you said it did not happen (did it happen? No).';
+  }
+  run.steps = run.steps.filter((s) => s.i < i);
+  run.turns = run.turns.filter((t) => t.at <= step.at);
+  run.requests = run.requests.filter((q) => q.step === undefined || q.step < i);
+  run.retry = { i, tries: (step.tries ?? 0) + 1 };
+  // A retry is the person's: a fresh time budget and interruption count.
+  Object.assign(run, { status: 'queued', usedMs: 0, interrupted: 0 });
+  for (const k of ['answer', 'best', 'why', 'endedAt'] as const) delete run[k];
+  return null;
+}
+
+export const AUTO_RETRY_MS = 30_000;
+
+/** A read or search that failed with a timeout or a network error, not yet retried: the worker tries it once more after 30 s. */
+export const autoRetry = (s: Step): boolean => s.state === 'failed' && !s.tries && (s.tool === 'read_page' || s.tool === 'search')
+  && /took too long|timed? ?out|net::|ERR_|error page|network|failed to fetch/i.test(s.error ?? '');
+
+/** A follow-up's start: the earlier run's answer and what each step did (no page text), as data. */
+export function earlierOf(r: GardenRun): string {
+  const steps = r.steps.map((s) => `- ${s.digest ?? `${s.tool} ${s.state}`}`);
+  return `Earlier answer: ${defang(r.answer ?? r.why ?? '(none)')}\nEarlier steps:\n${steps.length ? steps.join('\n') : '- none'}`.slice(0, 2000);
+}
+
+/** A follow-up run to `earlier`: plan work, or open with a loop model; tainted if the earlier run was (its answer is private). */
+export function followUpRun(earlier: GardenRun, work: Work, id: string, now: number): GardenRun {
+  return { ...newRun({ id, gardenerId: earlier.gardenerId, work, now }), followUp: earlier.id, tainted: earlier.tainted };
+}
+
+/** The ended run's oldest queued message, marked used, as a follow-up run; null when none is left. */
+export function queuedFollowUp(run: GardenRun, id: string, now: number): GardenRun | null {
+  const m = run.inbox?.find((x) => !x.steer && !x.usedAt);
+  if (!m) return null;
+  m.usedAt = now;
+  return followUpRun(run, { kind: run.agent?.loop ? 'ask' : 'plan', request: m.text }, id, now);
 }
 
 /**

@@ -63,11 +63,12 @@ It also owns these parts:
     control. `missionSave` takes `actsConfirmed` only from an extension page and never
     stores it with the mission.
 - `garden.ts` handlers (docs/plan/S-gardeners.md): `gardenerList`, `gardenerSave`, `gardenerDelete`, `routineList`,
-  `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, or `{ routineId }` for Run now), `runList`,
+  `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, `{ routineId }` for Run now, or `{ followUp, work }`: ask or plan work
+  after an ended run), `runList`,
   `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`
   (`{ runId, requestId, value, calls?, args? }`: a `plan` request's yes may carry the edited calls, parsed again; its
   no stops the run; an editable approve's yes may carry edited `args`), `requestAnswerAll` (`{ requests: { runId,
-  requestId }[] }`), `runMessage` (`{ id, text, steer: true }`), `grantList` (`{ gardenerId? }`),
+  requestId }[] }`), `runMessage` (`{ id, text, steer }`), `runSeen` (`{ id }`), `runRetry` (`{ id, step }`), `grantList` (`{ gardenerId? }`),
   `grantRevoke` (`{ gardenerId, tool, host, argsKey }`).
   - Edited approvals (`parseEdit`): only an `approve` for `act`, `draft` or `notify` without `noEdit`, only with
     `yes` (`always` would grant the original call), args parsed again with `parseArgs` and stored as `answer.args`.
@@ -79,7 +80,11 @@ It also owns these parts:
   - `runMessage`: a Steer message (≤ 1000 characters) joins `run.inbox` (also the live run's in memory, which the
     turn saves). The next think puts it in the instruction part; the worker sets `usedAt` when the turn is stored.
   - A `question` request with `questions` takes one JSON object of text answers keyed by its questions.
-  - `runMessage` refuses a 4th unused Steer message. `propose_routine`'s id is `<runId>.<step>`, so a re-run after a
+  - `runMessage` with `steer: false` queues the text; when the run ends done or failed (not stopped), the oldest
+    queued message becomes a follow-up run. `runRetry` refuses what `retryStep` refuses. A failed `read_page` or
+    `search` with a timeout or network error is tried once more after 30 s (`Step.tries`; the wait holds the queue).
+    `draft`, `note` and `propose_routine` add a `created` card to the run.
+  - `runMessage` refuses a 4th unused Steer message (or queued message). `propose_routine`'s id is `<runId>.<step>`, so a re-run after a
     restart stores nothing new.
   - `requestAnswer` (V2): `approve` takes `yes`, `no` or `always` (`always` stores a grant; not offered for a sensitive
     one), `reach` and `did-it-happen` take `yes` or `no`. It refuses after `expiresAt`, and refuses a sensitive

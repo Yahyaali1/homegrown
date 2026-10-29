@@ -955,13 +955,13 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 built, not yet committed or reviewed.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 in progress.
 
 | Slice | State |
 |---|---|
 | T1 | Done (c4cbc5e), reviewed (0 Blockers, 1 Major fixed): 187 unit tests pass; `tests/plan.spec.mjs` passes on the real model; `garden.spec` 4/4. `abilities.mjs plan`: E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan`, and Plan first stays off in the UI |
-| T2 | Built, awaiting review: 196 unit tests pass (9 new in `garden-steer`); `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4 (before the review fixes; its sensitive test now waits on Library, as Chat shows the tray); `plan.spec` passes |
-| T3 | Planned |
+| T2 | Done (1efce2f), reviewed (0 Blockers, 2 Majors fixed): 196 unit tests pass (9 new in `garden-steer`); `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4 (its sensitive test now waits on Library, as Chat shows the tray); `plan.spec` 1/1 |
+| T3 | Built, awaiting review: 205 unit tests pass (9 new in `garden-runlog`; review fixes: follow-up taint read fresh, queued messages kept on failRun and expiry, report digests); `tests/runlog.spec.mjs` 2/2 (real model); `approvals.spec` 2/2, `garden.spec` 4/4, `plan.spec` 1/1. Retry is allowed on any ended run with a failed step (a read run with one failed page ends `done`, so "failed or best-effort" only would block the e2e) |
 | T3b | Planned |
 | T4 | Planned |
 | T5 | Planned |
@@ -978,6 +978,7 @@ T1 done (commit c4cbc5e). T2 built, not yet committed or reviewed.
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T2 | code review | 0 / 2 | Fixed: `propose_routine` denied when the run is tainted, and its card lists all URLs; `approveAllOk(q, run)` is false for a `reach` in a tainted run (decision 5 reworded). Minors fixed: unused steer cap of 3 removed; question answers parsed as strict JSON; a running transaction merges `inbox`; `propose_routine` id `<runId>.<step>`, so a re-run is idempotent |
 | T1 | code review | 0 / 1 | Fixed: `chooseData` listed named tabs only for `ask` (loop.ts 333); now also `plan`, with a test that the plan prompt's data holds the tab URL |
 | 1 | design | 1 / 10 | All accepted after checking the code. Plan yes no longer outlives taint: planned reads join `seen` as approved, non-sensitive acts get `fromPlan` pre-approvals that `approveRequest` re-checks at call time (decision 2). Abilities pinned on the run in `pin()` (decision 1). `plan` treated like `ask` for tabs. Edited approvals stored as `answer.args` and used by `attempt`/`call`. Explicit `decide` cases for `propose_routine`, `remember`, `doc_read`, `doc_write`. Helpers moved to T3b with `live` as a map. `runRetry` drops the step, later steps and later turns; direct work only. `act_my_tab`: in `actOf`, fill sensitive whatever the taint, borrowed tab in `owned()`. MCP: only person-confirmed `describe` reaches the prompt; names checked. Presets: `workflow:<preset>/<id>` abilities gate turn-on. New `deck` and `cite` abilities with model-free fallbacks; chat Plan mode needs `plan` |
 | 1 | implementation readiness | 2 / 10 | All accepted. Plan yes covers only non-sensitive approves; reach and sensitive still asked (merged with design B1). T8 depends on T6 and T7. `GardenRun.abilities` and the planted-run JSON written. `sum` prompt and `requestAnswer { value, calls }` given. Queued messages moved to T3; `act_my_tab` / `app_call` test cases moved to T5 / T11. T6 moved onto the chain after T5. `helpers` answers refused from pages. Event trigger: `eventCheck` before the claim transaction, `claim(…, trigger)`, `GardenRun.trigger`, `pageText(url, credentials)`. `Skill.work` and `Work.skillId`. Names fixed: `contextChars` created in T1, `flower` not `hgFlower`, `skillSave` handler, T10 adds `main.ts`, T9 screenshot from `pagerequest.ts`. T7 e2e no longer needs a model; T12 lists Rosa's 2 routines and 3 skills |
@@ -1036,3 +1037,21 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
   returns `null` for unknown tools. When T5 or T11 teach `actOf` those tools, the test must exercise the explicit
   `act` / `collect` filter in `answerPlan`.
 - Accepted: notes taint a run at the `plan` think (see T1 "Accepted behaviour").
+
+**2026-10-29: T2 landed (commit 1efce2f).**
+- 196 unit tests pass; `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4; `plan.spec` 1/1 after the fixes.
+- Builder deviations, accepted:
+  - `propose_routine` is stricter: it denies off-site URLs, the person's tabs and (after review) any tainted run.
+  - The e2e tests plant queued runs with a fake model name.
+  - The `garden.spec` sensitive test parks the side panel on Library, because the Chat tab now shows the tray.
+  - `call.answered` is set only for edited calls.
+  - New pure helpers: `parseEdit`, `answeredBy`, `stopRequest` (loop.ts) and `proposedRoutine` (schedule.ts).
+  - The UI helpers moved from `pages/garden.ts` to `pages/shell.ts`.
+- Review: 0 Blockers, 2 Majors fixed (see Review history).
+- Open items:
+  1. Nothing creates `questions` requests yet. A model path will need a tool or a reply format, still unplanned (T6
+     chat parses fenced blocks).
+  2. `propose_routine` is now in the plan prompt, so `abilities.mjs plan` scores may shift. Re-run it before any
+     claim that a model has `plan`.
+  3. The act approval card shows the steps as one JSON field. A per-step editor is left for later.
+  4. The `draft` and `notify` editable entries are unused until T11 adds `app_call`.

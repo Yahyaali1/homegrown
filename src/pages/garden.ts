@@ -8,7 +8,9 @@ import { flower, runStage } from '../ui/flower.ts';
 import { can, modelById } from '../domain/model.ts';
 import { parseSettings } from '../domain/settings.ts';
 import { nextAfter } from '../domain/garden/schedule.ts';
-import { lookOf, randomLook, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
+import { retryStep } from '../domain/garden/loop.ts';
+import { reportOf } from '../domain/garden/report.ts';
+import { historyGroup, lookOf, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
 import type { Note } from '../domain/garden/notes.ts';
 import { hostOf } from '../domain/text.ts';
 import type { Grant } from '../domain/garden/policy.ts';
@@ -22,14 +24,15 @@ let routines: Listed[] = [];
 let loaded = false; // rows added after the first load get the entrance
 const runs = new Map<string, GardenRun>();
 const runRows = new Map<string, Row>();
-const steerForms = new Map<string, HTMLFormElement>(); // run id → its Steer box (a typed message survives)
+const steerForms = new Map<string, HTMLFormElement>(); // run id → its Steer or follow-up box (a typed message survives)
 const routineForms = new Map<string, HTMLDetailsElement>(); // gardener id → its open, half-filled form survives
 const nextLines = new Map<string, HTMLElement>(); // routine id → its "Next:" line
 const grantLists = new Map<string, HTMLElement>(); // gardener id → its "Allowed actions" box
 const notebooks = new Map<string, HTMLDetailsElement>(); // gardener id → its notebook (stays open across renders)
-const opened = new Set<string>(); // runs whose steps are shown
+const opened = new Set<string>(); // runs whose view is open
 const shown = new Set<string>(); // requests already reported shown
 let editing: Gardener | null = null;
+let abilities: Can = { ask: false, plan: false }; // what the gardens model can take, for follow-ups
 let formLook: Look = randomLook();
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -81,7 +84,7 @@ async function canDo(): Promise<Can> {
 export async function renderGarden(): Promise<void> {
   try {
     const [g, r, list, ask] = await Promise.all([bg<Gardener[]>('gardenerList'), bg<Listed[]>('routineList'), bg<GardenRun[]>('runList'), canDo()]);
-    [gardeners, routines] = [g, r];
+    [gardeners, routines, abilities] = [g, r, ask];
     runs.clear();
     for (const run of list) runs.set(run.id, run);
     loadError.hidden = true;
@@ -351,18 +354,40 @@ showLook(formLook, '');
 
 // ---- requests and runs ----
 
-/** `changed`: only that run's row is refilled; without it, every row is (names may have changed). */
+/** History in groups: Needs you, Unread, each routine's runs, then by hand; newest first in each. */
 function renderRuns(changed?: string): void {
   const list = [...runs.values()].sort((a, b) => b.queuedAt - a.queuedAt);
   renderRequests(list);
   for (const id of runRows.keys()) if (!runs.has(id)) runRows.delete(id);
-  place($('#garden-runs'), list.length ? list.map((run) => {
+  const groups = new Map<string, GardenRun[]>([['needs', []], ['unread', []]]);
+  for (const run of list) {
+    const g = historyGroup(run);
+    const key = g === 'routine' ? `routine:${run.routineId}` : g;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(run);
+  }
+  // By hand comes last, after every routine.
+  const hand = groups.get('hand');
+  groups.delete('hand');
+  if (hand) groups.set('hand', hand);
+  const nodes = [...groups].flatMap(([key, rs]) => (rs.length ? [groupHead(key), ...rs.map((run) => {
     let li = runRows.get(run.id);
     if (!li) runRows.set(run.id, (li = fresh(h('li', {}, flower(26, '')))));
     setLook(li, lookFor(run.gardenerId));
     if (!changed || changed === run.id || !li.stage) fillRun(li, run);
     return li;
-  }) : [emptyPot('No runs yet.')]);
+  })] : []));
+  place($('#garden-runs'), nodes.length ? nodes : [emptyPot('No runs yet.')]);
+}
+
+const groupHeads = new Map<string, HTMLLIElement>();
+function groupHead(key: string): HTMLLIElement {
+  const text = key === 'needs' ? 'Needs you' : key === 'unread' ? 'Unread' : key === 'hand' ? 'By hand'
+    : routines.find((r) => `routine:${r.id}` === key)?.name ?? 'A deleted routine';
+  let li = groupHeads.get(key);
+  if (!li) groupHeads.set(key, (li = h('li', { className: 'group-head' })));
+  li.textContent = text;
+  return li;
 }
 
 const nameOf = (run: GardenRun) => [gardeners.find((x) => x.id === run.gardenerId)?.name ?? 'A deleted gardener',
@@ -400,15 +425,18 @@ function fillRun(li: Row, run: GardenRun): void {
     : locked ? 'Working in a tab (locked)'
     : run.status === 'waiting' && run.requests.some((q) => q.kind === 'takeover' && !q.answer) ? 'You have its tab'
     : STATUS[run.status];
-  const result = run.answer ?? run.why ?? '';
+  // A failed run says why first, in plain words.
+  const result = run.status === 'failed' ? run.why ?? '' : run.answer ?? run.why ?? '';
   const active = run.status === 'queued' || run.status === 'running' || run.status === 'waiting';
   const name = nameOf(run);
   const err = errLine();
-  // Only skipped slots: the line itself, no "0 steps" to open.
-  const detail = run.steps.length
-    ? h('details', { open: opened.has(run.id), ontoggle: (e: Event) => ((e.currentTarget as HTMLDetailsElement).open ? opened.add(run.id) : opened.delete(run.id)) },
-      h('summary', { textContent: count(run.steps.length, 'step') }), ...stepLines(run))
-    : skippedLines(run);
+  const view = h('details', { className: 'run-view', open: opened.has(run.id), ontoggle: (e: Event) => {
+    if (!(e.currentTarget as HTMLDetailsElement).open) return void opened.delete(run.id);
+    opened.add(run.id);
+    // Opening it reads it: no longer Unread.
+    const now = runs.get(run.id);
+    if (now && historyGroup(now) === 'unread') void bg('runSeen', { id: run.id }).catch(() => {});
+  } }, h('summary', { textContent: run.steps.length ? `Open · ${count(run.steps.length, 'step')}` : 'Open' }), ...runView(run, li, err));
   const act = active
     ? labelled(busyButton('Stop', tryIt(err, () => bg('runStop', { id: run.id })), 'secondary'), `Stop ${name}`)
     : labelled(busyButton('Delete', tryIt(err, async () => {
@@ -419,46 +447,119 @@ function fillRun(li: Row, run: GardenRun): void {
   // Here too, not only on the page: a page can try to hide its lock bar.
   const take = locked ? labelled(busyButton('Take over', tryIt(err, () => bg('runTakeover', { id: run.id })), 'secondary'), `Take over from ${name}`) : null;
   const flowerEl = li.firstElementChild!;
-  if (!active) steerForms.delete(run.id);
+  // A run that ended swaps its Steer box for a follow-up box (and back, when retried).
+  if (steerForms.get(run.id)?.dataset.active !== String(active)) steerForms.delete(run.id);
   li.replaceChildren(flowerEl,
     h('span', { className: 't' }, h('b', { textContent: name }), h('span', { className: 'p', textContent: `${status} · ${at(run.endedAt ?? run.startedAt ?? run.queuedAt)}` }),
-      result && h('span', { className: 'result', textContent: result }), ...(Array.isArray(detail) ? detail : [detail]), active && steerBox(run.id), err),
+      result && h('span', { className: run.status === 'failed' ? 'result why' : 'result', textContent: result }), view, active ? steerBox(run.id) : followUpBox(run), err),
     take ? h('div', { className: 'actions' }, take, act) : act);
 }
 
-/** Steer: the person's words for the run's next think (its next step's choice, or its answer). */
-function steerBox(runId: string): HTMLFormElement {
-  let form = steerForms.get(runId);
+/** The run as a chat, top to bottom: the request, each step, what it made, then how it worked and a report. */
+function runView(run: GardenRun, li: HTMLElement, err: HTMLElement): HTMLElement[] {
+  const w = run.work;
+  const asked = w.kind === 'read' ? `Read: ${w.urls.join(', ')}` : w.kind === 'mission' ? `Mission: ${w.goal}` : `You asked: ${w.request}`;
+  return [
+    h('div', { className: 'muted small', textContent: run.followUp ? `${asked} (a follow-up)` : asked }),
+    ...stepLines(run, err),
+    // Queued messages not yet asked (a stopped run keeps them here).
+    ...(run.inbox ?? []).filter((m) => !m.steer && !m.usedAt).map((m) => h('div', { className: 'muted small', textContent: `Queued: ${m.text}` })),
+    ...(run.created ?? []).map((c) => h('div', { className: 'created' }, h('span', { textContent: `${CREATED[c.kind]} ${c.title}` }),
+      labelled(button('Open', () => openCreated(run, c, li), 'ghost'), `Open ${c.title}`))),
+    howItWorked(run),
+    reportBox(run, err),
+  ];
+}
+
+const CREATED: Record<Created['kind'], string> = { draft: 'Draft:', note: 'Note:', routine: 'Routine:', file: 'File:', doc: 'Document:', artifact: 'Output:' };
+
+/** Open a made item where it lives: a draft in this run, a note in the notebook, a routine under its gardener. */
+function openCreated(run: GardenRun, c: Created, li: HTMLElement): void {
+  const el = c.kind === 'draft' ? li.querySelector<HTMLElement>(`.draft[data-step="${c.ref}"]`)
+    : c.kind === 'note' ? notebooks.get(run.gardenerId) ?? null
+    : c.kind === 'routine' ? nextLines.get(c.ref)?.closest('li') ?? null : null;
+  if (el instanceof HTMLDetailsElement) el.open = true;
+  el?.scrollIntoView({ block: 'nearest' });
+}
+
+/** Think turns and step outputs, collapsed: the model's reasoning, for whoever wants it. */
+function howItWorked(run: GardenRun): HTMLElement {
+  const parts: [string, string][] = [...run.turns.map((t): [string, string] => [`${t.purpose} · ${at(t.at)}`, t.reply]), ...run.steps.filter((s) => s.output).map((s): [string, string] => [`${s.i + 1}. ${s.tool} output`, s.output!])];
+  return h('details', { className: 'how' }, h('summary', { textContent: 'How it worked' }),
+    ...(parts.length ? parts.map(([k, v]) => h('div', {}, h('b', { className: 'small', textContent: k }), h('div', { className: 'muted small result', textContent: v }))) : [h('div', { className: 'muted small', textContent: 'No thinking or output yet.' })]));
+}
+
+/** Report: a local file to keep or pass on; nothing is sent. Page text only when ticked. */
+function reportBox(run: GardenRun, err: HTMLElement): HTMLElement {
+  const text = h('input', { type: 'checkbox', attrs: { 'aria-label': 'Include page text' } });
+  return h('div', { className: 'row' },
+    labelled(busyButton('Report', tryIt(err, async () => {
+      const full = text.checked ? (await bg<GardenRun | null>('runGet', { id: run.id })) ?? run : run;
+      const json = JSON.stringify(reportOf(full, text.checked, chrome.runtime.getManifest().version), null, 2);
+      h('a', { href: URL.createObjectURL(new Blob([json], { type: 'application/json' })), download: `homegrown-report-${run.id}.json` }).click();
+    }), 'ghost'), 'Download a report of this run'),
+    h('label', { className: 'check' }, text, 'Include page text'));
+}
+
+/** Ask a follow-up: a new run whose data starts with this one's answer. It needs a model that plans (or loops). */
+function followUpBox(run: GardenRun): HTMLFormElement {
+  let form = steerForms.get(run.id);
   if (form) return form;
-  const text = h('input', { placeholder: 'Steer: add something for its next step', maxLength: 1000, attrs: { 'aria-label': 'Steer this run' } });
+  const text = h('input', { placeholder: 'Ask a follow-up', maxLength: 1000, attrs: { 'aria-label': 'Ask a follow-up' } });
   const err = errLine();
-  form = h('form', { className: 'row steer' }, text, h('button', { className: 'ghost', textContent: 'Steer' }), err);
+  form = h('form', { className: 'row steer' }, text, h('button', { className: 'ghost', textContent: 'Ask' }), err);
   form.onsubmit = (e) => {
     e.preventDefault();
     if (!text.value.trim()) return;
     void tryIt(err, async () => {
-      await bg('runMessage', { id: runId, text: text.value, steer: true });
+      await bg('gardenRun', { followUp: run.id, work: { kind: abilities.ask ? 'ask' : 'plan', request: text.value.trim() } });
       text.value = '';
-      text.placeholder = 'Sent. It reads it at its next think.';
     })();
   };
+  form.dataset.active = 'false';
+  steerForms.set(run.id, form);
+  return form;
+}
+
+/** Steer: the person's words for the run's next think. Queue: asked as a follow-up once the run ends. */
+function steerBox(runId: string): HTMLFormElement {
+  let form = steerForms.get(runId);
+  if (form) return form;
+  const text = h('input', { placeholder: 'Steer, or queue a follow-up', maxLength: 1000, attrs: { 'aria-label': 'Steer this run' } });
+  const err = errLine();
+  const send = (steer: boolean) => {
+    if (!text.value.trim()) return;
+    void tryIt(err, async () => {
+      await bg('runMessage', { id: runId, text: text.value, steer });
+      text.value = '';
+      text.placeholder = steer ? 'Sent. It reads it at its next think.' : 'Queued. It is asked when this run ends.';
+    })();
+  };
+  const queue = labelled(button('Queue', () => send(false), 'ghost'), 'Queue as a follow-up');
+  form = h('form', { className: 'row steer' }, text, h('button', { className: 'ghost', textContent: 'Steer' }), queue, err);
+  form.onsubmit = (e) => (e.preventDefault(), send(true));
+  form.dataset.active = 'true';
   steerForms.set(runId, form);
   return form;
 }
 
 const skippedLines = (run: GardenRun) => (run.skipped ?? []).map((t) => h('div', { className: 'muted small', textContent: `Skipped ${at(t)}: the last run was still working` }));
 
-/** Each step's digest; a draft shows in full with Copy (its text is in the call's args, never trimmed). */
-function stepLines(run: GardenRun): HTMLElement[] {
+/** Each step's call and digest, with Retry step where it can be; a draft shows in full with Copy. */
+function stepLines(run: GardenRun, err: HTMLElement): HTMLElement[] {
   const out = skippedLines(run);
   for (const s of run.steps) {
+    // The same check the worker makes, on a copy.
+    const retry = s.state === 'failed' && !retryStep(structuredClone(run), s.i)
+      ? labelled(busyButton('Retry step', tryIt(err, () => bg('runRetry', { id: run.id, step: s.i })), 'ghost'), `Retry step ${s.i + 1}`) : null;
+    const tries = s.tries ? ` (tried ${s.tries + 1} times)` : '';
     if (s.tool !== 'draft' || s.state !== 'done') {
-      out.push(h('div', { className: 'muted small', textContent: s.digest ?? `${s.tool}…` }));
+      out.push(h('div', { className: 'muted small step' }, `${s.i + 1}. ${s.digest ?? `${s.tool}…`}${tries}`, retry));
       continue;
     }
     const text = String(s.args.text ?? '');
     const title = String(s.args.title ?? 'Draft');
-    out.push(h('div', { className: 'draft' }, h('b', { textContent: title }), h('div', { className: 'text', textContent: text }),
+    out.push(h('div', { className: 'draft', dataset: { step: String(s.i) } }, h('b', { textContent: title }), h('div', { className: 'text', textContent: text }),
       labelled(button('Copy', async (e) => {
         const b = e.currentTarget as HTMLButtonElement;
         await navigator.clipboard.writeText(text);

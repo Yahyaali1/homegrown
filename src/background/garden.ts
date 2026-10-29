@@ -10,7 +10,7 @@ import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
-import { answeredBy, answerFor, answerPlan, approveRequest, digest, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, recover, refusal, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
+import { answeredBy, answerFor, answerPlan, approveRequest, AUTO_RETRY_MS, autoRetry, digest, earlierOf, followUpRun, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, queuedFollowUp, recover, refusal, retryStep, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
 import { actOf, addSeen, approveAllOk, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
 import { claim, expired, nextAfter } from '../domain/garden/schedule.ts';
 import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
@@ -52,6 +52,12 @@ async function saveRun(run: GardenRun): Promise<void> {
 
 const end = (run: GardenRun, status: Status, why?: string): GardenRun => Object.assign(run, { status, endedAt: Date.now() }, why === undefined ? {} : { why });
 
+/** A run that ended (not stopped): its oldest queued message becomes a follow-up run, saved after it. */
+const followQueued = (run: GardenRun): GardenRun[] => {
+  const f = queuedFollowUp(run, crypto.randomUUID(), Date.now());
+  return f ? [run, f] : [run];
+};
+
 /** The newest 30 runs per gardener stay; queued, running and waiting runs always do. */
 async function prune(gardenerId: string): Promise<void> {
   const d = await db;
@@ -71,7 +77,7 @@ async function fire(routineId: string): Promise<void> {
     if (!r) return null;
     const runs = parsed(await idb.req(t.objectStore('runs').index('routineId').getAll(routineId)), parseRun);
     const c = claim(r, runs, Date.now());
-    for (const id of c.fail) changed.push(end(runs.find((x) => x.id === id)!, 'failed', NEEDED_YOU));
+    for (const id of c.fail) changed.push(...followQueued(end(runs.find((x) => x.id === id)!, 'failed', NEEDED_YOU)));
     if (c.newRun) changed.push(c.newRun);
     // A slot's run id is fixed (`routine@due`): never overwrite a run that already has it.
     if (c.newRun && (await idb.req(t.objectStore('runs').getKey(c.newRun.id))) !== undefined) changed.pop();
@@ -106,14 +112,21 @@ function drain(): void {
 /** A turn that threw: the run fails in words, so the queue never picks it again. */
 async function failRun(id: string, e: unknown): Promise<void> {
   console.warn('garden run failed', e);
+  let f: GardenRun[] = [];
   await updateRun(id, (r) => {
-    if (r.status === 'queued' || r.status === 'running') end(r, 'failed', `Something went wrong: ${e instanceof Error ? e.message : String(e)}`);
+    if (r.status === 'queued' || r.status === 'running') f = followQueued(end(r, 'failed', `Something went wrong: ${e instanceof Error ? e.message : String(e)}`)).slice(1);
   }).catch(() => {});
+  for (const x of f) await saveRun(x);
 }
 
 async function nextQueued(): Promise<GardenRun | undefined> {
   const now = Date.now(), runs = await allRuns();
-  for (const r of runs.filter((x) => expired(x, now))) await saveRun(end(r, 'failed', NEEDED_YOU));
+  for (const r of runs.filter((x) => expired(x, now))) {
+    for (const x of followQueued(end(r, 'failed', NEEDED_YOU))) {
+      await saveRun(x);
+      if (x !== r) runs.push(x);
+    }
+  }
   return runs.filter((r) => r.status === 'queued').sort((a, b) => a.queuedAt - b.queuedAt)[0];
 }
 
@@ -142,7 +155,13 @@ async function turn(run: GardenRun): Promise<void> {
   const tab: Run = { id: run.id, stop };
   live = { id: run.id, name: '', tab, run };
   const save = () => (stop.signal.aborted ? Promise.resolve() : saveRun(run));
-  const finish = (status: Status, why?: string) => (stop.signal.aborted ? undefined : saveRun(end(run, status, why)));
+  // An ended run's oldest queued message becomes a follow-up run.
+  const finish = async (status: Status, why?: string) => {
+    if (stop.signal.aborted) return;
+    const all = followQueued(end(run, status, why));
+    for (const x of all) await saveRun(x);
+    if (all.length > 1) drain();
+  };
   const d = await db;
   const gardener = parseGardener(await idb.get(d, 'gardeners', run.gardenerId));
   const routine = run.routineId ? parseRoutine(await idb.get(d, 'routines', run.routineId)) ?? undefined : undefined;
@@ -171,6 +190,8 @@ async function turn(run: GardenRun): Promise<void> {
   // The notes that best match the work, for its choose or word data (a mission's answer is its own: none).
   const query = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.request : run.work.kind === 'read' ? `${gardener.instructions}\n${run.work.urls.join('\n')}` : '';
   const notes = query ? await notesFor(gardener.id, query).catch(() => []) : [];
+  const before = run.followUp ? await getRun(run.followUp) : null;
+  const earlier = before ? earlierOf(before) : '';
   const budget = gardener.minutes * 60_000;
   Object.assign(tab, { title: `❀ ${gardener.name}`, prepare: (t: number) => cookieRule(t, gardener.sites), deadline: Date.now() + budget - run.usedMs });
   try {
@@ -184,7 +205,7 @@ async function turn(run: GardenRun): Promise<void> {
     for (;;) {
       if (stop.signal.aborted) return;
       const known = await knownFor(gardener.id);
-      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }) };
+      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }) };
       const a = next(run, ctx);
       if ('think' in a) {
         // Notes are private: from the moment the model reads them, the run is tainted (stored first).
@@ -265,7 +286,9 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     const error = 'Not allowed.';
     return setStep(run, { i, tool, args, effect, state: 'failed', error, digest: digest(tool, args, { error }), at: Date.now() });
   }
-  setStep(run, { i, tool, args, effect, state: 'started', at: Date.now() });
+  // A step the person retried keeps its count; a resumed one its own.
+  let tries = run.steps.find((s) => s.i === i)?.tries ?? (run.retry?.i === i ? run.retry.tries : undefined);
+  setStep(run, { i, tool, args, effect, state: 'started', at: Date.now(), ...(tries && { tries }) });
   // Awaited on its own before the call: an act never runs without its started record, so a stop mid-act asks
   // "did this happen?" instead of acting twice.
   await save();
@@ -282,9 +305,24 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     // edited yes covers no reason of the original's: the edit is a new call.
     const ok = q?.sensitive && said(q) && q.why && !q.answer?.args ? { why: q.why, ...(q.index !== undefined && { index: q.index }) } : undefined;
     const reach = (url: string) => decide(run, gardener, { tool: 'read_page', args: { url } }) === 'allow';
-    const r = await impl(args as never, { run, gardener, tab, i, db: await db, key, reach, ...(ok && { ok }) } satisfies ToolCtx);
+    const go = async () => impl(args as never, { run, gardener, tab, i, db: await db, key, reach, ...(ok && { ok }) } satisfies ToolCtx);
+    // A read or search that timed out or hit a network error: once more after 30 s (stored first, so a restart resumes it).
+    // ponytail: the wait holds the one-run queue; a waiting state would free it if 30 s ever matters.
+    const r = await go().catch(async (e: unknown) => {
+      if (!autoRetry({ i, tool, args, effect, state: 'failed', error: e instanceof Error ? e.message : String(e), at: 0, ...(tries && { tries }) })) throw e;
+      tries = (tries ?? 0) + 1;
+      setStep(run, { i, tool, args, effect, state: 'started', at: Date.now(), tries });
+      await save();
+      if (tab.stop.signal.aborted) throw e;
+      await new Promise((ok, no) => {
+        const t = setTimeout(ok, AUTO_RETRY_MS);
+        tab.stop.signal.addEventListener('abort', () => (clearTimeout(t), no(e)), { once: true });
+      });
+      return go();
+    });
     setStep(run, { i, tool, args, effect, state: 'done', output: r.output, digest: digest(tool, args, { n: r.n, unit: r.unit }), at: Date.now(),
-      ...(r.links && { links: r.links }), ...(r.url && { url: r.url }) });
+      ...(r.links && { links: r.links }), ...(r.url && { url: r.url }), ...(tries && { tries }) });
+    if (r.created) run.created = [...(run.created ?? []).filter((x) => x.kind !== r.created!.kind || x.ref !== r.created!.ref), r.created];
     if (r.seen) run.seen = addSeen(run.seen, r.seen.urls, r.seen.from, r.seen.from === 'link' ? i : undefined);
     if (r.taint) run.tainted = true;
   } catch (e) {
@@ -301,7 +339,7 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
       }
     }
     const error = e instanceof Error ? e.message : String(e);
-    setStep(run, { i, tool, args, effect, state: 'failed', error, digest: digest(tool, args, { error }), at: Date.now() });
+    setStep(run, { i, tool, args, effect, state: 'failed', error, digest: digest(tool, args, { error }), at: Date.now(), ...(tries && { tries }) });
   } finally {
     if (keep) tab.prepare = keep;
     else delete tab.prepare;
@@ -428,20 +466,26 @@ export const handlers = {
     return r;
   },
   routineDelete: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await ready(), await deleteRoutine(id), true),
-  // Run now ({ routineId }): the routine's work and snapshots; its nextDue stays.
-  gardenRun: async ({ gardenerId, work, routineId }: { gardenerId?: string; work?: unknown; routineId?: string }, sender?: Sender) => {
+  // Run now ({ routineId }): the routine's work and snapshots; its nextDue stays. Ask a follow-up ({ followUp, work }):
+  // ask or plan work for the earlier run's gardener, whose answer starts its data.
+  gardenRun: async ({ gardenerId, work, routineId, followUp }: { gardenerId?: string; work?: unknown; routineId?: string; followUp?: string }, sender?: Sender) => {
     page(sender);
     await ready();
     const d = await db;
     const routine = routineId ? parseRoutine(await idb.get(d, 'routines', routineId)) : null;
     if (routineId && !routine) throw new Error('That routine no longer exists.');
-    const g = await mustGardener(routine?.gardenerId ?? String(gardenerId ?? ''));
+    const earlier = followUp ? await getRun(String(followUp)) : null;
+    if (followUp && !earlier) throw new Error('That run no longer exists.');
+    if (earlier && ['queued', 'running', 'waiting'].includes(earlier.status)) throw new Error('It’s still working: queue the message instead.');
+    const g = await mustGardener(earlier?.gardenerId ?? routine?.gardenerId ?? String(gardenerId ?? ''));
     const w = checkWork(routine?.work ?? work, g);
+    if (earlier && w.kind !== 'ask' && w.kind !== 'plan') throw new Error('A follow-up is a request.');
     if (w.kind === 'ask' || w.kind === 'plan') {
       const name = (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
       if (!modelById(name)?.agent?.loop && (w.kind === 'ask' || !can(name, 'plan'))) throw new Error(w.kind === 'ask' ? OPEN_REFUSED : PLAN_REFUSED);
     }
-    const run = newRun({ id: crypto.randomUUID(), gardenerId: g.id, work: w, now: Date.now(), ...(routine && { routineId: routine.id }) });
+    const run = earlier ? followUpRun(earlier, w, crypto.randomUUID(), Date.now())
+      : newRun({ id: crypto.randomUUID(), gardenerId: g.id, work: w, now: Date.now(), ...(routine && { routineId: routine.id }) });
     await saveRun(run);
     if (routine) {
       await idb.tx(d, 'routines', 'readwrite', async (t) => {
@@ -583,25 +627,47 @@ export const handlers = {
     if (n) drain();
     return n;
   },
-  /** Steer: `{ id, text, steer: true }`, the person's words for the run's next think. */
+  /**
+   * `{ id, text, steer }`. Steer (true): the person's words for the run's next think. Queued (false): asked as a
+   * follow-up when the run ends, oldest first; in no think before that.
+   */
   runMessage: async ({ id, text, steer }: { id: string; text: string; steer: boolean }, sender?: Sender) => {
     page(sender);
     await ready();
-    if (steer !== true) throw new Error('Only Steer messages can be sent for now.');
+    if (typeof steer !== 'boolean') throw new Error('A message is Steer or queued.');
     if (typeof text !== 'string' || !text.trim() || text.length > 1000) throw new Error('A message is 1 to 1000 characters.');
-    const m = { id: crypto.randomUUID().slice(0, 8), text: text.trim(), at: Date.now(), steer: true };
-    // At most 3 unused, so the next think's instruction part still fits.
-    const unused = (r: GardenRun) => (r.inbox ?? []).filter((x) => x.steer && !x.usedAt).length;
-    if (live?.id === id && unused(live.run) >= 3) throw new Error('It hasn’t read your last 3 messages yet.');
+    const m = { id: crypto.randomUUID().slice(0, 8), text: text.trim(), at: Date.now(), steer };
+    // At most 3 unused of each kind, so the next think's instruction part still fits.
+    const unused = (r: GardenRun) => (r.inbox ?? []).filter((x) => x.steer === steer && !x.usedAt).length;
+    const full = steer ? 'It hasn’t read your last 3 messages yet.' : 'Three messages are already queued.';
+    if (live?.id === id && unused(live.run) >= 3) throw new Error(full);
     // A working run is saved from memory after each action: the message goes there too, or the next save drops it.
     if (live?.id === id) (live.run.inbox ??= []).push(m);
     await updateRun(String(id), (r) => {
       if (r.status !== 'queued' && r.status !== 'running' && r.status !== 'waiting') throw new Error('That run has ended.');
       if (r.inbox?.some((x) => x.id === m.id)) return;
-      if (unused(r) >= 3) throw new Error('It hasn’t read your last 3 messages yet.');
+      if (unused(r) >= 3) throw new Error(full);
       (r.inbox ??= []).push(m);
     });
     return m.id;
+  },
+  /** Opening a run in the Garden tab: it is no longer Unread. */
+  runSeen: async ({ id }: { id: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    await updateRun(String(id), (r) => void (r.seenAt = Date.now()));
+    return true;
+  },
+  /** Retry step: `{ id, step }`, an ended run of direct work runs that failed step again, then what followed it. */
+  runRetry: async ({ id, step }: { id: string; step: number }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    await updateRun(String(id), (r) => {
+      const why = retryStep(r, Number(step));
+      if (why) throw new Error(why);
+    });
+    drain();
+    return true;
   },
   // The notebook: private, so extension pages only. A note belongs to a gardener that exists, or to every gardener.
   noteList: async ({ gardenerId }: { gardenerId?: string } = {}, sender?: Sender) => (page(sender), listNotes(gardenerId)),
@@ -664,7 +730,7 @@ export function init(): void {
     if (await chrome.offscreen.hasDocument().catch(() => false)) await engine('cancelOwner', { owner: 'garden', before: now }).catch(() => {});
     const runs = await allRuns();
     const back = recover(runs, now);
-    for (const [k, r] of back.entries()) if (r !== runs[k]) await idb.put(await db, 'runs', r);
+    for (const [k, r] of back.entries()) if (r !== runs[k]) for (const x of r.status === 'failed' ? followQueued(r) : [r]) await idb.put(await db, 'runs', x);
     await closeLiveGroups();
     for (const r of await routines()) await fire(r.id).catch((e) => console.warn('garden claim failed', e));
   })().catch((e) => console.warn('garden start failed', e));
