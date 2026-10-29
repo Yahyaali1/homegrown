@@ -7,6 +7,7 @@ DOM helpers for the in-page UI and the extension pages:
 - `dom.ts`: a typed element builder.
 - `questions.ts`: a question block, asked one at a time.
 - `flower.ts`: the Homegrown SVG mark and its animation states.
+- `chart.ts`: SVG charts and KPI cards from a table (plan T9).
 - `theme.ts`: applies the light, dark or system theme.
 - `theme-early.ts`: applies the theme before the first paint.
 
@@ -28,6 +29,14 @@ DOM helpers for the in-page UI and the extension pages:
   - `flower(size, state)`: the mark as an `SVGSVGElement`, with the same defaults.
   - `markPage()`: replaces each `<i class="hg-mark">` with the mark. The size is `data-size` (default 18),
     and the state is always `sprout`.
+- `chart.ts`
+  - `chart(table, 'bar' | 'line', width = 640, height = 320)`: an `SVGSVGElement`. The first text column labels
+    the x axis (else the row number); up to 4 numeric columns are series, told apart by gray steps and, for lines,
+    dashes, with a legend when there are 2 or more. At most 60 rows. Colours are read from the tokens as plain
+    `rgb()` when drawn, so the SVG also draws on a canvas.
+  - `scale(values)`: `{ lo, hi }`, always holding 0; a single value or a flat line still has height.
+  - `numericColumns(table)`, `kpis(table)` (a card per numeric column, up to 4: the last value and ▲/▼ change
+    since the first row in `--good`/`--danger`), `toPng(svg)` (twice the size, `{ png, width, height }`).
 - `theme.ts`: `theme()` applies the stored theme and follows changes to it. It adds three buttons to each
   `.theme-switch`: system (◐), light (☀) and dark (☾). The switch gets `role="group"` and
   `aria-label="Theme"`, and each button's `aria-pressed` follows the current theme.
@@ -35,7 +44,7 @@ DOM helpers for the in-page UI and the extension pages:
 
 ## Invariants
 
-- Data text never goes through `innerHTML`. `h()` adds text nodes. Use `fromHtml` only for trusted static
+- Data text never goes through `innerHTML`. `h()` adds text nodes; `chart.ts` sets SVG text by `textContent`. Use `fromHtml` only for trusted static
   templates.
 - `flowerHtml` puts only a numeric size and a state from the fixed set into the markup.
 - The theme is stored in the `chrome.storage.sync` key `theme`. `localStorage.theme` is a cache so the

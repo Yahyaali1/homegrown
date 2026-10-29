@@ -28,6 +28,10 @@ Done after the group agents report. Owner: the main session.
   auto-retry wait out of the call). DONE.
 - T4 (plan T): no shared file changed. `background/monitors.ts` exports `pageText(url, credentials = 'include')`
   for the gardener event check. DONE.
+- T9 (outputs): `scripts/build.mjs` adds the `outputs` page bundle; `background/main.ts` registers the new
+  `outputs.ts` module (one import, one entry in `modules`); `static/sidepanel.html` Library tab gets one "Outputs ›"
+  link line;
+  `background/pagerequest.ts` exports `screenshot`.
 
 ## Known issues
 

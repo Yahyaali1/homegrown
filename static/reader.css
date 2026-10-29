@@ -15,3 +15,10 @@ table { border-collapse: collapse; } td, th { border: 1px solid var(--line); pad
 img { max-width: 100%; }
 
 .brand .flower { vertical-align: -3px; margin-right: 4px; color: var(--fg); --seed-ring: var(--bg); }
+.ask-files { display: flex; flex-wrap: wrap; gap: 8px; font: 15px/1.5 system-ui, sans-serif; position: sticky; top: 52px; background: var(--bg); padding: 8px 0; z-index: 1; }
+.ask-files input { flex: 1; font: inherit; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--chip); color: var(--fg); }
+.ask-files button { font: inherit; border: 0; border-radius: var(--r-sm); padding: 6px 14px; background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+#ask-files-out { flex-basis: 100%; max-height: 40vh; overflow: auto; }
+#ask-files-out .answer { color: var(--fg); }
+.passages li { margin: 6px 0; }
+.file { border-top: 2px solid var(--line-strong); padding-top: 8px; }

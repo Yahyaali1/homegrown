@@ -13,6 +13,7 @@ It also owns these parts:
 - background features: missions, page monitors and schedules, web research, tab tidying, IndexedDB memory
   and live captions,
 - gardeners (`garden.ts`): routines on alarms and a one-run queue.
+- outputs (`outputs.ts`, plan T9): the artifacts store, decks and cited answers across files.
 
 ## Interface
 
@@ -170,14 +171,32 @@ It also owns these parts:
     Wikipedia is tried with the full query, then with up to 7 keywords.
   - `research`, `researchTerm` and `checkClaim` send `{type:'web-progress', id, text}` to the asking tab. Page text, titles, snippets, notes, the topic and the claim reach the model as defanged data, never inside an instruction; a model error ends the run instead of being read as "page would not load".
   - `init` registers the MAIN-world content script `eg-youtube-main` for `*://*.youtube.com/*`.
+  - `research` uses `reportPrompt`; when the model is measured for `evidence` (`measured`), the report gains
+    "Evidence" and "Assumptions" sections and `moveCited` moves any cited assumption to Evidence. The report and its
+    sources are kept as a `brief` artifact; the reply gains `outputId`.
+- `outputs.ts` (plan T9): IndexedDB `hg-outputs`. Handlers `artifactSave`, `artifactGet`, `artifactList` (newest
+  first), `artifactDelete`, `deckMake({ id })`, `citeAnswer({ question, files })`. The artifact handlers refuse
+  anything but Homegrown's own pages (`isExtensionPage`). Exports `saveArtifact` and `measured(ability)`: the model a
+  background request would use (`resolve`), only if `can()` says it has the ability; null without asking the engine
+  when no catalog model has it, and null when none is downloaded.
+  - `deckMake`: from a `brief` or a `table`/`chart`. With `deck`, `writeDeck` (one repair; a table also gets its
+    chart slide); otherwise `deckFromBrief` / `deckFromTable`. Saves and returns a `deck` artifact.
+  - `citeAnswer`: up to 10 files; with `cite`, `citeFiles` (map per file, reduce, `keepCited`) fitted to
+    `contextChars`; null without it.
 - `memory.ts` handlers: `memHistory`, `memClearHistory`, `memHighlightSave`, `memHighlights`,
   `memHighlightDelete`, `memSimilar`, `memAsk`, `memChanged`, `memSnapshot`, `memSavings`, `transcribe`.
   It also has the `onAnswer` hook.
 - `monitors.ts` handlers: `watchPage`, `unwatch`, `listMonitors`, `checkNow`, `schedule`, `unschedule`,
   `runScheduleNow`.
 - `tabs.ts` handlers: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`. Exports `tabText(tabId, cap)` and `tabPage` (text and the URL read at; `read_my_tab` refuses a moved tab).
-- `capture.ts` handlers: `generateImage` (passes Settings' `imageModel`), `depthMap` (passes `depthModel`), `capture`.
+- `capture.ts` handlers: `generateImage` (passes Settings' `imageModel`), `depthMap` (passes `depthModel`), `capture`,
+  `pageShot`, `brandRead`.
   - `capture` crops a region of `tabs.captureVisibleTab` and returns a PNG data URL.
+  - `pageShot`: the asking Homegrown page as a full-page PNG data URL (`pagerequest.ts` `screenshot` under the
+    optional `debugger` permission, detached after). Extension pages only.
+  - `brandRead({ url })`: opens the page in a background tab, reads computed colours (through a canvas pixel, so as
+    `rgb()`), font families and a logo URL (`og:image`, `link[rel=icon]`, first `header img`), never page text; closes
+    the tab, fetches the logo without credentials as a data URL (images up to 300 KB) and saves a `brand` artifact.
   - `init` relays engine `status` broadcasts for a `generateImage` or `depthMap` request to the asking tab as
     `{type:'eg-status', id, text}`.
 - `livecaptions.ts` handlers: `liveStart`, `liveStop`, `livePause`, `liveStartFile`.
@@ -281,6 +300,8 @@ It also owns these parts:
 - IndexedDB `hg-garden` v1: `gardeners`, `routines`, `runs` (indexes `gardenerId`, `routineId`, `status`; the newest
   30 per gardener kept), `snapshots` (`<routineId>\n<url>` → `{ text, prev, runId }`; an event routine's page check
   `<routineId>\nevent <url>` → `{ text }`).
+- IndexedDB `hg-outputs` v1 (store `artifacts`, keyed by `id`: `{ v: 1, id, kind, title, data, runId?, chatId?, at }`,
+  checked by `parseArtifact` on every read).
 - IndexedDB `hg-trust` v1 (store `confirmed`: the steps the user confirmed for each scheduled mission).
 - IndexedDB `eg-memory` v3 (`upgradeMemory` in domain/garden/notes.ts), with the stores `history`, `highlights`,
   `kb`, `snapshots` and `notes` (the gardeners' notebook: `{ v: 1, id, gardenerId?, text, by, at, vec? }`, at most
@@ -301,6 +322,7 @@ It also owns these parts:
 - Network:
   - `web.ts` fetches DuckDuckGo, Bing, the Wikipedia API and other pages, without credentials.
   - `monitors.ts` fetches watched URLs with credentials.
+  - `capture.ts` `brandRead` opens the named page in a tab and fetches its logo without credentials.
   - Missions open real background tabs on Bing, DuckDuckGo and Brave (`search.brave.com`).
 - Uses `OffscreenCanvas` and `createImageBitmap` to crop screenshots.
 

@@ -11,6 +11,7 @@ The entry scripts for the extension's own pages. `scripts/build.mjs` bundles the
 | `library.ts` | `library.js` |
 | `settings.ts` | `settings.js` |
 | `reader.ts` | `reader.js` |
+| `outputs.ts` | `outputs.js` |
 
 The pages of these scripts (`sidepanel.html`, `agent.html`, `library.html`, `settings.html` and
 `reader.html` in `static/`) load `ui/theme.js` in the `<head>`. `static/offscreen.html` is not one of them:
@@ -62,6 +63,8 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - It attaches to a run with `bg('missionState', {id})`.
   - It saves with `bg('missionSave')`. The saved-missions list uses `bg('missionsList')`, with Open and
     Delete (`bg('missionDelete')`).
+  - Results: a Chart toggle (bars from the rows, `ui/chart.ts`) and "Edit as output", which saves the rows as a
+    `table` artifact and opens it in `outputs.html` (editing happens there, so the run's rows stay as found).
   - It downloads the results as `mission.csv` (formula-safe, `domain/csv.ts`; the page address is the
     `source_url` column, or `_source_url` when a field has that name), copies them as JSON, and opens the best result.
   - **Collect from pages** mode: URLs, ScrapingBee `extract_rules` and optional `ai_extract_rules` (with
@@ -79,7 +82,18 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     a saved mission ready to save again (from the "not confirmed for unattended runs" notification). An opened
     mission keeps its id through a run, so Save updates it.
 - `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
-  library", flashcard spaced repetition and the savings meter.
+  library", flashcard spaced repetition and the savings meter. Both pages link to Outputs.
+- `outputs.ts` (`outputs.html`, plan T9): with `?id=`, one artifact from `bg('artifactGet')`; without, the list
+  (`artifactList`, Delete), "Brand kit from a site" (`brandRead`) and "Write a brief".
+  - Table or chart: Table · Bars · Line (`ui/chart.ts`, with KPI cards); cells edit in place, rows are added and
+    deleted and sorted by header, each change saved (debounced 300 ms); Export CSV (`toCsv`), PNG (the chart
+    drawn on a canvas), PPTX (`deckFromTable`), Make deck (`deckMake`).
+  - Brief: rendered with `markdownWithTables`; Make deck, One-pager, PDF.
+  - Deck and one-pager: a brand kit select saved on the artifact (`brandId`), applied as `--brand-*` CSS
+    variables and the logo; PDF (`print()`, one slide a page), PPTX (`domain/pptx.ts`, charts as PNG pictures,
+    the brand's background, text colour and first font), PNG of the whole page (`pageShot`, asking for the
+    optional `debugger` permission on the click).
+  - Brand kit: swatches, fonts and logo.
 - `settings.ts` (`settings.html`, and the Settings tab of the side panel):
   - Switches: every `[data-key]` checkbox whose key is in `SWITCHES` (`domain/settings.ts`) is bound to
     `chrome.storage.sync`. Both `settings.html` and `sidepanel.html` have a checkbox for every switch:
@@ -95,6 +109,9 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - HTML: reduced to plain-text paragraphs. It is not shown as DOM.
   - CSV and JSON: raw text in a `<pre>`.
   - Anything else: plain-text paragraphs.
+  - Up to 10 files at once (picker or drop): each in its own section, and "Ask across these files". Code picks
+    each file's best passages (`filePassages`) and lists them as "file p.N"; then `bg('citeAnswer')` adds a cited
+    answer when the model is measured for `cite`, else the note says the passages are the answer.
 
 ## Invariants
 
@@ -141,13 +158,15 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - Listens for engine broadcasts and for `agent-progress`, `agent-done` and `scrape-progress`.
 - Writes `localStorage.tab` and calls `history.replaceState`.
 - Fetches images and documents, using the extension's host permissions.
-- `chrome.permissions.request({permissions: ['debugger']})` on the Collect click when options need it, and
+- `chrome.permissions.request({permissions: ['debugger']})` on the Collect click when options need it, and on an
+  output's PNG click (`outputs.ts`), and
   `confirm()` for steps that act (Run, Collect, and Save with a schedule).
 - File pickers and drag and drop.
 - Downloads: a Blob of the task export (`homegrown-tasks.json`) and a CSV Blob of mission results
-  (`mission.csv`) or of collected rows (`collected.csv`).
+  (`mission.csv`) or of collected rows (`collected.csv`); an output's CSV, PNG and PPTX (named after its title).
+- `print()` for an output's PDF.
 - Clipboard: `sidepanel.ts` writes the tasks JSON; Mission control's Copy JSON writes the results.
-- `confirm`, `alert`, `window.open` (the best mission result) and `document.startViewTransition`.
+- `confirm`, `alert`, `window.open` (the best mission result, and an output from "Edit as output") and `document.startViewTransition`.
 
 ## Verification
 

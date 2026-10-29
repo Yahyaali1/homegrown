@@ -31,6 +31,7 @@ await Promise.all([
       library: 'src/pages/library.ts',
       settings: 'src/pages/settings.ts',
       reader: 'src/pages/reader.ts',
+      outputs: 'src/pages/outputs.ts',
     },
   }),
   // Classic scripts: content scripts can't be modules, and the theme must apply before a page's first paint.

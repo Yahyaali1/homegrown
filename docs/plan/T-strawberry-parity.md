@@ -955,7 +955,7 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T9 done (merged from t9-outputs).
 
 | Slice | State |
 |---|---|
@@ -968,7 +968,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T6 | Planned |
 | T7 | Planned |
 | T8 | Planned |
-| T9 | Planned |
+| T9 | Built (not reviewed): 9 unit tests, e2e 6/6 (2 `@slow`); `abilities.mjs` on E2B: `deck` 0/6 once titles are checked too (5/6 on bullets only; not set), `cite` 2/4, `evidence` 3/6; E4B not measured (no local copy, disk full). Editing is on the output page ("Edit as output" from Mission control); `background/outputs.ts` added |
 | T10 | Planned |
 | T11 | Planned |
 | T12 | Planned |

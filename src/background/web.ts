@@ -2,7 +2,8 @@
 import { ask } from './engine.ts';
 import { htmlToText, parseBing, parseDuckDuckGo, decode } from '../domain/html.ts';
 import { defang, hostOf } from '../domain/text.ts';
-import { termQuery, termReport, TERM_LIMITS } from '../domain/research.ts';
+import { moveCited, reportPrompt, termQuery, termReport, TERM_LIMITS } from '../domain/research.ts';
+import { measured, saveArtifact } from './outputs.ts';
 import type { SearchResult } from '../domain/mission/types.ts';
 
 type Sender = chrome.runtime.MessageSender | undefined;
@@ -97,8 +98,15 @@ async function research(msg: { id: string; q: string; n?: number }, sender: Send
   const notes = await readAll(await search({ q: msg.q, n: msg.n || 6 }), msg.q, say);
   if (!notes.length) throw new Error('None of the top results could be read or were relevant.');
   say('Writing the report…');
-  const report = await ask(`Answer the question "${msg.q}" using only the numbered sources below. Cite them inline like [1]. Start with a two-sentence answer, then the key points as bullets. Say where sources disagree.`, numbered(notes));
-  return { report, sources: cite(notes) };
+  // A model measured for `evidence` adds Evidence and Assumptions; code still moves any cited assumption to Evidence.
+  const evidence = !!(await measured('evidence'));
+  const reply = await ask(reportPrompt(msg.q, evidence), numbered(notes));
+  const report = evidence ? moveCited(reply) : reply;
+  const sources = cite(notes);
+  // Kept as a brief in Library → Outputs, where it becomes a deck or a one-pager.
+  const md = `${report}\n\n## Sources\n${sources.map((x, i) => `${i + 1}. ${x.title} (${x.url})`).join('\n')}`;
+  const brief = await saveArtifact({ kind: 'brief', title: msg.q.slice(0, 200), data: { md } }).catch(() => null);
+  return { report, sources, ...(brief && { outputId: brief.id }) };
 }
 
 /** A highlighted term: a query for its meaning on this page, then the usual read-and-note, then a report for a term. */

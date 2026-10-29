@@ -97,7 +97,8 @@ async function emulate(tabId: number, o: PageOptions): Promise<() => Promise<voi
   return () => chrome.debugger.detach(target);
 }
 
-async function screenshot(tabId: number, o: PageOptions): Promise<string | null> {
+/** A PNG data URL of the tab (the debugger already attached), or null when `o` asks for none. Also the outputs page's PNG. */
+export async function screenshot(tabId: number, o: PageOptions): Promise<string | null> {
   if (!o.screenshot) return null;
   const target = { tabId };
   let clip: { x: number; y: number; width: number; height: number; scale: number } | undefined;
