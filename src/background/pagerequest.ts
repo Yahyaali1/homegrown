@@ -106,11 +106,12 @@ async function evaluate(tabId: number, code: string): Promise<unknown> {
 }
 
 /** After a step that may navigate: watch up to 1 s for the tab to move, and if it did, wait for the new page. */
-async function follow(tabId: number, before: string | undefined, end: number): Promise<boolean> {
+async function follow(tabId: number, before: { url?: string | undefined; status?: string | undefined }, end: number): Promise<boolean> {
   let moved = false;
   for (let t = 0; t < 1000 && !moved; t += 100) {
     const tab = await chrome.tabs.get(tabId);
-    moved = tab.url !== before || tab.status === 'loading';
+    // A new URL, or loading again after it had finished: a page still on its first load hasn't "moved".
+    moved = tab.url !== before.url || (before.status === 'complete' && tab.status === 'loading');
     if (!moved) await sleep(100);
   }
   if (moved) await waitLoaded(tabId, Math.max(1000, end - Date.now()));
@@ -131,13 +132,16 @@ export async function play(tabId: number, scenario: Scenario, run: Run): Promise
       if (left <= 0) throw new Error('the 40 s for steps ran out');
       if ('wait' in i) await sleep(Math.min(i.wait, left));
       else if ('evaluate' in i) {
-        const before = (await chrome.tabs.get(tabId)).url;
-        const out = await Promise.race([evaluate(tabId, i.evaluate), sleep(left).then(() => Promise.reject(new Error('timed out')))]);
-        results.push((line.result = out));
-        await follow(tabId, before, end); // code may submit a form or navigate, like a click
+        const before = await chrome.tabs.get(tabId);
+        const out = await Promise.race([evaluate(tabId, i.evaluate), sleep(left).then(() => Promise.reject(new Error('timed out')))])
+          .then((v) => ({ v }), (e: unknown) => ({ e }));
+        // Code may submit a form or navigate, like a click; if that ended the script, the move is the result.
+        const moved = await follow(tabId, before, end);
+        if ('e' in out && !moved) throw out.e;
+        results.push((line.result = 'v' in out ? out.v : null));
       }
       else {
-        const before = (await chrome.tabs.get(tabId)).url;
+        const before = await chrome.tabs.get(tabId);
         await inject(tabId);
         const ran = await chrome.scripting.executeScript({ target: { tabId }, args: [i, 'infinite_scroll' in i ? left : Math.min(left, SCENARIO_LIMITS.wait)], func: async (s: Parameters<NonNullable<Window['__hgStep']>>[0], ms: number) => {
           try {

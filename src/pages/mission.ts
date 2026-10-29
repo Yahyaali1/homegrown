@@ -42,6 +42,7 @@ $('#examples').append(...EXAMPLES.map((g) => h('button', { textContent: g, oncli
 // ---- plan ----
 
 async function plan(): Promise<void> {
+  openedId = undefined; // a new plan is a new mission
   const goal = goalBox.value.trim();
   if (!goal) return goalBox.focus();
   const btn = $<HTMLButtonElement>('#plan');
@@ -361,7 +362,7 @@ $('#save-btn').onclick = async () => {
   if (!workflow) return;
   const field = $<HTMLSelectElement>('#alert-field').value;
   const mission = {
-    id: workflow.id ?? crypto.randomUUID().slice(0, 8),
+    id: workflow.id ?? openedId ?? crypto.randomUUID().slice(0, 8),
     name: $<HTMLInputElement>('#name').value.trim() || workflow.goal,
     goal: workflow.goal,
     brief: workflow.brief,
@@ -373,7 +374,9 @@ $('#save-btn').onclick = async () => {
   const scenario = workflow.steps.find((s) => s.type === 'open')?.scenario;
   const acts = scenario?.instructions.filter(isAct) ?? [];
   if (acts.length && mission.every) {
-    if (!confirm(`Every ${mission.every}, unattended, before reading each page this mission will, signed in as you:\n\n${acts.map((i) => `• ${describe(i)}`).join('\n')}\n\nSave it with this schedule?`)) return;
+    const search = workflow.steps.find((s) => s.type === 'search');
+    const where = search?.type === 'search' && search.urls?.length ? [...new Set(search.urls.map((u) => hostOf(u)))].join(', ') : `pages found by searching "${search?.type === 'search' ? search.query : ''}"`;
+    if (!confirm(`Every ${mission.every}, unattended, on ${where}, before reading each page this mission will, signed in as you:\n\n${acts.map((i) => `• ${describe(i)}`).join('\n')}\n\nSave it with this schedule?`)) return;
     Object.assign(mission, { actsConfirmed: JSON.stringify(parseWorkflow(mission)!.steps) }); // every step: what it does, and where
   }
   await bg('missionSave', { mission });
@@ -407,13 +410,20 @@ function load(m: Saved): void {
   const wf = parseWorkflow(m);
   if (!wf) return void alert('This saved mission can’t be opened: it has no search step.');
   workflow = { ...wf, id: m.id };
+  openedId = m.id; // kept through a run (the worker's copy has no id), so Save updates this mission
   goalBox.value = m.goal;
   showWorkflow(workflow);
   $('#planner').textContent = 'saved';
-  $('#results').hidden = $('#save').hidden = true;
+  $('#results').hidden = true;
+  $('#save').hidden = false; // saving again (to confirm its steps for a schedule) needs no run first
   $<HTMLInputElement>('#name').value = m.name;
   $<HTMLSelectElement>('#every').value = m.every ?? '';
+  const a = (m as Saved & { alert?: { field: string; op: string; value: string } | null }).alert;
+  $('#alert-field').replaceChildren(h('option', { value: '', textContent: 'the best result changes' }), ...(a?.field ? [h('option', { value: a.field, textContent: a.field })] : []));
+  $<HTMLSelectElement>('#alert-field').value = a?.field ?? '';
+  if (a) (($<HTMLSelectElement>('#alert-op').value = a.op), ($<HTMLInputElement>('#alert-value').value = a.value));
 }
+let openedId: string | undefined;
 // Lets go of the attached run (it keeps going in the worker): Run is back, its rounds and log are gone, and a
 // reload won't re-attach.
 let detached = 0; // counts detaches, so a start or attach still in flight knows it was let go
@@ -427,6 +437,7 @@ function detach(): void {
   history.replaceState(null, '', location.pathname);
 }
 $('#new').onclick = () => {
+  openedId = undefined;
   detach();
   setMode('find');
   workflow = null;
@@ -605,7 +616,9 @@ const context = params.get('context');
 if (context) (($('#context').hidden = false), ($('#context').textContent = `Started from: ${context}`));
 void renderSaved();
 const run = params.get('run');
-if (run && run !== '1') void attach(run);
+const opening = params.get('mission'); // from the "not confirmed" notification
+if (opening) void bg<Saved[]>('missionsList').then((list) => { const m = list.find((x) => x.id === opening); if (m) load(m); });
+else if (run && run !== '1') void attach(run);
 else if (params.get('goal')) {
   goalBox.value = params.get('goal')!;
   void plan().then(() => run === '1' && workflow && $('#run').click());

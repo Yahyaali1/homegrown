@@ -5,6 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { serve, launch, ROOT, EXT } from './harness.mjs';
+import { parseWorkflow } from '../src/domain/mission/workflow.ts';
 
 let ctx, sw, id, site;
 test.describe.configure({ mode: 'serial' });
@@ -194,10 +195,12 @@ test('pageRequest: any feature can read a page with ScrapingBee parameters; step
 test('scheduled missions run steps that act only as confirmed, and the confirmation is out of content scripts\' reach', async () => {
   const url = `${site.url}/scrape/listing.html`;
   const scenario = { strict: true, instructions: [{ click: '#more' }] };
-  const mission = { id: 'sched', name: 'Ferns', goal: 'ferns', brief: null, every: 'hour', steps: [{ type: 'search', query: 'x', n: 1, urls: [url] }, { type: 'open', limit: 1, scenario }, { type: 'answer', question: 'x' }] };
+  // `n` left out on purpose: the confirmation is of the parsed workflow, defaults filled in, as Mission control sends it.
+  const mission = { id: 'sched', name: 'Ferns', goal: 'ferns', brief: null, every: 'hour', steps: [{ type: 'search', query: 'x', urls: [url] }, { type: 'open', limit: 1, scenario }, { type: 'answer', question: 'x' }] };
+  const confirmed = JSON.stringify(parseWorkflow(mission).steps);
   const page = await ctx.newPage();
   await page.goto(`chrome-extension://${id}/library.html`);
-  const saved = await page.evaluate((m) => chrome.runtime.sendMessage({ target: 'bg', cmd: 'missionSave', mission: m }), { ...mission, actsConfirmed: JSON.stringify(mission.steps) });
+  const saved = await page.evaluate((m) => chrome.runtime.sendMessage({ target: 'bg', cmd: 'missionSave', mission: m }), { ...mission, actsConfirmed: confirmed });
   expect(saved.ok).toBe(true);
   const stored = await sw.evaluate(async () => (await chrome.storage.local.get('missions')).missions.find((m) => m.id === 'sched'));
   expect(stored.actsConfirmed).toBeUndefined(); // not where a content script could write it
@@ -211,7 +214,7 @@ test('scheduled missions run steps that act only as confirmed, and the confirmat
   });
   expect(await outcome()).toBe('skipped');
   // The confirmed steps aimed at another page: also skipped.
-  await page.evaluate((m) => chrome.runtime.sendMessage({ target: 'bg', cmd: 'missionSave', mission: m }), { ...mission, actsConfirmed: JSON.stringify(mission.steps) });
+  await page.evaluate((m) => chrome.runtime.sendMessage({ target: 'bg', cmd: 'missionSave', mission: m }), { ...mission, actsConfirmed: confirmed });
   expect(await outcome()).toMatch(/^ran/);
   await sw.evaluate(async () => {
     const { missions } = await chrome.storage.local.get('missions');
@@ -219,6 +222,17 @@ test('scheduled missions run steps that act only as confirmed, and the confirmat
     await chrome.storage.local.set({ missions });
   });
   expect(await outcome()).toBe('skipped');
+  // The notification's link opens that mission ready to save; saving with the schedule confirms it again, same id.
+  await page.goto(`chrome-extension://${id}/agent.html?mission=sched`);
+  await expect(page.locator('#save')).toBeVisible();
+  await expect(page.locator('#name')).toHaveValue('Ferns');
+  let asked = '';
+  page.once('dialog', (d) => ((asked = d.message()), d.accept()));
+  await page.click('#save-btn');
+  await expect(page.locator('#save-btn')).toHaveText('Saved ✓');
+  expect(asked).toContain('Every hour, unattended, on attacker.example'); // where it runs is in the question
+  const ids = await sw.evaluate(async () => (await chrome.storage.local.get('missions')).missions.map((m) => m.id).filter((x) => x === 'sched'));
+  expect(ids).toEqual(['sched']); // updated, not copied
   await page.close();
 });
 

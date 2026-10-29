@@ -46,7 +46,9 @@ export interface Run { stop: AbortController; group?: number | undefined; regrou
  */
 async function joinGroup(run: Run, tabId: number): Promise<void> {
   const into = (groupId: number) => chrome.tabs.group({ tabIds: tabId, groupId }).then(() => true, () => false);
-  if (run.group !== undefined && (await into(run.group))) return;
+  const tried = run.group;
+  if (tried !== undefined && (await into(tried))) return;
+  if (run.group !== tried && run.group !== undefined && (await into(run.group))) return; // another tab regrouped meanwhile
   if (run.regrouping) {
     const g = await run.regrouping;
     if (g !== undefined && (await into(g))) return;
@@ -461,7 +463,7 @@ export function init(): void {
   chrome.notifications.onClicked.addListener((id) => {
     if (id.startsWith('mission:')) chrome.tabs.create({ url: id.split(':').slice(2).join(':') });
     if (id.startsWith('live:')) openMission(id.slice(5));
-    if (id.startsWith('unconfirmed:')) chrome.tabs.create({ url: MISSION_PAGE() });
+    if (id.startsWith('unconfirmed:')) chrome.tabs.create({ url: `${MISSION_PAGE()}?mission=${encodeURIComponent(id.slice(12))}` });
   });
   // A restarted worker owns no run yet, so tabs left in "❀ Mission" groups are orphans of the old one: close them.
   chrome.tabGroups.query({ title: '❀ Mission' }).then(async (groups) => {

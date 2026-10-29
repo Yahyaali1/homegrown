@@ -61,7 +61,9 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     `recipeSave`, `recipeDelete`) with a "recipe" label. Copy JSON gives the rules' JSON per page with `_url`;
     the CSV is `collected.csv`, with the page address in `source_url` (`_source_url` when a field has that
     name).
-  - URL parameters: `?goal=&run=1&context=&urls=`, or `?run=<id>` to attach to a run.
+  - URL parameters: `?goal=&run=1&context=&urls=`, `?run=<id>` to attach to a run, or `?mission=<id>` to open
+    a saved mission ready to save again (from the "not confirmed for unattended runs" notification). An opened
+    mission keeps its id through a run, so Save updates it.
 - `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
   library", flashcard spaced repetition and the savings meter.
 - `settings.ts` (`settings.html`, and the Settings tab of the side panel):
