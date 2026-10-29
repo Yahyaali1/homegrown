@@ -238,6 +238,10 @@ ability pin, as `garden-eval` does, if no model has `plan` yet.
 **Done.** `bench/abilities.mjs plan` runs on E2B and E4B and its results are in the Elephant log; `model.ts` changes
 only on a pass.
 
+**Accepted behaviour (T1 review).** When a gardener has notes, the `plan` think puts them in the data and taints the
+run before any step runs. Planned searches then become `reach` requests, and planned fills never get a `fromPlan`
+answer. This fails safe, so it stays.
+
 ---
 
 ### T2 Approvals and steering
@@ -950,11 +954,11 @@ it lands.
 
 ## Status
 
-T1 built, waiting for review.
+T1 done (commit c4cbc5e). T2 next.
 
 | Slice | State |
 |---|---|
-| T1 | Built (not reviewed): 13 unit tests, e2e passes on a planted run; `abilities.mjs plan` E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan` |
+| T1 | Done (c4cbc5e), reviewed (0 Blockers, 1 Major fixed): 187 unit tests pass; `tests/plan.spec.mjs` passes on the real model; `garden.spec` 4/4. `abilities.mjs plan`: E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan`, and Plan first stays off in the UI |
 | T2 | Planned |
 | T3 | Planned |
 | T3b | Planned |
@@ -973,6 +977,7 @@ T1 built, waiting for review.
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T1 | code review | 0 / 1 | Fixed: `chooseData` listed named tabs only for `ask` (loop.ts 333); now also `plan`, with a test that the plan prompt's data holds the tab URL |
 | 1 | design | 1 / 10 | All accepted after checking the code. Plan yes no longer outlives taint: planned reads join `seen` as approved, non-sensitive acts get `fromPlan` pre-approvals that `approveRequest` re-checks at call time (decision 2). Abilities pinned on the run in `pin()` (decision 1). `plan` treated like `ask` for tabs. Edited approvals stored as `answer.args` and used by `attempt`/`call`. Explicit `decide` cases for `propose_routine`, `remember`, `doc_read`, `doc_write`. Helpers moved to T3b with `live` as a map. `runRetry` drops the step, later steps and later turns; direct work only. `act_my_tab`: in `actOf`, fill sensitive whatever the taint, borrowed tab in `owned()`. MCP: only person-confirmed `describe` reaches the prompt; names checked. Presets: `workflow:<preset>/<id>` abilities gate turn-on. New `deck` and `cite` abilities with model-free fallbacks; chat Plan mode needs `plan` |
 | 1 | implementation readiness | 2 / 10 | All accepted. Plan yes covers only non-sensitive approves; reach and sensitive still asked (merged with design B1). T8 depends on T6 and T7. `GardenRun.abilities` and the planted-run JSON written. `sum` prompt and `requestAnswer { value, calls }` given. Queued messages moved to T3; `act_my_tab` / `app_call` test cases moved to T5 / T11. T6 moved onto the chain after T5. `helpers` answers refused from pages. Event trigger: `eventCheck` before the claim transaction, `claim(…, trigger)`, `GardenRun.trigger`, `pageText(url, credentials)`. `Skill.work` and `Work.skillId`. Names fixed: `contextChars` created in T1, `flower` not `hgFlower`, `skillSave` handler, T10 adds `main.ts`, T9 screenshot from `pagerequest.ts`. T7 e2e no longer needs a model; T12 lists Rosa's 2 routines and 3 skills |
 | 2 | blockers only (fresh) | 5 / — | All accepted after checking garden.ts 500–520, loop.ts 40–50, 90–130, records.ts 54–68. (1) `always` refused when args are edited (the grant is built from the original `argsKey`). (2) Edited calls settle: `K0`/`K1` lookups stated, `editedFrom` and `noEdit` on the re-asked request, the `call` action names its `answered` request. (3) `fromPlan` pre-approvals only for `act` and acting `collect` in gardener tabs; `decide` runs before a `fromPlan` answer counts; `act_my_tab` and `app_call` always asked (T1, T5, T11). (4) T2 e2e plants a pending approve request with no `fromPlan` answer. (5) `Routine.needs`, `Skill.needs`, `Skill.on`; `pin()` checks routine and skill needs; slash command and batch test refuse unmet or off skills |
@@ -1016,3 +1021,17 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
 - Changed: decision 2, T1, T2 (key rules, `answered` on the call action, no `always` on edits, e2e plant), T5, T8
   (`Skill.on`), T11, T12 (`needs` on records, `pin()` check). No slice added or reordered.
 - Open: the builder of T2 must change the `Action` type in loop.ts (`call.answered`), which `garden.ts` `turn` reads.
+
+**2026-10-29: T1 landed (commit c4cbc5e).**
+- 187 unit tests pass; `tests/plan.spec.mjs` passes on the real model with a planted pin; `garden.spec` 4/4.
+- `bench/abilities.mjs plan`: E2B 3/8, 1 violation (a planned search after a signed-in read was asked again under
+  taint); E4B 5/8, 1 violation (an act on a missing selector, stopped by `classify`). No model has `plan`. Open item 6
+  is answered "neither": Plan first stays off in the UI, and T2–T5 e2e tests must plant runs (T1 "Planted runs").
+- Builder deviations, accepted: the `garden-eval` fixtures moved to `bench/garden-fixtures.mjs` (shared by both
+  benches); `answerPlan` mutates the run it is given; no `integration.md` entry was added (to add at the next
+  shared-file change: `domain/model.ts`, `domain/text.ts`).
+- Review: no Blockers; one Major fixed (named tabs in `chooseData` for `plan`).
+- Carry to T5 and T11: the test "no `fromPlan` answer for `act_my_tab` / `app_call`" passes today only because `actOf`
+  returns `null` for unknown tools. When T5 or T11 teach `actOf` those tools, the test must exercise the explicit
+  `act` / `collect` filter in `answerPlan`.
+- Accepted: notes taint a run at the `plan` think (see T1 "Accepted behaviour").
