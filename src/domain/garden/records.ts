@@ -1,0 +1,298 @@
+// Gardener records (docs/plan/S-gardeners.md). Each is versioned; a parser returns null for an invalid record or a
+// newer `v`, and callers ignore such records (never delete them), so an older build leaves newer data alone.
+
+export interface Gardener {
+  v: 1;
+  id: string;
+  name: string;
+  instructions: string;
+  /** Hosts whose pages are read signed in; each matches its subdomains. */
+  sites: string[];
+  /** Model and tool time per run. */
+  minutes: number;
+  createdAt: number;
+  /** Its flower in the Garden tab (optional, so v stays 1). */
+  look?: Look;
+}
+
+/** A gardener's flower: never 10 petals (the Homegrown mark's), always leaning left, the leaf on the right. */
+export interface Look { petals: 5 | 6 | 7 | 8 | 9 | 11 | 12; lean: number /* 0.3..1 */ }
+export const PETALS = [5, 6, 7, 8, 9, 11, 12] as const;
+
+export function parseLook(raw: unknown): Look | null {
+  if (!isObj(raw) || !PETALS.includes(raw.petals as Look['petals'])) return null;
+  const lean = raw.lean;
+  return typeof lean === 'number' && lean >= 0.3 && lean <= 1 ? { petals: raw.petals as Look['petals'], lean } : null;
+}
+
+export const randomLook = (rand = Math.random): Look => ({ petals: PETALS[Math.floor(rand() * PETALS.length)]!, lean: Math.round((0.3 + rand() * 0.7) * 100) / 100 });
+
+/** A gardener's flower: its stored look, or (none stored, or one this build can't read) the same one from its id each time. */
+export function lookOf(g: { id: string; look?: Look | undefined }): Look {
+  if (g.look) return g.look;
+  let h = 7;
+  for (const c of g.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return randomLook(() => (h = (Math.imul(h, 1103515245) + 12345) >>> 0) / 2 ** 32);
+}
+
+export type When =
+  | { kind: 'every'; hours: number }
+  | { kind: 'daily'; at: string }
+  | { kind: 'weekly'; days: number[]; at: string };
+
+export type Work =
+  | { kind: 'read'; urls: string[] } // direct
+  | { kind: 'mission'; goal: string } // direct
+  | { kind: 'ask'; request: string; tabs?: Mention[] }; // open: needs a model with `agent.loop`
+
+/**
+ * A tab the person named for `read_my_tab`: its URL when named. By hand it also keeps the tab's id, and the tab must
+ * still be on that URL; a routine keeps the URL only and finds an open tab with exactly it on each run.
+ */
+export interface Mention { url: string; title: string; tabId?: number }
+
+export interface Routine {
+  v: 1;
+  id: string;
+  gardenerId: string;
+  name: string;
+  when: When;
+  tz: string;
+  work: Work;
+  paused: boolean;
+  nextDue: number;
+  lastRunId?: string;
+  /** Slots skipped while the last run still worked (last 5); handed to the next run, then cleared. */
+  skipped?: number[];
+  createdAt: number;
+}
+
+export type Status = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
+
+/** Where a reachable URL came from. Under taint only `person`, `approved` and links from the gardener's sites pass. */
+export interface Seen {
+  url: string;
+  from: 'person' | 'approved' | 'search' | 'link';
+  /** For `link`: the step whose page held it. */
+  step?: number;
+}
+
+export interface GardenRun {
+  v: 1;
+  id: string;
+  gardenerId: string;
+  routineId?: string;
+  work: Work;
+  /** Pinned when the run first goes `running`. */
+  model?: string;
+  maxTokens?: number;
+  agent?: { loop: boolean; maxSteps: number };
+  status: Status;
+  queuedAt: number;
+  startedAt?: number;
+  endedAt?: number;
+  usedMs: number;
+  turns: Turn[];
+  steps: Step[];
+  requests: Request[];
+  seen: Seen[];
+  tainted: boolean;
+  answer?: string;
+  /** The final check said the task wasn't met, or time ran out. */
+  best?: boolean;
+  why?: string;
+  interrupted?: number;
+  /** The routine's skipped slots, shown as the run's first line. */
+  skipped?: number[];
+}
+
+export interface Turn {
+  purpose: 'choose' | 'repair' | 'check' | 'word';
+  reply: string;
+  at: number;
+}
+
+export interface Step {
+  i: number;
+  tool: string;
+  args: Record<string, unknown>;
+  effect: 'read' | 'act';
+  state: 'started' | 'done' | 'failed';
+  digest?: string;
+  output?: string;
+  links?: string[];
+  /** The tab's final URL after a read: taint and link trust follow it, not the requested URL. */
+  url?: string;
+  error?: string;
+  at: number;
+}
+
+export interface Request {
+  id: string;
+  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen';
+  step?: number;
+  /** The exact call an answer applies to: its tool and `argsKey(args)`. */
+  tool?: string;
+  argsKey?: string;
+  /** An approve's host: an "always" answer grants the call there only. */
+  host?: string;
+  /** A sensitive approve: the reason shown, and (when the page stopped it) the step it covers, once. */
+  why?: string;
+  index?: number;
+  text: string;
+  sensitive: boolean;
+  tabId?: number;
+  shownAt?: number;
+  expiresAt?: number;
+  /** approve: yes, no or always (a grant; never for a sensitive one); did-it-happen and reach: yes or no. */
+  answer?: { value: 'yes' | 'no' | 'always' | string; at: number };
+}
+
+export const LIMITS = { sites: 20, urls: 5, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
+
+// Shared-hosting suffixes: anyone can publish under them, so one entry would trust every tenant.
+export const PUBLIC_SUFFIXES = [
+  'github.io', 'gitlab.io', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com',
+  'appspot.com', 'herokuapp.com', 'onrender.com', 'fly.dev', 'glitch.me', 'blogspot.com', 'wordpress.com',
+  'azurewebsites.net', 'cloudfront.net', 'amazonaws.com', 'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'co.jp',
+  'co.nz', 'co.in', 'com.br',
+];
+const SECOND_LEVEL = /^(co|com|net|org|ac|gov|edu|ne|or)\.[a-z]{2}$/; // co.za, com.mx… the list can't name them all
+
+/** "https://WWW.Example.com:8080/x" → "example.com"; null for a single label, a shared suffix, or not a host. */
+export function site(entry: string): string | null {
+  const h = entry.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/^(\*\.|www\.)/, '');
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(h)) return null;
+  return PUBLIC_SUFFIXES.includes(h) || SECOND_LEVEL.test(h) ? null : h;
+}
+
+/** Normalises the person's site lines; `refused` names the entries that can't be sites. */
+export function sitesOf(lines: string[]): { sites: string[]; refused: string[] } {
+  const sites: string[] = [], refused: string[] = [];
+  for (const l of lines.filter((l) => l.trim())) {
+    const s = site(l);
+    if (!s) refused.push(l.trim());
+    else if (!sites.includes(s)) sites.push(s);
+  }
+  return { sites, refused };
+}
+
+/** The URL with its fragment removed; null unless http(s). */
+export function bare(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) return null;
+    u.hash = '';
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
+const int = (x: unknown, min: number, max: number): x is number => Number.isInteger(x) && (x as number) >= min && (x as number) <= max;
+const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+const AT = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function validTz(tz: unknown): tz is string {
+  if (typeof tz !== 'string' || !tz) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function parseGardener(raw: unknown): Gardener | null {
+  if (!isObj(raw) || raw.v !== 1 || !str(raw.id, 200) || !str(raw.name, 40) || !str(raw.instructions, 2000, 0)) return null;
+  if (!Array.isArray(raw.sites) || raw.sites.length > LIMITS.sites || !raw.sites.every((s) => typeof s === 'string')) return null;
+  const { sites, refused } = sitesOf(raw.sites as string[]);
+  const minutes = raw.minutes ?? 10;
+  if (refused.length || !int(minutes, 1, 60) || !time(raw.createdAt)) return null;
+  // An unknown look (a newer build's, or broken) is dropped, never the gardener: the UI draws one from its id.
+  const look = raw.look === undefined ? null : parseLook(raw.look);
+  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }) };
+}
+
+export function parseWhen(raw: unknown): When | null {
+  if (!isObj(raw)) return null;
+  if (raw.kind === 'every') return int(raw.hours, 1, 24) ? { kind: 'every', hours: raw.hours } : null;
+  if (typeof raw.at !== 'string' || !AT.test(raw.at)) return null;
+  if (raw.kind === 'daily') return { kind: 'daily', at: raw.at };
+  if (raw.kind !== 'weekly' || !Array.isArray(raw.days) || !raw.days.length || !raw.days.every((d) => int(d, 0, 6))) return null;
+  return { kind: 'weekly', days: [...new Set(raw.days as number[])].sort(), at: raw.at };
+}
+
+export function parseWork(raw: unknown): Work | null {
+  if (!isObj(raw)) return null;
+  if (raw.kind === 'mission') return str(raw.goal, 300) ? { kind: 'mission', goal: raw.goal } : null;
+  if (raw.kind === 'ask') {
+    if (!str(raw.request, 1000)) return null;
+    if (raw.tabs === undefined) return { kind: 'ask', request: raw.request };
+    const tabs = Array.isArray(raw.tabs) && raw.tabs.length <= LIMITS.tabs ? raw.tabs.map(parseMention) : [null];
+    return tabs.every((t) => t) ? { kind: 'ask', request: raw.request, tabs: tabs as Mention[] } : null;
+  }
+  if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.urls)) return null;
+  const urls = raw.urls.map((u) => (typeof u === 'string' ? bare(u) : null));
+  return urls.every((u) => u) ? { kind: 'read', urls: urls as string[] } : null;
+}
+
+function parseMention(raw: unknown): Mention | null {
+  if (!isObj(raw) || !str(raw.url, 2000) || !bare(raw.url) || typeof raw.title !== 'string') return null;
+  const m: Mention = { url: raw.url, title: raw.title.slice(0, 200) };
+  if (raw.tabId !== undefined) {
+    if (!int(raw.tabId, 0, 2 ** 31)) return null;
+    m.tabId = raw.tabId;
+  }
+  return m;
+}
+
+export function parseRoutine(raw: unknown): Routine | null {
+  if (!isObj(raw) || raw.v !== 1 || !str(raw.id, 200) || !str(raw.gardenerId, 200) || !str(raw.name, 80)) return null;
+  const when = parseWhen(raw.when), work = parseWork(raw.work);
+  if (!when || !work || !validTz(raw.tz) || typeof raw.paused !== 'boolean' || !time(raw.nextDue) || !time(raw.createdAt)) return null;
+  const r: Routine = { v: 1, id: raw.id, gardenerId: raw.gardenerId, name: raw.name.trim(), when, tz: raw.tz, work, paused: raw.paused, nextDue: raw.nextDue, createdAt: raw.createdAt };
+  if (typeof raw.lastRunId === 'string') r.lastRunId = raw.lastRunId;
+  if (Array.isArray(raw.skipped)) r.skipped = raw.skipped.filter(time).slice(-LIMITS.skipped);
+  return r;
+}
+
+const STATUSES: Status[] = ['queued', 'running', 'waiting', 'done', 'failed', 'stopped'];
+const ORIGINS: Seen['from'][] = ['person', 'approved', 'search', 'link'];
+
+// ponytail: turns, steps and requests are checked for shape only (objects with their key fields); runs are only ever
+// written by this code, so deeper checks wait for a v2 record.
+export function parseRun(raw: unknown): GardenRun | null {
+  if (!isObj(raw) || raw.v !== 1 || !str(raw.id, 200) || !str(raw.gardenerId, 200) || !parseWork(raw.work)) return null;
+  if (!STATUSES.includes(raw.status as Status) || !time(raw.queuedAt) || !time(raw.usedMs) || typeof raw.tainted !== 'boolean') return null;
+  if (raw.maxTokens !== undefined && !int(raw.maxTokens, 1, 1e8)) return null;
+  if (raw.agent !== undefined && !(isObj(raw.agent) && typeof raw.agent.loop === 'boolean' && int(raw.agent.maxSteps, 1, 100))) return null;
+  const list = (x: unknown, ok: (o: Record<string, unknown>) => boolean) => Array.isArray(x) && x.every((o) => isObj(o) && ok(o));
+  if (!list(raw.turns, (t) => typeof t.reply === 'string' && typeof t.purpose === 'string')) return null;
+  if (!list(raw.steps, (s) => int(s.i, 0, 1e4) && typeof s.tool === 'string' && isObj(s.args) && typeof s.state === 'string')) return null;
+  if (!list(raw.requests, (r) => typeof r.id === 'string' && typeof r.kind === 'string' && typeof r.text === 'string')) return null;
+  if (!list(raw.seen, (s) => typeof s.url === 'string' && ORIGINS.includes(s.from as Seen['from']))) return null;
+  return { ...(raw as unknown as GardenRun), work: parseWork(raw.work)! };
+}
+
+/** The URLs the person gave: a read's pages, or absolute http(s) URLs written in a request (fragment removed, ≤ 20). */
+export function personUrls(w: Work): string[] {
+  if (w.kind === 'read') return w.urls;
+  if (w.kind !== 'ask') return [];
+  const urls = [...w.request.matchAll(/https?:\/\/[^\s<>"'()\[\]]+/g)].map((m) => bare(m[0].replace(/[.,;:!?]+$/, ''))).filter((u): u is string => !!u);
+  return [...new Set(urls)].slice(0, 20);
+}
+
+/** A new queued run. The person's own URLs are reachable from the start. */
+export function newRun(o: { id: string; gardenerId: string; routineId?: string; work: Work; now: number; skipped?: number[] }): GardenRun {
+  const run: GardenRun = {
+    v: 1, id: o.id, gardenerId: o.gardenerId, work: o.work, status: 'queued', queuedAt: o.now, usedMs: 0,
+    turns: [], steps: [], requests: [], tainted: false,
+    seen: personUrls(o.work).map((url) => ({ url, from: 'person' })),
+  };
+  if (o.routineId) run.routineId = o.routineId;
+  if (o.skipped?.length) run.skipped = o.skipped;
+  return run;
+}

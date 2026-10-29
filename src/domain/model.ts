@@ -34,6 +34,8 @@ export interface ModelSpec {
   defaults: Required<Pick<Sampling, 'temperature' | 'topK' | 'topP'>>;
   /** One line for Settings. */
   note: string;
+  /** Measured by bench/garden-eval.mjs: open requests (`loop`) and the most tool calls a run gets. */
+  agent?: { loop: boolean; maxSteps: number };
 }
 
 const hf = (repo: string, commit: string, file: string) => `https://huggingface.co/${repo}/resolve/${commit}/${file}?download=true`;
@@ -66,6 +68,8 @@ export const MODELS: readonly ModelSpec[] = [
 
 export const modelById = (id: string): ModelSpec | undefined => MODELS.find((m) => m.id === id);
 export const supports = (m: ModelSpec, c: Capability): boolean => m.capabilities.includes(c);
+/** A model with no measured `agent` runs only routines whose steps are set. */
+export const DEFAULT_AGENT: NonNullable<ModelSpec['agent']> = { loop: false, maxSteps: 4 };
 
 /** The tasks a model can be chosen for (settings.taskModels). */
 export const TASKS = {
@@ -73,6 +77,7 @@ export const TASKS = {
   page: 'Actions on pages',
   missions: 'Missions',
   background: 'Background work',
+  gardens: 'Gardeners',
 } as const;
 export type TaskId = keyof typeof TASKS;
 

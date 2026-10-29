@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Lanes } from '../../src/offscreen/lanes.ts';
-import { fitSelection, CHARS_PER_TOKEN, OUTPUT_RESERVE } from '../../src/offscreen/fit.ts';
+import { fitSelection } from '../../src/offscreen/fit.ts';
+import { CHARS_PER_TOKEN, OUTPUT_RESERVE } from '../../src/domain/text.ts';
 
 test('a question asked during a mission waits only for the call already running, not for the queued mission work', async () => {
   const lanes = new Lanes();
