@@ -10,7 +10,7 @@
 //
 // deck, cite, evidence (T9): the product's own prompts and parsers from src/domain, called on the model directly
 // (fixtures in output-fixtures.mjs). deck: 6 sources → decks; a case passes when the deck parses (one repair), has
-// ≤ 15 slides and every bullet is grounded in the source; pass ≥ 5/6. cite: 4 sets of 3–5 files; the reader's
+// ≤ 15 slides and every title and bullet is grounded in the source; pass ≥ 5/6. cite: 4 sets of 3–5 files; the reader's
 // map-reduce (`citeFiles`); a case passes when the answer holds the known words, no citation was dropped and every
 // sentence of 4+ words cites a file and page; pass ≥ 3/4. evidence: 6 source sets with the report prompt and its two
 // sections; a case passes when there is an Evidence and an Assumptions section, every Evidence bullet cites a listed
@@ -165,7 +165,7 @@ async function deck() {
     const source = c.table ? tableText(c.table) : c.source;
     const d = await writeDeck(ask, source, contextChars(m.maxTokens));
     if (!d) return { fails: ['did not parse after one repair'] };
-    const invented = d.slides.flatMap((s) => s.bullets).filter((b) => !grounded(b, source));
+    const invented = d.slides.flatMap((s) => [s.title, ...s.bullets]).filter((b) => !grounded(b, source));
     return { deck: d, fails: [...(d.slides.length > DECK_MAX ? [`${d.slides.length} slides`] : []), ...invented.map((b) => `not in the source: ${b}`)] };
   }, 5, '≥ 5/6 decks that parse, hold ≤ 15 slides, and state only facts in the source');
 }

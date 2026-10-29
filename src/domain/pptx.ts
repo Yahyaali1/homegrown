@@ -3,7 +3,7 @@
 import type { Deck } from './outputs.ts';
 import { zipWrite } from './zip.ts';
 
-export const xml = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+export const xml = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, '');
 
 /** "rgb(12, 34, 56)" or "#abc" → "0C2238"; anything else → the fallback. */
 export function hex(css: string | undefined, fallback: string): string {

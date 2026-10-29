@@ -5,6 +5,7 @@ import { $ } from './shell.ts';
 import { h } from '../ui/dom.ts';
 import { bg } from '../shared/protocol.ts';
 import { markdown } from '../domain/markdown.ts';
+import { can, MODELS } from '../domain/model.ts';
 import { citeLabel, filePassages, READER_FILES, type DocFile } from '../domain/reading.ts';
 import { unzip } from '../domain/zip.ts';
 import * as pdfjs from 'pdfjs-dist';
@@ -90,6 +91,7 @@ const pagesOf = (nodes: Node[]): string[] => (nodes.length && nodes.every((n) =>
   ? nodes.map((n) => [...(n as HTMLElement).querySelectorAll('p')].map((p) => p.textContent).join('\n\n'))
   : [nodes.map((n) => n.textContent ?? '').join('\n\n')]);
 
+const NO_CITE = 'The best passages from each file. A cited answer needs a model measured for citing files.';
 /** The question across files: code picks each file's best passages; a model measured for `cite` also answers. */
 function askAcross(docs: DocFile[]): HTMLElement {
   const q = h('input', { id: 'ask-files-q', placeholder: `Ask across these ${docs.length} files`, ariaLabel: 'Question across the files' });
@@ -102,9 +104,11 @@ function askAcross(docs: DocFile[]): HTMLElement {
     const note = h('p', { className: 'hint', textContent: ps.length ? 'Writing a cited answer…' : 'No passage in these files matches the question.' });
     out.replaceChildren(note, passages);
     if (!ps.length) return;
+    // No catalog model is measured for citing: the files' text never leaves the page.
+    if (!MODELS.some((m) => can(m.id, 'cite'))) return void (note.textContent = NO_CITE);
     try {
       const cited = await bg<{ text: string; dropped: number; model: string } | null>('citeAnswer', { question, files: docs });
-      if (!cited) return void (note.textContent = 'The best passages from each file. A cited answer needs a model measured for citing files.');
+      if (!cited) return void (note.textContent = NO_CITE);
       note.replaceChildren(h('span', { className: 'answer', textContent: cited.text }),
         h('span', { textContent: ` (${cited.model}${cited.dropped ? `; ${cited.dropped} citation${cited.dropped > 1 ? 's' : ''} dropped: the page doesn’t hold the words` : ''})` }));
     } catch (e) {

@@ -55,7 +55,8 @@ async function deckMake({ id }: { id: string }, sender: Sender): Promise<Artifac
 }
 
 /** One cited answer across the reader's files (`citeFiles`), or null without the `cite` ability: the page shows the passages. */
-async function citeAnswer({ question, files }: { question: string; files: DocFile[] }): Promise<{ text: string; dropped: number; model: string } | null> {
+async function citeAnswer({ question, files }: { question: string; files: DocFile[] }, sender: Sender): Promise<{ text: string; dropped: number; model: string } | null> {
+  ownPage(sender);
   files = (Array.isArray(files) ? files : []).slice(0, READER_FILES).map((f) => ({ name: String(f.name).slice(0, 200), pages: (Array.isArray(f.pages) ? f.pages : []).map(String) }));
   const m = await measured('cite');
   return m && { ...(await citeFiles((p, d = '') => ask(m, p, d), String(question), files, contextChars(m.maxTokens) - 600)), model: m.name };

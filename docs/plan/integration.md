@@ -20,7 +20,7 @@ Done after the group agents report. Owner: the main session.
 - G: `translateTo` name/code mismatch — DONE (translate.js). Remote model option removed by user decision: local model only.
 - T9 (outputs): `scripts/build.mjs` adds the `outputs` page bundle; `background/main.ts` registers the new
   `outputs.ts` module (one import, one entry in `modules`); `static/sidepanel.html` Library tab gets one "Outputs ›"
-  link line; `domain/model.ts` gives Gemma-4-E2B-it `abilities: ['deck']` (bench pass 5/6);
+  link line;
   `background/pagerequest.ts` exports `screenshot`.
 
 ## Known issues

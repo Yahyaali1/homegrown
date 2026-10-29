@@ -963,7 +963,7 @@ T1 built, waiting for review. T9 built beside the chain, waiting for review.
 | T6 | Planned |
 | T7 | Planned |
 | T8 | Planned |
-| T9 | Built (not reviewed): 9 unit tests, e2e 6/6 (2 `@slow`); `abilities.mjs` on E2B: `deck` 5/6 (pass, twice, set in `model.ts`), `cite` 2/4, `evidence` 3/6; E4B not measured (no local copy, disk full). Editing is on the output page ("Edit as output" from Mission control); `background/outputs.ts` added |
+| T9 | Built (not reviewed): 9 unit tests, e2e 6/6 (2 `@slow`); `abilities.mjs` on E2B: `deck` 0/6 once titles are checked too (5/6 on bullets only; not set), `cite` 2/4, `evidence` 3/6; E4B not measured (no local copy, disk full). Editing is on the output page ("Edit as output" from Mission control); `background/outputs.ts` added |
 | T10 | Planned |
 | T11 | Planned |
 | T12 | Planned |

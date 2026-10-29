@@ -185,7 +185,7 @@ test('reader @slow: 3 PDFs give passages from all 3 with no model call; a cited 
   }
 });
 
-test('deck @slow: with a model measured for deck, Make deck has the model write the slides from the brief', async () => {
+test('deck @slow: Make deck has a model measured for deck write the slides, else code builds them', async () => {
   const { ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') });
   try {
     const page = await ctx.newPage();
@@ -194,8 +194,12 @@ test('deck @slow: with a model measured for deck, Make deck has the model write 
     const brief = await bgOn(page, 'artifactSave', { artifact: { kind: 'brief', title: 'Fern care', data: { md } } });
     const t0 = Date.now();
     const deck = await bgOn(page, 'deckMake', { id: brief.id });
-    const loaded = (await engine(sw, 'status')).loaded; // code alone would load no model
-    expect(loaded?.name).toBe('Gemma-4-E2B-it');
+    const loaded = (await engine(sw, 'status')).loaded; // code alone loads no model
+    if (!loaded) {
+      expect(deck.data.slides.map((s) => s.title)).toEqual(['Fern care', 'Light', 'Water', 'Feeding']);
+      console.log('deck: no model in the catalog is measured for deck, so code built it (the model part was not run).');
+      return;
+    }
     console.log(`deck by ${loaded.name}: ${deck.data.slides.length} slides in ${Date.now() - t0} ms: ${deck.data.slides.map((s) => s.title).join(' | ')}`);
     expect(deck.data.slides.length).toBeGreaterThan(1);
     expect(deck.data.slides.length).toBeLessThanOrEqual(15);

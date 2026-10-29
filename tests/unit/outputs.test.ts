@@ -9,7 +9,7 @@ import { unzip, zipWrite, crc32 } from '../../src/domain/zip.ts';
 import { pptx, hex } from '../../src/domain/pptx.ts';
 import { moveCited } from '../../src/domain/research.ts';
 import { scale, numericColumns } from '../../src/ui/chart.ts';
-import { deckFromBrief, deckFromTable, parseArtifact, parseDeck } from '../../src/domain/outputs.ts';
+import { deckFromBrief, deckFromTable, fontStack, parseArtifact, parseCell, parseBrand, parseDeck } from '../../src/domain/outputs.ts';
 import { filePassages, keepCited } from '../../src/domain/reading.ts';
 
 const bytes = (s: string) => new TextEncoder().encode(s);
@@ -112,4 +112,25 @@ test('without cite, 3 PDFs give passages from each file, labelled by page, and n
   // A label after the full stop cites that sentence.
   assert.deepEqual(keepCited('Ferns grow on the moon. [a.pdf p.2] The Boston fern costs twelve pounds. [a.pdf p.2]', files),
     { text: 'Ferns grow on the moon. The Boston fern costs twelve pounds [a.pdf p.2].', dropped: 1 });
+});
+
+test('font stacks keep non-ASCII names, drop other characters and cut long stacks at a family', () => {
+  assert.equal(fontStack('"Noto Sans JP", "ヒラギノ角ゴ", sans-serif; x{}'), '"Noto Sans JP", "ヒラギノ角ゴ", sans-serif x');
+  const long = Array.from({ length: 30 }, (_, i) => `Family Number ${i}`).join(', ');
+  const cut = fontStack(long);
+  assert.ok(cut.length <= 200 && cut.endsWith(`Number ${cut.split(', ').length - 1}`));
+  const b = { site: 's', bg: '#fff', text: '#000', link: '#00f', button: '#000', buttonText: '#fff', font: fontStack('"ヒラギノ", sans-serif'), headingFont: fontStack(long) };
+  assert.ok(parseBrand(b));
+});
+
+test('edited cells: numbers become numbers, codes with leading zeros stay text', () => {
+  assert.equal(parseCell('42'), 42);
+  assert.equal(parseCell('-0.5'), -0.5);
+  assert.equal(parseCell('007'), '007');
+  assert.equal(parseCell(' '), null);
+});
+
+test('PPTX text drops U+FFFE and U+FFFF, which XML forbids', async () => {
+  const z = unzip(pptx({ slides: [{ title: 'a\uFFFEb\uFFFFc', bullets: [] }] }).slice().buffer);
+  assert.match(await text(z, 'ppt/slides/slide1.xml'), /<a:t>abc<\/a:t>/);
 });

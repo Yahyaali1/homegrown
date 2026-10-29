@@ -7,7 +7,7 @@ import { isExtensionPage, screenshot } from './pagerequest.ts';
 import { saveArtifact } from './outputs.ts';
 import { parseSettings } from '../domain/settings.ts';
 import { parsePageOptions } from '../domain/scrape/options.ts';
-import type { Brand } from '../domain/outputs.ts';
+import { fontStack, type Brand } from '../domain/outputs.ts';
 
 type Sender = chrome.runtime.MessageSender | undefined;
 const watching = new Map<string, number>(); // engine request id → tab id
@@ -128,7 +128,7 @@ async function brandRead({ url }: { url: string }, sender: Sender) {
   }
   const site = new URL(url).hostname.replace(/^www\./, '');
   const { logo: _, ...styles } = read;
-  const brand: Brand = { ...styles, site, ...(logo && { logo }) };
+  const brand: Brand = { ...styles, font: fontStack(read.font), headingFont: fontStack(read.headingFont), site, ...(logo && { logo }) };
   return saveArtifact({ kind: 'brand', title: site, data: brand });
 }
 

@@ -51,7 +51,16 @@ export function parseDeckData(x: unknown): Deck | null {
 }
 
 const COLOR = /^(rgba?\([\d.,\s%]+\)|#[0-9a-f]{3,8})$/i;
-const FONT = /^[\w\s,"'-]{0,200}$/;
+const FONT = /^[\p{L}\p{N}\s,"'-]{0,200}$/u;
+/** A computed font-family as a brand kit keeps it: only letters, digits, spaces, commas, quotes and hyphens, and at most 200 characters, cut after a whole family. */
+export function fontStack(css: string): string {
+  const s = css.replace(/[^\p{L}\p{N}\s,"'-]/gu, '').trim();
+  if (s.length <= 200) return s;
+  const cut = s.slice(0, 200);
+  return cut.slice(0, Math.max(0, cut.lastIndexOf(','))).trim() || cut;
+}
+/** An edited table cell: empty is null, a plain number is a number; leading-zero codes ("007") stay text. */
+export const parseCell = (v: string): Cell => (v.trim() === '' ? null : /^-?(0|[1-9]\d*)(\.\d+)?$/.test(v.trim()) ? Number(v) : v);
 export function parseBrand(x: unknown): Brand | null {
   const b = x as Brand;
   const colours = [b?.bg, b?.text, b?.link, b?.button, b?.buttonText];

@@ -2,16 +2,16 @@
   "ability": "deck",
   "model": "Gemma-4-E2B-it",
   "maxTokens": 4096,
-  "pass": 5,
+  "pass": 0,
   "of": 6,
   "violations": 0,
-  "passed": true,
+  "passed": false,
   "rule": "≥ 5/6 decks that parse, hold ≤ 15 slides, and state only facts in the source",
   "cases": [
     {
       "id": "fern-care",
-      "ok": true,
-      "ms": 3090,
+      "ok": false,
+      "ms": 2971,
       "calls": 1,
       "deck": {
         "slides": [
@@ -37,12 +37,16 @@
           }
         ]
       },
-      "fails": []
+      "fails": [
+        "not in the source: Light Requirements",
+        "not in the source: Watering Instructions",
+        "not in the source: Feeding Schedule"
+      ]
     },
     {
       "id": "moss-garden",
-      "ok": true,
-      "ms": 4966,
+      "ok": false,
+      "ms": 4856,
       "calls": 1,
       "deck": {
         "slides": [
@@ -84,12 +88,17 @@
           }
         ]
       },
-      "fails": []
+      "fails": [
+        "not in the source: Site Selection",
+        "not in the source: Soil Requirements",
+        "not in the source: Initial Watering",
+        "not in the source: Maintenance (Autumn)"
+      ]
     },
     {
       "id": "shop-quarter",
-      "ok": true,
-      "ms": 4360,
+      "ok": false,
+      "ms": 4319,
       "calls": 1,
       "deck": {
         "slides": [
@@ -122,12 +131,16 @@
           }
         ]
       },
-      "fails": []
+      "fails": [
+        "not in the source: Quarterly Sales Summary",
+        "not in the source: Challenges Encountered",
+        "not in the source: Looking Ahead"
+      ]
     },
     {
       "id": "pond",
       "ok": false,
-      "ms": 5600,
+      "ms": 5532,
       "calls": 1,
       "deck": {
         "slides": [
@@ -176,13 +189,15 @@
         ]
       },
       "fails": [
-        "not in the source: Information about a pond"
+        "not in the source: Title Slide",
+        "not in the source: Information about a pond",
+        "not in the source: Sloping End"
       ]
     },
     {
       "id": "trowel-table",
-      "ok": true,
-      "ms": 2076,
+      "ok": false,
+      "ms": 2052,
       "calls": 1,
       "deck": {
         "slides": [
@@ -196,12 +211,14 @@
           }
         ]
       },
-      "fails": []
+      "fails": [
+        "not in the source: Trowel Data"
+      ]
     },
     {
       "id": "visits-table",
-      "ok": true,
-      "ms": 2213,
+      "ok": false,
+      "ms": 2190,
       "calls": 1,
       "deck": {
         "slides": [
@@ -216,7 +233,9 @@
           }
         ]
       },
-      "fails": []
+      "fails": [
+        "not in the source: Visitors and Events Data"
+      ]
     }
   ]
 }

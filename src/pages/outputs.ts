@@ -7,7 +7,7 @@ import { bg } from '../shared/protocol.ts';
 import { markdownWithTables } from '../domain/markdown.ts';
 import { toCsv } from '../domain/csv.ts';
 import { pptx } from '../domain/pptx.ts';
-import { deckFromTable, type Artifact, type Brand, type Cell, type Slide } from '../domain/outputs.ts';
+import { deckFromTable, parseCell, type Artifact, type Brand, type Cell, type Slide } from '../domain/outputs.ts';
 
 const KINDS: Record<Artifact['kind'], string> = { table: 'Table', chart: 'Chart', deck: 'Deck', onepager: 'One-pager', brief: 'Brief', brand: 'Brand kit' };
 const out = $('#out');
@@ -51,15 +51,15 @@ async function list(): Promise<void> {
 
 // ---- tables and charts ----
 
-const parseCell = (v: string): Cell => (v.trim() === '' ? null : /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : v);
 const cmp = (a: Cell, b: Cell) => Number(a == null) - Number(b == null) || (typeof a === 'number' && typeof b === 'number' ? a - b : String(a ?? '').localeCompare(String(b ?? '')));
 
 function showTable(a: Of<'table' | 'chart'>): void {
   const t = a.data;
   let view: 'table' | 'bar' | 'line' = a.kind === 'chart' ? 'bar' : 'table';
   let sort: { col: number; dir: 1 | -1 } | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const persist = () => (clearTimeout(timer), (timer = setTimeout(() => void store({ ...a, kind: view === 'table' ? 'table' : 'chart' }).then(() => say('Saved ✓'), (e: Error) => say(e.message)), 300)));
+  // Each change is stored at once, in order; Make deck waits for the last one, so it never reads a stale table.
+  let saving: Promise<unknown> = Promise.resolve();
+  const persist = () => (saving = saving.then(() => store({ ...a, kind: view === 'table' ? 'table' : 'chart' })).then(() => say('Saved ✓'), (e: Error) => say(e.message)));
   const segmented = h('div', { className: 'segmented', role: 'group', ariaLabel: 'View' });
   const render = () => {
     segmented.replaceChildren(...(['table', 'bar', 'line'] as const).map((v) => h('button', {
@@ -91,7 +91,7 @@ function showTable(a: Of<'table' | 'chart'>): void {
       download(new Blob([png], { type: 'image/png' }), fileName(a, 'png'));
     }),
     act('PPTX', async () => downloadPptx(a, deckFromTable(a.title, t).slides, null)),
-    act('Make deck', async () => go(await bg<Artifact>('deckMake', { id: a.id }))));
+    act('Make deck', async () => (await saving, go(await bg<Artifact>('deckMake', { id: a.id })))));
   render();
 }
 
