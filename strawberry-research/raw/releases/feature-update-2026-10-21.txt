@@ -1,0 +1,34 @@
+Feature update –
+October 21
+What's new
+in Strawberry
+A new everyday chat mode, a quicker way back to any conversation, and routines that only run when it matters. This update also brings WhatsApp, side-by-side browsing, and meeting transcripts that know who is speaking.
+The right amount of effort for every chat
+Chats now have three modes. Efficient answers quickest and uses the fewest credits, Expert takes its time on harder problems, and the new Default sits in between for everyday work. New chats and routines start in Default, and Efficient and Default are available on every plan.
+On a paid plan, each companion can choose its own model and thinking effort for each mode. Gemini 4 Argon joins the lineup for complex coding and reasoning.
+Get back to any chat in seconds
+Chat History is quicker to reach and easier to scan. In the Classic layout, it opens right over the tab you are on, and you can click a chat to preview it. In the Modern layout, it has its own page in the sidebar, where you can also filter by companion. Search your conversations, narrow the list to unread chats, chats that need you, or routine runs, and select several chats to mark them read, archive them, or delete them in one go.
+Routine runs you have not looked at yet collect in one place, and small dots show which chats are unread or waiting for you.
+Routines that only run when it matters
+Add an Only if condition to a routine that starts from an app event, and only the events you care about will start a run. For example, only invoices from your finance team, or only pull requests that need your review. Choose Run in a chat to post results into a conversation you already use. Above the chat input, you can see which routines will post there.
+Custom schedules show the next runs before you save. A routine also keeps running on time when an earlier run is still waiting for your answer.
+WhatsApp, with your companion
+Link your personal WhatsApp by scanning a QR code in Settings > Integrations. Your companion can find chats, search your messages, and send replies, photos, documents, and voice notes for you. Sending follows your app permissions, so you decide what needs your approval first.
+Two pages, side by side
+Drag a tab over the left or right side of the page, wait for the split preview, and let go. The new Split view button next to the address bar lets you swap sides, reset to 50/50, or separate the tabs again.
+The address bar is smarter too. It offers to switch to a page you already have open, learns which suggestions you pick, and searches text with spaces instead of guessing at a website.
+Know who said what in your meetings
+Meeting transcripts now tell speakers apart, so each voice gets its own label. Strawberry offers to record when you open a Zoom or Teams meeting as well as Google Meet, and the Meetings button shows when a recording is live. Meeting reminders now work with Outlook Calendar too.
+Improvements and bug fixes
+Strawberry blocks website certificates made with eight compromised eMudhra certificate authority keys, so they cannot be used to impersonate a site. Future blocks like this reach you automatically, without waiting for an app update.
+Annual plans are back, and the pricing page shows Individual, Team, and Enterprise plans side by side. Promotion codes work at checkout, and upgrades show exactly what you pay today.
+Emails, drafts, documents, and events your companion creates appear in the chat with an Open button.
+Edit a queued message without losing its place, and answer grouped questions one at a time.
+Skills show the files in their folder. Preview them, or drag files onto a skill to add them.
+Ask your companion to bring back files deleted in the last 30 days.
+Chat tabs you have not used for 48 hours close on their own. Their chats stay in Chat History.
+Tabs your companion is using glow in its color, and the screen-share picker shows live tab previews.
+Image generation picks the right model for creating or editing, and generated videos can include sound.
+Hold-to-talk Voice Command is available to everyone in Settings > Voice.
+macOS and Windows show progress while Strawberry restarts to update.
+Fewer interrupted chats, more reliable file syncing and app connections, and faster startup, tab switching, and dictation.

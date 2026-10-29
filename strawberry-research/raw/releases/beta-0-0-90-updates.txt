@@ -1,0 +1,34 @@
+Release 0.0.90
+What's new
+in Strawberry
+Released
+March 5, 2026
+Big quality-of-life update. We've added safety countdowns before risky actions, better email and Slack drafting, and a redesigned final report you can share straight to Slack or Gmail. Plenty of polish under the hood too.
+Richer Compose Blocks
+Email drafting got a proper editor with better formatting. Slack messages and channel actions got dedicated UI blocks too. Gmail drafts now have their own structured block, creating and editing drafts feels cleaner and more trustworthy.
+Final Report Redesign
+The report your companion generates at the end of a task got a visual overhaul, and you can now share it directly to Slack, Gmail, or Outlook. Export handling is smoother too.
+Safety Countdown for Sensitive Actions
+This one's for the brave, if you've turned off "always ask before acting" for an app, your companion now shows an 8-second countdown before doing anything sensitive, like sending an email or deleting a record. Plenty of time to hit cancel if something looks off.
+Agent Comment Button
+New quick button to send instructions or feedback to your companion while it's working. For example, if you notice it drafting the wrong email, just click the comment button and say "use a friendlier tone", no need to wait for it to finish first.
+Improvements and Bug Fixes
+Companion Apps Page: New Apps tab in companion settings, connect apps, manage accounts, adjust permissions, and set app-specific guidelines all in one place. No more hunting through scattered menus.
+Cloud Files Work Across Tools: Files from Google Drive and OneDrive are now saved locally so your companion can actually use them, like attaching a Drive file to a Slack message. Office files from Drive can now be read and parsed too.
+Salesforce & HubSpot: Both got reliability improvements, fewer failed actions from malformed IDs or mismatched fields, and better workflow guidance for common sales tasks.
+Agent Mode Per Chat: Each chat now has its own effort and mode settings. For example, you can set one chat to use a faster mode for quick lookups and another to use a thorough mode for research, changing one won't affect the other.
+Google Sheets: Your companion now uses your selected sheet and range as context, so actions are more relevant. Formula separators also respect your locale now, no more broken formulas for international users.
+Long Chat Warning: A gentle reminder now appears when a conversation gets very long, before you hit quality or performance limits.
+Credit Estimate Warning: Your companion now warns you when estimated cost is trending higher than expected, fewer surprise credit burns.
+File Experience: File references in chat are now clickable, there's a dedicated file sidebar, and report exports are easier to access.
+Question Blocks: If you select an answer in a question block and type a message at the same time, both are now sent together. No more lost inputs.
+Copy Block: Copied content no longer includes extra blank lines, cleaner paste into LinkedIn, docs, wherever.
+Find-in-Page: Reopening Cmd/Ctrl+F now refocuses the search input instead of jumping the page unexpectedly.
+Shift-Click Links: Now opens a proper new browser window instead of a popup-like window.
+Pinned Tab Fix: Fixed a bug where pinned tabs (like Gmail or Slack) could become stuck and impossible to close, for example, if the page crashed or was unloaded, the tab would linger as an empty shell. That's resolved now.
+Keyboard Shortcut Fix: Some websites could accidentally override Strawberry shortcuts, for example, a site might capture Cmd+T so the new-tab shortcut stops working. Strawberry now blocks that so your shortcuts always work.
+Popup blocker logic was tightened to catch more unwanted popups.
+App Connection Reliability: If your companion can't detect an app the usual way, for example, it doesn't realize Salesforce is open, it now tries a backup method instead of just giving up.
+Improved bookmark and history import reliability on Windows, counts and exclusions are more accurate.
+Faster Sheets & Slides: When you ask your companion to do something in Google Sheets or Slides, like updating a cell or adding a slide, it now uses a direct shortcut instead of a slower multi-step process. Same result, noticeably faster.
+Rendering and tab bar architecture improvements, smoother UI and fewer flicker issues under load.

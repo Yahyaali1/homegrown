@@ -743,6 +743,23 @@ test('scrape as you scroll: a grid that loads after the start, inside sections a
   await page.close();
 });
 
+test('scrape as you scroll, whole page: Organize has the local model put each section into a table, only with what it says', async () => {
+  const page = await openPage('scrape/scroll.html');
+  await palette(page, 'Scrape as you scroll');
+  const bar = ui(page).locator('.sasbar');
+  await bar.getByRole('button', { name: 'Whole page' }).click();
+  await bar.getByRole('button', { name: 'Organize' }).click(); // sections not seen yet are captured first
+  await expect(bar.locator('span')).toContainText('organized', { timeout: 300000 });
+  await bar.getByRole('button', { name: 'Show' }).click();
+  const shown = await ui(page).locator('.card').innerText();
+  console.log(`  [organize] ${(await bar.locator('span').innerText())} · ${shown.replace(/\s+/g, ' ').slice(0, 300)}`);
+  expect(shown).toContain('Outline');
+  expect(shown).toMatch(/\(Opening times\)/); // a table made from the prose about opening times
+  expect(shown).toMatch(/9:00|17:00|10:00|16:00/);
+  expect(shown).not.toMatch(/Monday|8:00|20:00/); // nothing the page doesn't say
+  await page.close();
+});
+
 test('side panel missions: a mission over the open tabs runs in the background and shows up as done', async () => {
   const tabs = await Promise.all(['a', 'b', 'c'].map((s) => openPage(`shop/${s}.html`)));
   panel ??= await ctx.newPage();

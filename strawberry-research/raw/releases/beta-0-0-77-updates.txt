@@ -1,0 +1,16 @@
+Release Beta 0.0.77
+What's new
+in Strawberry
+Released
+January 22, 2026
+Smoother starts, simpler exports. Updates this week are all about giving you a better view of your work. We've refreshed the Home page so you can easily see what your agents are doing, improved their email skills, and added a quick way to save reports as PDFs.
+Home & History
+See everything at once. We redesigned the Home page to act more like a dashboard. It is now much easier to see an overview of your active tasks, track what your companions are working on in real-time, and jump in quickly if they need help.
+Smarter Gmail
+Your companion just got better at email. We've upgraded the Gmail integration, improving how companions search and retrieve messages so you can find exactly what you're looking for without the digging.
+Export to PDF
+Share your results easily. You can now save your agent's research reports directly as a PDF file. It preserves all your styling and formatting, so that research summary hits your boss's inbox looking presentation-ready instantly.
+Improvements and Bug Fixes
+Smoooother Tabs: Animations when dragging tabs into groups are now fluid and flicker-free.
+Sidebar Fix: The text box where you type messages now clears correctly after you hit send.
+Mouse Navigation: Added support for Forward/Backward mouse buttons on Windows, Linux, and macOS.

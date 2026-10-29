@@ -1,0 +1,18 @@
+Release Beta 0.0.72 (& 73)
+What's new
+in Strawberry
+Released
+December 10, 2025
+This update focuses on efficiency, significantly reducing memory usage and improving performance. It introduces a Salesforce integration and enhanced controls for companion credit consumption.
+Performance Improvements
+Optimized Strawberry for faster operation, resulting in an 80% reduction in RAM usage and better battery life. Tabs now pause efficiently to save resources and operate in the background.
+Salesforce Integration
+Allows direct linking of Salesforce accounts for streamlined CRM updates and data retrieval. Integration can be added in Settings → Integrations.
+Advanced Credit Controls
+Users can now set specific limits for companion credit consumption, with options for a hard stop or a "soft limit" to allow completion of current tasks.
+Improvements and Bug Fixes
+Windows Passkey Support: Enabled secure and fast login for Windows users
+Link Previews: Users can hover over hyperlinks in chat to see the URL destination before clicking
+In-Chat Zoom: Added the ability to zoom out within the chat interface using Ctrl -
+Feedback: Users can now leave feedback on individual chat messages to report agent performance
+Dark Mode Accessibility: Improved contrast ratios in Dark Mode for enhanced readability

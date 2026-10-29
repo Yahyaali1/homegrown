@@ -117,6 +117,13 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
     `section` column) and ✕. ✕ closes the session's `scrape:<id>` port (the worker cancels the model call; the port
     is opened again if the worker restarted meanwhile),
     removes the outlines, and a late answer from the stopped session is dropped.
+  - Whole page (a switch on the bar): the page is split at its h1–h4 headings outside navigation (what comes
+    before the first is "Intro"), at most 30 sections. Each section's content, heading to next heading without
+    navigation, headers, footers, scripts or our UI, is captured as text and Markdown (`content/markdown.ts`)
+    when its heading comes within 200 px of the view. Organize captures the rest as the page is now, then for
+    each section of 5 words or more asks `bg('scrollOrganize')` for a table, one at a time, and adds an outline
+    (heading, level, words) made without a model. Show lists the organized tables and the captured sections;
+    Copy JSON gives `{ tables, page: [{ heading, level, text, markdown }] }`.
 - `search.ts`
   - Exports: `research(q, rect)`, the deep-research card (`bg('research')`).
   - Page actions: "Research…" and "Related reading" (`bg('related')`).
@@ -185,7 +192,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 - `memory.ts`: `memHighlightSave`, `memHighlights`, `memChanged`, `memSnapshot`, `memSimilar`
 - `missions.ts`: `agentOpen`, `missionSave`, `priceSeen`, `shopCheck`
 - `palette.ts`: `missionsList`, and `agentOpen` (with `tabs: true` for "Across my open tabs:")
-- `scrollscrape.ts`: `scrollList`
+- `scrollscrape.ts`: `scrollList`, `scrollOrganize`
 - `search.ts`: `research`, `researchTerm`, `related`, `checkClaim`
 - `tabs.ts`: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`, `watchPage`
 - `voice.ts`: `transcribe`

@@ -1,0 +1,14 @@
+Release Alpha 0.0.68
+What's new
+in Strawberry
+Released
+October 22, 2025
+This release is all about stability improvements and critical bug fixes! Freezing in chat is gone and bookmarks are more functional. After valuable input from our new users since the Beta launch, we have resolved many of the friction points mentioned.
+Improvements and Bug Fixes
+Freeze bug in chat is gone
+More functional bookmarks
+New memory notes are now successfully saved
+Significantly reduced amount of Captchas
+Fullscreen issues resolved
+Quick profile switcher
+Issue of repeated permission popups is fixed

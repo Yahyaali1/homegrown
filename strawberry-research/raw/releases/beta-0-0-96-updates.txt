@@ -1,0 +1,29 @@
+Release 0.0.96
+What's new
+in Strawberry
+Released
+March 26, 2026
+Picture-in-Picture is here, sites like Google Meet can now pop video into a floating window while you keep browsing. Setting up split-screen is now easier too, with a new picker for choosing which tabs to view side by side. We also cut the app size by
+over 60%
+and significantly reduced memory usage.
+Picture-in-Picture
+Sites like Google Meet can now pop video into a floating window that stays on top while you keep working. No extensions, no setup.
+Better Split-Screen
+Viewing two tabs side by side got a proper picker. Click the split icon on any tab, pick what you want next to it, done. The whole flow is cleaner with better animations and more reliable pairing.
+60% Smaller, significantly Lighter
+The Strawberry app has been reduced by over 60% in disk space. On top of that, idle memory usage has significantly reduced through lazy loading meaning we dont waste resources things you dont use. Long sessions feel noticeably smoother.
+Improvements and Bug Fixes
+Chat Rename: Right-click any chat in the history sidebar to rename it.
+Chat Reliability: Upstream provider issues (like Anthropic outages) now surface clearer error messages instead of silent failures.
+Agent Reliability: Asking your companion for feedback mid-task no longer accidentally stops the whole run. Tabs your companion was controlling are now properly released when it finishes, no more locked tabs.
+Stop/Cancel: Hitting stop or cancel is now more responsive, tool calls no longer linger or hang after you've cancelled a task.
+Passkeys: Fixed a payload issue that could cause passkey (fingerprint) creation to fail during sign-up.
+Autofill: Fixed popup placement and visibility issues with autofill at different zoom levels.
+Find on Page: Cmd/Ctrl+F now opens reliably and focuses the input immediately, no more blank or unresponsive search widgets.
+Address Bar: Localhost URLs now open directly instead of routing to a Google search.
+Skills: Imported chat skills now stay scoped to the correct companion, no more skills leaking across companions.
+Vertical Tabs: Fixed window dragging breaking after scrolling in vertical tab layouts.
+Tabs: Hides the close button on small tabs.
+Fixed a small bug with file ownership when opening files from chat.
+Fixed OneDrive login sometimes leaving behind empty blank tabs.
+Fixed importing from Edge getting stuck on first launch.

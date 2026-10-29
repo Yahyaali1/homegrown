@@ -10,7 +10,8 @@ import type { AiRules } from './scrape/ai.ts';
 export const SCROLL_LIMITS = { blocks: 25, calls: 40, batches: 5, items: 20, sample: 3, sampleChars: 400, fields: 6, field: 30 } as const;
 
 export type Cell = string | number | null;
-export interface Collected { kind: 'table' | 'facts' | 'list'; name: string; rows: Record<string, Cell>[] }
+/** `organized`: a table the Organize pass made from the whole page (and the outline). */
+export interface Collected { kind: 'table' | 'facts' | 'list'; name: string; rows: Record<string, Cell>[]; organized?: boolean }
 
 /** The model's choice for a repeated block: skip it, or the fields worth pulling from each item. */
 export interface Pick { use: boolean; name: string; fields: string[] }

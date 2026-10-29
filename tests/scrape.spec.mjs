@@ -298,6 +298,23 @@ test('scrape as you scroll: tables and fact lists are collected as they come int
   await page.waitForTimeout(800);
   await expect(page.locator('#specials [data-eg-scraped]')).toHaveCount(0); // each card's <dl> belongs to the card list, not a block of its own
   await expect(page.locator('#cardfacts')).not.toHaveAttribute('data-eg-scraped', 'facts'); // several "Label:" lines per card: a list
+  // Whole page: every section's text and Markdown as it comes into view (no model needed to capture).
+  await page.evaluate(() => scrollTo(0, 0));
+  await ui.locator('.sasbar').getByRole('button', { name: 'Whole page' }).click();
+  await expect(ui.locator('.sasbar span')).toContainText(/Whole page: \d+\/\d+ sections/);
+  const before = Number((await ui.locator('.sasbar span').innerText()).match(/Whole page: (\d+)\//)[1]);
+  await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+  await expect.poll(async () => Number((await ui.locator('.sasbar span').innerText()).match(/Whole page: (\d+)\//)[1])).toBeGreaterThan(before);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await ui.locator('.sasbar').getByRole('button', { name: 'Copy JSON' }).click();
+  const json = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+  const hours = json.page.find((p) => p.heading === 'Opening times');
+  expect(hours.text).toContain('Saturday from 9:00 to 17:00');
+  expect(json.page.find((p) => p.heading === 'Plant care').markdown).toContain('| Boston fern | Weekly | Shade |');
+  expect(JSON.stringify(json.page)).not.toContain('About us'); // the nav menu is not page content
+  // Organize asks the model, and there is none here: the outline still comes.
+  await ui.locator('.sasbar').getByRole('button', { name: 'Organize' }).click();
+  await expect(ui.locator('.sasbar span')).toContainText('No model', { timeout: 30000 });
   // Stop: outlines go, and a late model answer can't bring them back.
   await ui.locator('.sasbar').getByRole('button', { name: 'Stop collecting' }).click();
   await expect(page.locator('[data-eg-scraped]')).toHaveCount(0);

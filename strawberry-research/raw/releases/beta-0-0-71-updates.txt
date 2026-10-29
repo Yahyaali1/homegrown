@@ -1,0 +1,17 @@
+Release Beta 0.0.71
+What's new
+in Strawberry
+Released
+November 17, 2025
+This release focuses on collaboration features, sharing companions, and a new team plan. It also includes improvements to Gmail and Google Sheets integrations, and general bug fixes.
+Share Companions
+Collaboration just got easier. Share your custom companions with team members or colleagues so everyone can benefit from the workflows and expertise you've built.
+Gmail & Google Sheets Enhancements
+Increased capabilities and precision for these integrations. Connect via Settings -> Integrations.
+Team Plan (pinned from last update)
+Collaboration is here! Invite your team members to work together in Strawberry. With unified billing and smooth user management, its perfect for colleagues who want to use it for work. Find under Settings → View all plans → Create Team.
+Improvements and Bug Fixes
+Improved file handling when saving and downloading web content
+Export data tables from your research and workflows
+Resolved "Open Tabs" functionality that was previously unresponsive
+Agents no longer leave behind blank white tabs after completing tasks

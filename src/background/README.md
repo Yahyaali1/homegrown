@@ -156,7 +156,9 @@ It also owns these parts:
   `wait_browser: domcontentloaded` waits until the tab has left `about:blank` and its document is past
   `loading`. Headers go only to the page's own site (`requestDomains`). Steps get 40 s in all; a strict failure makes the page an error
   and keeps the report. The tab's rules and the debugger are removed when the tab closes.
-- `scrape.ts` handlers: `scrollList({ heading, items, fields?, runId? })` (scrape as you scroll: the model's pick,
+- `scrape.ts` handlers: `scrollOrganize({ heading, text, runId? })` (one captured section into a table the model
+  designs, every cell checked against the text; under 12 words gives none; same `runId` rule as below),
+  `scrollList({ heading, items, fields?, runId? })` (scrape as you scroll: the model's pick,
   or the given fields, then grounded AI fields per item; text in, values out, so content scripts may call it;
   with `runId`, the run exists only while the page's `scrape:<runId>` port is open: a missing one answers
   `stopped`, and the port closing cancels the model call),

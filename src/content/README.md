@@ -45,6 +45,8 @@ The other files are separate bundles or pure helpers:
     `ai: { items, selector }` it also returns `aiText`: the text of each item the item rule matched (at most
     20, 1500 characters each), or one block for the page: the `ai_selector` element, else `main`, `[role=main]`,
     `article` or the body (6000 characters).
+- `markdown.ts`: `toMarkdown(root, keepForms?)`, `cell`, `tableRows`: page content as Markdown, shared by the page
+  reader and the content script (no Readability).
 - `scenario.ts` (in `lib/pageread.js`): `step(instruction, ms)` runs one `js_scenario` step (not `evaluate`,
   which the worker runs through `userScripts`); `settle({ waitBrowser, waitFor, wait })` waits in ScrapingBee's
   order (network idle: no new resource for 500 ms, at most 10 s; `wait_for` gives up after 10 s and reads

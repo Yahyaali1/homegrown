@@ -1,0 +1,21 @@
+Release Beta 0.0.76
+What's new
+in Strawberry
+Released
+January 14, 2026
+New year, tidier workspace. This update brings Tab Groups to combat tab overload, native Passkey support (including iCloud Keychain), and Profile Colors so you separate work-you from personal-you at a glance. We've also polished up some details based on your feedback.
+Tab Groups
+Finally, some order. Create named, color-coded groups to organize your tabs by project, client, or "stuff I'll get to eventually." Drag tabs in or out, collapse groups when you need to focus. Right-click any tab to get started.
+Profile Colors
+Your tab bar, your colors. Set a different color for each profile to instantly see whether you're in work mode or personal mode. No more accidentally sending that message from the wrong account. Enable in Settings → Browser profiles.
+Native Passkeys & WebAuthn
+Passkeys now work the way they should on Mac. Log in with Touch ID, pull passkeys straight from iCloud Keychain, and import bookmarks and passwords from Safari in seconds.
+Improvements and Bug Fixes
+Smart(er) Address Bar: Faster suggestions with no flickering, plus clearer loading indicators.
+Chat & Files: Transcribe audio/video files (MP3/WAV) and view/edit data tables directly in the chat.
+Pinned tabs: Fixed duplicating and restoration issues.
+Notifications: Slack and Gmail tabs now show accurate counts.
+Zoom levels: They now persist across sessions and tabs restore correctly after updates.
+Duplicate chat: You can now duplicate chat sessions to try different prompting approaches without losing your original context. Open the chat history modal, right click on a chat and then click duplicate.
+Window Restoration: Cmd+Shift+T now restores tabs to their original window, not just whichever one you're looking at.
+Smarter Passwords: Autofill has been upgraded to handle multi-step logins (username first, then password) and works correctly within popup windows.

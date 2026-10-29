@@ -37,3 +37,13 @@ Without a model, tables and facts still come in and the bar says why lists wait.
 | --- | --- | --- | --- |
 | 1 | design | 1 Blocker (the outermost repeated container won, so a grid inside page sections was never collected), 6 Major, 2 Nit | All fixed: the innermost block wins; layout tables skipped and rows read directly; lists over 20 items go on while in view; budgets for model requests, and Stop cancels the call through a session port; scans only of what changed, when idle; card lists with "Price:" lines aren't facts; items remembered one by one (prepend, recycle); late answers after Stop dropped; skipped blocks outlined and counted |
 | 2 | design | no Blockers, 6 Major, 2 Nit | All fixed: innermost across scans (a late grid drops the wrapper, even mid-read); per-item detail blocks stay in their list; facts need one pair per child; items keyed by text with text changes watched; mutation scans limited to added subtrees; runs only while the port is open (reconnects after a worker restart); restart and retry budget fixes. Real model: a grid loading 4 s after the start inside sections is collected |
+
+## Whole page and Organize
+
+Asked for after the first version: capture literally everything, then have the agent place it in tables.
+
+- **Whole page** switch: the page split at its headings; each section's text and Markdown captured as it comes
+  into view, without navigation, headers, footers or scripts.
+- **Organize**: the rest captured, then one model call per section: a table the model designs (name, up to 6
+  columns, 15 rows), each cell kept only when the section's text says it; prose gets no table. An outline
+  (heading, level, words) without a model.

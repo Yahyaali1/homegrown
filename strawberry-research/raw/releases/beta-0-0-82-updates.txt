@@ -1,0 +1,34 @@
+Release Beta 0.0.82
+What's new
+in Strawberry
+Released
+February 16, 2026
+Strawberry now launches 57% faster, Slack and Notion got a stability overhaul, and there's a brand-new floating AI controller for when your companion takes the wheel. Plus a new invite system, share your code with a friend and you both get free credits.
+New AI Controller
+When your companion is browsing a tab, there's now a sleek floating controller that stays out of your way while giving you full oversight, pause, stop, or watch what it's doing at a glance. Tool blocks in chat also got a visual refresh with cleaner icons and expandable details.
+57% Faster Startup
+Launching Strawberry now feels nearly instant. We cut startup time from 6.7 seconds down to 2.9 seconds. If you were waiting a few seconds on launch before, that wait is basically gone.
+Slack & Notion Integrations
+Both got overhauled for stability. Connect your Slack workspace to search messages across channels and DMs without leaving Strawberry. Connect Notion to browse your pages, add comments, and update content, everything stays in sync automatically. Set them up in Settings → Integrations.
+Invite Friends, Get Free Credits
+There's a new referral system built right into the app. Share your personal invite code with friends, when they sign up, you both get free credits. You can find your invite link in your account settings or click the present icon in the bottom left corner of the screen.
+New Website
+We gave strawberrybrowser.com a fresh coat of paint, new intro animation, a use cases section, and a faster experience overall.
+Improvements and Bug Fixes
+Auto-Retry: If something goes wrong while your companion is working, it now picks back up automatically instead of just stopping.
+Google Drive: Shared Drives are now accessible, your team drives show up alongside personal files.
+Google Docs: Formatting, headings, and lists no longer break when exporting to Google Docs.
+Google Sheets: Connecting your sheets is now smoother with fewer login prompts.
+Email Search: Finding emails is faster and shows more useful previews, sender, recipients, and attachments are visible at a glance.
+Memory: Your companion's memory now uses a cleaner layout. Rename your companion and its memory updates too.
+Onboarding: Simplified and faster, you can get started without waiting as long.
+Tabs: Tab groups and pinned tabs now survive restarts properly.
+MacOS: Reordering tabs now triggers haptic feedback on supported trackpads.
+No more false "0 credits remaining" warnings on team plans.
+Fixed an issue that could wipe saved logins and cookies after an update.
+Fixed a rare crash that could happen on startup.
+Companion timer now starts after you confirm "Start browsing," not when the task is created.
+Fixed special characters getting mangled in email messages.
+Fixed duplicate emails showing up when searching.
+Fixed pop-ups and menus sometimes blocking clicks after being closed.
+Fixed confirmation windows occasionally not appearing when they should.

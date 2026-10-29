@@ -7,6 +7,8 @@ import { ui } from '../core.ts';
 import { h } from '../../ui/dom.ts';
 import { factsRow, labelPairs, SCROLL_LIMITS, type Cell, type Collected } from '../../domain/scroll.ts';
 import { toCsv } from '../../domain/csv.ts';
+import { ORGANIZE_LIMITS, outline, type PageSection } from '../../domain/organize.ts';
+import { markdownOf, textOf } from '../scenario.ts';
 
 type Kind = Collected['kind'];
 interface Block { el: HTMLElement; kind: Kind; inView: boolean; queued: boolean; started: boolean; batches: number; tries: number; section?: Collected; fields?: string[]; skipped?: boolean }
@@ -26,6 +28,13 @@ let calls = 0; // model requests on this page
 let skipped = 0;
 let noModel = '';
 let note = '';
+
+// ---- whole page: every section's text and Markdown as it comes into view, then Organize into tables ----
+interface Part extends PageSection { at: Element; from: Element | null; to: Element | null; captured: boolean }
+let whole = false;
+let parts: Part[] = [];
+let partObserver: IntersectionObserver | null = null;
+let organizing = false;
 
 const text = (el: Element) => ((el as HTMLElement).innerText ?? el.textContent ?? '').trim();
 const FURNITURE = 'nav, header, footer, aside, [role=navigation], [role=banner], [role=contentinfo], menu';
@@ -180,13 +189,89 @@ async function collect(b: Block): Promise<void> {
   b.section.rows.push(...rows);
 }
 
+/** The page split at its headings (h1–h4, outside navigation), with what comes before the first one as "Intro". */
+function partsOfPage(): Part[] {
+  const heads = [...document.body.querySelectorAll<HTMLElement>('h1, h2, h3, h4')].filter((hd) => !outside(hd) && text(hd)).slice(0, ORGANIZE_LIMITS.sections - 1);
+  const first = [...document.body.children].find((c) => !outside(c) && !c.matches('script, style')) ?? document.body;
+  return [null, ...heads].map((hd, i) => ({
+    heading: hd ? text(hd).slice(0, 150) : 'Intro', level: hd ? Number(hd.tagName[1]) : 0, text: '', markdown: '',
+    at: hd ?? first, from: hd, to: heads[i] ?? null, captured: false,
+  }));
+}
+
+/** A section's content: from its heading to the next one, without navigation, headers, footers, scripts or our UI. */
+function capture(p: Part): void {
+  const r = document.createRange();
+  if (p.from) r.setStartBefore(p.from);
+  else r.setStart(document.body, 0);
+  if (p.to) r.setEndBefore(p.to);
+  else r.setEnd(document.body, document.body.childNodes.length);
+  const box = document.createElement('div');
+  box.append(r.cloneContents());
+  for (const x of box.querySelectorAll(`${FURNITURE}, edge-gallery, script, style, noscript, template`)) x.remove();
+  p.markdown = markdownOf(box).slice(0, 20000);
+  p.text = textOf(box).slice(0, 20000);
+  p.captured = true;
+}
+
+const wholeStatus = () => (whole ? `Whole page: ${parts.filter((p) => p.captured).length}/${parts.length} sections` : '');
+
+function setWhole(on: boolean): void {
+  whole = on;
+  bar.querySelector<HTMLElement>('[data-whole]')!.setAttribute('aria-pressed', String(on));
+  bar.querySelector<HTMLElement>('[data-organize]')!.hidden = !on;
+  partObserver?.disconnect();
+  partObserver = null;
+  if (on) {
+    parts = partsOfPage();
+    partObserver = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const p = parts.find((x) => x.at === e.target);
+        if (e.isIntersecting && p && !p.captured) (capture(p), partObserver?.unobserve(e.target));
+      }
+      status();
+    }, { rootMargin: '200px 0px' });
+    for (const p of parts) partObserver.observe(p.at);
+  }
+  status();
+}
+
+/**
+ * The agent pass: sections not yet seen are captured, then the local model puts each one into a table it designs,
+ * every cell checked against the section's text (bg 'scrollOrganize'). Plus an outline, without a model.
+ */
+async function organize(): Promise<void> {
+  if (organizing || !whole) return;
+  organizing = true;
+  const mine = session;
+  for (const p of parts) if (!p.captured) capture(p); // the rest of the page, as it is now
+  const kept = parts.filter((p) => p.text.split(/\s+/).filter(Boolean).length >= 5);
+  sections = sections.filter((s) => !s.organized);
+  sections.push({ kind: 'table', name: 'Outline', rows: outline(kept), organized: true });
+  let n = 0;
+  for (const p of kept) {
+    if (session !== mine) break;
+    bar.querySelector('span')!.textContent = `Organizing ${++n}/${kept.length}: ${p.heading}…`;
+    try {
+      const r = await ui.bg<{ table: { name: string; rows: Record<string, Cell>[] } | null; stopped?: boolean }>('scrollOrganize', { heading: p.heading, text: p.text, runId: session });
+      if (session !== mine || r.stopped) break;
+      if (r.table) sections.push({ kind: 'table', name: `${r.table.name} (${p.heading})`, rows: r.table.rows, organized: true });
+    } catch (e) {
+      note = (e as Error).message;
+      break;
+    }
+  }
+  organizing = false;
+  if (session === mine) (note = note || `organized ${kept.length} sections`), status();
+}
+
 const filled = () => sections.filter((s) => s.rows.length);
 const count = () => filled().reduce((n, s) => n + s.rows.length, 0);
 function status(): void {
   const by = (k: Kind) => filled().filter((s) => s.kind === k).length;
   const plural = (n: number, w: string) => (n ? `${n} ${w}${n > 1 ? 's' : ''}` : '');
-  const parts = [plural(by('table'), 'table'), plural(by('list'), 'list'), plural(by('facts'), 'fact list'), skipped ? `${skipped} skipped` : ''].filter(Boolean);
-  bar.querySelector('span')!.textContent = [parts.length ? `${count()} rows · ${parts.join(' · ')}` : 'Collecting as you scroll…', noModel, note].filter(Boolean).join(' · ');
+  const kinds = [plural(by('table'), 'table'), plural(by('list'), 'list'), plural(by('facts'), 'fact list'), skipped ? `${skipped} skipped` : ''].filter(Boolean);
+  bar.querySelector('span')!.textContent = [kinds.length ? `${count()} rows · ${kinds.join(' · ')}` : 'Collecting as you scroll…', wholeStatus(), noModel, note].filter(Boolean).join(' · ');
 }
 
 async function pump(): Promise<void> {
@@ -233,12 +318,16 @@ function show(): void {
   card.body.replaceChildren(...filled().map((s) => {
     const keys = [...new Set(s.rows.flatMap((r) => Object.keys(r)))];
     return h('section', {},
-      h('p', { style: 'font-weight:600;margin:8px 0 4px', textContent: `${s.name} · ${s.kind} · ${s.rows.length}` }),
+      h('p', { style: 'font-weight:600;margin:8px 0 4px', textContent: `${s.name} · ${s.organized ? 'organized' : s.kind} · ${s.rows.length}` }),
       h('div', { style: 'overflow:auto;max-height:220px' }, h('table', { className: 'sas' },
         h('tr', {}, ...keys.map((k) => h('th', { textContent: k }))),
         ...s.rows.slice(0, 50).map((r) => h('tr', {}, ...keys.map((k) => h('td', { textContent: r[k] == null ? '' : String(r[k]) })))))));
-  }));
+  }), ...(whole ? [h('details', {}, h('summary', { textContent: `Whole page: ${captured().length} sections captured` }),
+    ...captured().map((p) => h('section', {}, h('p', { style: 'font-weight:600;margin:6px 0 2px', textContent: p.heading }), h('pre', { className: 'sasmd', textContent: p.markdown.slice(0, 2000) }))))] : []));
 }
+const captured = () => parts.filter((p) => p.captured && p.text);
+/** Copy JSON: the tables, and with Whole page on, every captured section's text and Markdown. */
+const asJson = () => ({ tables: filled(), ...(whole && { page: captured().map(({ heading, level, text: t, markdown }) => ({ heading, level, text: t, markdown })) }) });
 
 function stop(): void {
   session = '';
@@ -246,8 +335,11 @@ function stop(): void {
   life = null;
   observer?.disconnect();
   watcher?.disconnect();
-  observer = watcher = null;
+  partObserver?.disconnect();
+  observer = watcher = partObserver = null;
   queue = [];
+  parts = [];
+  whole = organizing = false;
   for (const el of document.querySelectorAll<HTMLElement>('[data-eg-scraped]')) delete el.dataset.egScraped;
   document.getElementById('eg-scrape-style')?.remove();
   bar.hidden = true;
@@ -309,7 +401,7 @@ function start(): void {
   watcher.observe(document.body, { childList: true, characterData: true, subtree: true }); // recycled rows change text
   scan([document.body]);
   bar.hidden = false;
-  status();
+  setWhole(false);
 }
 
 export function install(): void {
@@ -317,6 +409,7 @@ export function install(): void {
   ui.style(`.sasbar{position:fixed;right:18px;bottom:18px;display:flex;gap:4px;align-items:center;padding:4px;border-radius:10px;
     background:var(--bg);color:var(--fg);border:1px solid var(--line);box-shadow:var(--shadow-menu)}
     .sasbar span{color:var(--muted);font-size:11px;padding:0 6px;max-width:300px}
+    .sasbar [aria-pressed=true]{background:var(--accent);color:var(--bg)} pre.sasmd{white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;margin:0}
     table.sas{border-collapse:collapse;font-size:11px} table.sas th,table.sas td{border:1px solid var(--line);padding:2px 4px;text-align:left;vertical-align:top}`);
   const download = () => {
     const rows = allRows();
@@ -325,7 +418,9 @@ export function install(): void {
   };
   bar = h('div', { className: 'sasbar', hidden: true, attrs: { role: 'toolbar', 'aria-label': 'Scrape as you scroll' } },
     h('button', { textContent: 'Show', onclick: show }),
-    h('button', { textContent: 'Copy JSON', onclick: () => void navigator.clipboard.writeText(JSON.stringify(filled(), null, 2)) }),
+    h('button', { textContent: 'Whole page', dataset: { whole: '' }, attrs: { 'aria-pressed': 'false', title: 'Also keep every section\'s text and Markdown' }, onclick: () => setWhole(!whole) }),
+    h('button', { textContent: 'Organize', hidden: true, dataset: { organize: '' }, attrs: { title: 'Put the captured sections into tables (the model on this device)' }, onclick: () => void organize() }),
+    h('button', { textContent: 'Copy JSON', onclick: () => void navigator.clipboard.writeText(JSON.stringify(asJson(), null, 2)) }),
     h('button', { textContent: 'CSV', onclick: download }),
     h('button', { textContent: '✕', attrs: { 'aria-label': 'Stop collecting' }, onclick: stop }),
     h('span'));

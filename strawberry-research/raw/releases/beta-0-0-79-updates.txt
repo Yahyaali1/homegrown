@@ -1,0 +1,37 @@
+Release Beta 0.0.79
+What's new
+in Strawberry
+Released
+February 9, 2026
+We've been busy under the hood and Strawberry's interface is now 78.5% faster. There are new features to explore, but the real story is what's happening behind the scenes. We've completed a massive engine swap to make everything feel faster and snappier.
+Everything's Faster
+We migrated our renderer from React to SvelteKit. New tabs load 78.5% faster, UI updates are 30% quicker, and the app is noticeably lighter. For example, the new tab page now loads in under 100ms (down from 466ms).
+Companions Don't Lose Track Anymore
+Your companion now has its own virtual file system, much better context management. No more "wait, what were we doing?" moments. Click on your companion and check out Documents to see what it's keeping track of.
+Redesigned Agent Block
+Reworked how agent work appears in chat. We consolidated everything into a clean vertical flow instead of the old horizontal layout. Each step, tool call, and result now reads top-to-bottom so you can follow what your agent is doing linearly. Much easier to scan through progress at a glance.
+Visual Polish
+History, Downloads, Passwords, and Settings all got a visual update. Cleaner layouts, better loading states, and more polish. Passwords now lives on its own dedicated page. Downloads, Bookmarks, and Permissions widgets got the same treatment.
+Add Integrations via Chat
+"Hey, can you connect to [obscure tool]?" Now the AI can discover integrations, guide you through setup, and add them through conversation. No settings menu required.
+New Integrations
+Ashby HQ: Manage recruiting workflows right from the browser.
+Attio: CRM that connects with a couple of clicks.
+Lemlist: Email outreach, just paste your API key to get started.
+Improvements and Bug Fixes
+Companion Edit Modal: Memories and skills now show as browsable files
+Google Sheets: Richer results, sheets auto-expand when needed, and large responses no longer stall your chat.
+Email Search: We upped the search limits and improved indexing, so finding that one attachment from 2024 is much faster.
+Screenshots & Image Processing: Fixed those annoying crashes when processing screenshots. We moved image handling to WebAssembly, so it's faster and way more stable.
+Passkeys: Logging in with your face or fingerprint is now significantly more reliable.
+Google Login Unified: Gmail, Sheets, Drive, and Calendar now share a single login flow.
+Selectable Login Permissions: Choose exactly which permissions to grant when connecting accounts.
+Long Chats: Long conversations load noticeably faster.
+Onboarding → New Tab: Your onboarding preferences now show as personalized suggestions on the new tab page.
+Tab Orientation Per-Profile: Customize tab bar orientation differently for each profile.
+Pasting files no longer accidentally attempts to launch external apps.
+Traffic lights (window controls) now properly hide when you go full-screen (macOS).
+Resolved an issue where certain emoji and special characters were being cut in half during rendering.
+Editing a message no longer switches your selected session.
+Chat names show their actual name instead of placeholder text.
+Password encryption no longer fails silently.

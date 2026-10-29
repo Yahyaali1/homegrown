@@ -1,0 +1,29 @@
+Release 0.0.87
+What's new
+in Strawberry
+Released
+February 22, 2026
+Strawberry is now open beta, anyone can download it at strawberrybrowser.com. This update brings a major engine upgrade, a smarter default model with automatic failover, and tab hover actions for faster browsing. We've also squashed a long list of bugs since going public.
+Open Beta
+No more invite codes. Anyone can now download Strawberry Browser at strawberrybrowser.com and start using it right away.
+Engine Upgrade
+The core browser engine has been updated to the latest version, better website compatibility, stronger security, and smoother performance across the board.
+Smarter Default Model
+The default model is now Claude Sonnet 4.6, noticeably better at complex tasks. If the provider goes down, it switches to a backup. The model picker also got logos and better grouping. Click your companion and go to Advanced settings to change it.
+Tab Hover Actions
+Hover over any tab to pin it, bookmark it, open it in chat, or copy the URL. No right-clicking required.
+Improvements and Bug Fixes
+Chat context carries over: Links opened from chat now carry your conversation into the new tab, your companion remembers what you were talking about.
+Shortcut hints: Hold Cmd to reveal shortcut numbers on pinned tabs.
+New messages indicator: A "scroll to bottom" button appears when new messages arrive while you're reading above. The chat no longer fights your scrolling or jumps around while your companion is typing.
+iPhone photos: HEIC and HEIF images (the default format from iPhones) now display and attach properly. No more broken thumbnails.
+Memory browser: Folder paths are now visible in your companion's memory list, and you can browse nested folders to see everything it's stored.
+Mute/unmute tabs: Always available in the right-click menu, not just sometimes.
+Companion animations: Smoother transitions for avatars and pinned tabs.
+Paste handling: Pasting a mix of links and images into chat now works as expected. You can also paste images directly into the new tab input.
+Performance: Tab hover is smoother, background tabs no longer waste resources, and multi-tool tasks run more efficiently.
+Fix: Deleting a conversation no longer leaves behind data that could make the chat reappear.
+Fix: Stopping an agent now correctly shows it as stopped instead of looking like it's still running.
+Fix: Moving a tab to a new window no longer loses what was on the page.
+Fix: Login popups work correctly when Strawberry is set as your default browser on Mac.
+Fix: Improved how the browser handles its own special pages (like settings and downloads) to prevent unexpected behavior from links in chat.

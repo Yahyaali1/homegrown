@@ -8,6 +8,7 @@ import { itemRule, LIMITS, parseRecipe, type PageResult, type Recipe } from '../
 import { aiAnswer, aiFill } from '../domain/scrape/ai.ts';
 import { TOOLS } from '../domain/scrape/tools.ts';
 import { parsePick, pickData, pickRules, PICK_INSTRUCTION, SCROLL_LIMITS } from '../domain/scroll.ts';
+import { organizeData, ORGANIZE_INSTRUCTION, ORGANIZE_LIMITS, parseTable } from '../domain/organize.ts';
 import type { Ask } from '../domain/mission/ports.ts';
 
 
@@ -170,8 +171,19 @@ async function scrollList({ heading = '', items = [], fields, runId }: { heading
   return { ...pick, rows: got.values, dropped: got.dropped };
 }
 
+/** Organize one captured section into a table the model designs, every cell checked against the section's text. */
+async function scrollOrganize({ heading = '', text = '', runId }: { heading?: string; text?: string; runId?: string }) {
+  const run = runId ? runs.get(runId) : undefined;
+  if (runId && !run) return { table: null, stopped: true };
+  const t = String(text).slice(0, ORGANIZE_LIMITS.chars);
+  if (t.split(/\s+/).length < 12) return { table: null }; // too little to tabulate
+  const reply = await engineAsk(ORGANIZE_INSTRUCTION, organizeData({ heading: String(heading), text: t }), { task: 'missions', temperature: 0, ...(run && { signal: run.stop.signal }) });
+  return { table: parseTable(reply, t) };
+}
+
 export const handlers = {
   scrollList,
+  scrollOrganize,
   pageRequest: pageRequestHandler,
   pageTools: () => TOOLS,
   scrapeRun,

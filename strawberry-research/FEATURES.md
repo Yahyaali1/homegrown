@@ -2,8 +2,8 @@
 
 Research date 2026-10-29. Sources: 6 fresh-context research passes over strawberrybrowser.com, its 9 agent
 playbooks, the feature pages, 21 release notes, docs.strawberrybrowser.com and the 6 comparison pages. Full
-notes with quotes are in `raw/01…07`. Full text of the 1.0 page and the 8 release notes it links to is in
-`raw/releases/`. Homegrown status is taken from the repo `README.md`; it was not
+notes with quotes are in `raw/01…07`. Full text of all 21 release notes (Alpha 0.0.65, Oct 2025 →
+Oct 21 2026) is in `raw/releases/`. Homegrown status is taken from the repo `README.md`; it was not
 re-tested.
 
 Status: ✅ Homegrown has it · ◐ partly · ○ missing · ⚠ conflicts with a current Homegrown decision.
@@ -50,6 +50,10 @@ glossary, and release notes 0.0.65, 0.0.82, 0.0.87, 0.0.98, 08-15, 10-08 and 10-
 | Browsing view modes: Desktop / Activity / Compact | 0.0.65 | ○ | side panel view of the run |
 | Take over a previewed page, then hand it back without changing chats | 10-08 | ○ | pause the run, focus the tab, "Resume" button |
 | Agent never closes tabs you opened | 10-21 | ✅ closes only its own tabs | track the agent's tab IDs |
+| Agent locks the tabs it controls and releases them when it finishes ("no more locked tabs") | 0.0.96 | ○ | per-tab owner flag; block user input or warn |
+| No blank tabs left behind after a task | 0.0.71 | ✅ closes its tabs | — |
+| Login pop-ups work during take-over | 0.0.65 | n/a | — |
+| Address bar offers to switch to a tab you already have open | 10-21 | n/a (Chrome does it) | — |
 | Idle tabs pause but can keep working in the background | 0.0.72 | n/a | Chrome discards tabs itself |
 | Gather from several URLs in one step; code fetches many pages | 0.0.98, 0.1.0 | ✅ Collect from pages | already built |
 | Pop a tab out to a window or split view | 0.0.98 | n/a (Chrome feature) | — |
@@ -114,6 +118,8 @@ Pages it opens itself stay inside its chat.
 | Search past work (reports, transcripts, pages) | Knowledge hub | ✅ library, Ask your library |
 | Reference anchors: "like Maja", "like our three best customers" | yes | ○ (needs entity memory) |
 | Per-entity templates: each client's report format and folder | yes (Cora) | ○ |
+| Companion's own file system ("Documents") to keep track of long tasks | 0.0.79 | ○ |
+| Memory and skills shown as browsable files, in folders | 0.0.79, 0.0.87 | ○ |
 
 ### G6. Skills
 | Feature | Strawberry | Homegrown |
@@ -134,6 +140,13 @@ Pages it opens itself stay inside its chat.
 | Messages sent mid-run are queued, not sent; "Steer" runs one next | 0.0.88, docs | ○ |
 | Recover interrupted chats after a restart | 08-15, 0.1.0 | ○ |
 | Modes: Plan (research first) / Smart (best model) / Fast (quick, cheap) | 0.1.0 | ◐ model per task |
+| Steps read top to bottom: each step, tool call and result in one vertical flow | 0.0.79 | ◐ mission rounds |
+| Compose blocks: email editor, Slack message and Gmail draft blocks in the chat | 0.0.90 | ◐ answer card with Replace / Insert |
+| Question blocks: grouped questions answered one at a time | 10-21 | ○ |
+| Duplicate a chat to try a different prompt | 0.0.76 | ○ |
+| Feedback on each message | 0.0.72 | ○ |
+| When a chat stops on an error, the reason stays visible, with "Report" | 10-08 | ◐ the daisy wilts |
+| Long-chat warning before quality drops | 0.0.90 | ○ (matters more on a small context) |
 
 ### G8. Outputs (artifacts)
 | Feature | Strawberry | Homegrown |
@@ -145,6 +158,8 @@ Pages it opens itself stay inside its chat.
 | PDF / PNG / PPTX export | yes | ○ |
 | Images | yes | ✅ Janus, FLUX |
 | Library of artifacts linked to the run that made them | yes | ◐ library |
+| View and edit data tables in the chat | 0.0.76 | ◐ sortable table, read only |
+| Analyse up to 10 large PDFs at once | 0.0.65 | ◐ reader opens one at a time |
 
 ### G9. Audio and meetings
 | Feature | Strawberry | Homegrown |
@@ -155,6 +170,7 @@ Pages it opens itself stay inside its chat.
 | Offer to record when a Meet / Zoom / Teams tab opens | yes | ○ (easy: URL match) |
 | Ask across past meetings | yes | ○ (library can hold them) |
 | Dictation, hold to talk | yes | ✅ |
+| Transcribe an uploaded audio or video file (MP3, WAV) | 0.0.76 | ◐ Whisper is loaded; no file input |
 
 ### G10. Connectors (apps)
 | Feature | Strawberry | Homegrown |
@@ -163,6 +179,11 @@ Pages it opens itself stay inside its chat.
 | Custom MCP (remote HTTP, local stdio) | yes | ○ |
 | Use the app's API "when faster than browsing" | yes | ○ |
 | Act in the logged-in web UI instead | yes | ◐ reads logged-in pages · ⚠ writes |
+| Add an integration by asking in chat; the agent finds it and guides setup | 0.0.79 | ○ |
+| Choose which permissions (scopes) to grant when connecting | 0.0.79 | ○ |
+| Guidelines for each app ("how to use HubSpot here") | 0.0.90 | ○ (fits site-specific Tasks) |
+| Uses the selected sheet and range as context | 0.0.90 | ◐ selection works on pages, not Google Sheets' canvas |
+| Detects which app is open, with a backup method when that fails | 0.0.90 | ○ |
 
 ### G11. Cost and model routing
 | Feature | Strawberry | Homegrown |

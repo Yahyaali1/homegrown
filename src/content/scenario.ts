@@ -2,7 +2,7 @@
 // so a click that navigates only ends its own step. Part of lib/pageread.js, run in Homegrown's background tabs.
 import type { Instruction, SelectorType } from '../domain/scrape/scenario.ts';
 import type { WaitBrowser } from '../domain/scrape/options.ts';
-import { toMarkdown } from './pageread.ts';
+import { toMarkdown } from './markdown.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

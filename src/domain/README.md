@@ -44,6 +44,9 @@ runtime adapters and storage live outside `domain/`.
   keeps at most 15 words.
 - `csv.ts`: `csvCell`, `toCsv(keys, rows)`. Quotes every cell and prefixes `'` to a cell that starts like a
   spreadsheet formula (`= + - @`, tab, CR) unless it is a plain number.
+- `organize.ts`: Organize for a whole captured page. `ORGANIZE_INSTRUCTION` (fixed), `organizeData(section)`
+  (heading and 3500 characters, defanged), `parseTable(reply, text)` (up to 6 columns and 15 rows; each cell kept
+  only if `onText` finds it in the section, a row needs 2 kept cells; null for prose), `outline(sections)`.
 - `scroll.ts`: scrape as you scroll. `PICK_INSTRUCTION` (fixed) and `pickData(heading, items)` (3 items, 400
   characters each, defanged) for the model's choice; `parsePick(reply)` (anything unusable is a skip; up to 6
   slugged fields); `pickRules(fields)`; `labelPairs(text)` and `factsRow(pairs)` (3 pairs or more);
@@ -100,5 +103,5 @@ contract. Where it differs, this list says so.
 ## Verification
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
-  `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, and `csv` in `scrape.test.ts`)
+  `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`)
 - Type check: `npm run check`

@@ -1,0 +1,25 @@
+Release Alpha 0.0.65
+What's new
+in Strawberry
+Released
+October 1, 2025
+This release marks the transition to Beta, emphasizing major performance and stability improvements. It introduces a new brand profile, redesigned companion views, upgraded app integrations, dark mode, and enhanced large file handling.
+Updated Brand Profile
+A new brand profile is introduced to reflect Strawberry's ambition, with a logo built from building blocks, symbolizing the aim to provide users with agent building blocks directly within their workflow.
+Companion Browsing View
+A new, intuitive interface for monitoring autonomous browsing sessions. Users can see companion activity in detail and switch between Desktop, Activity, and Compact views.
+Upgraded Apps (Integrations)
+Significantly more powerful and user-friendly app integrations with a new design. Features include reviewing and editing actions before execution, cleaner display of information, and better handling of complex workflows.
+Dark Mode
+Full dark mode support is now available, with an easy toggle between light and dark modes.
+Fresh Companions
+New companion designs are introduced.
+Powerful File & Website Handling
+Improved ability to handle larger files and more complex websites. Users can now upload and analyze up to 10 large PDFs simultaneously with reduced credit usage.
+Bug Fixes
+Resolved payload size issues on very long chats
+Improved interact performance on complex sites
+Fixed take-over functionality in edge cases
+Fixed login popups not appearing during tab takeover
+Solved chat not recognizing filepath of uploaded files
+Fixed abort button not working when feedback modal is open

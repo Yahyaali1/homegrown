@@ -1,0 +1,27 @@
+Feature update –
+October 8
+What's new
+in Strawberry
+Follow your companion's work more easily and see when it needs you. This update brings a clearer chat, quick previews while you browse, polished password and bookmark managers, and tasks that run just once.
+A clearer view of your companion's work
+The new chat makes it easier to follow what your companion is doing. App and page activity has clearer descriptions, and related work is grouped together so you can see the steps behind an answer.
+When your companion needs an answer, approval, or help with a website, the request appears above the chat input. Review an app action, answer a question, or help with a website check from the same place. You can switch between waiting requests or collapse them to read the conversation, then come back when you are ready.
+Preview without leaving your sidebar chat
+When chatting beside a website, click a page, file, or skill card to open a quick preview. This works for images and videos too. Inspect what your companion is working with, then press Escape or click outside to return to the conversation. You can also take over a previewed page and hand it back to your companion without switching chats.
+A polished Password Manager
+Saved logins are grouped by website, with recently used accounts easier to find. Search, add, edit, and remove logins in one place, with clearer settings for password autofill, strong-password suggestions, and saving new passwords. Saved passwords can now be viewed and edited on Windows and Linux too.
+Your bookmarks, easier to find and organize
+The polished Bookmark Manager gives your saved pages and folders more room. Search by name or web address, create folders, rename entries, and drag bookmarks into the order or folder you want. Open a saved page straight from the list.
+For the things you only need done once
+Ask your companion to check an invoice on Friday or prepare a briefing before a meeting. One-off routines run at a date and time you choose, then stop. You can also set one to run the next time something happens in a connected app, with an optional deadline to stop waiting.
+Manage them alongside your recurring routines. Edit, pause, or cancel a task before it starts, and find completed tasks under Past with a link to their conversation.
+Improvements and bug fixes
+Library artifacts now show which chat presented them, with a link back to the conversation.
+Chat search handles partial words and punctuation better, and finds renamed chats and edited messages more reliably.
+Attachments return with unsent drafts, with fixes for PDFs, SVG images, and large files.
+Meeting transcripts are available while summaries finish in the background, with clearer progress along the way.
+Permission choices are saved when you approve an action, and folder access defaults to the current chat.
+Low-credit reminders account for top-ups and other available balances, and remember when you dismiss them.
+More reliable downloads, app connections, password saving, and file syncing.
+Smoother tab switching, window resizing, and scrolling through long sidebars and large Libraries.
+If a chat stops because something went wrong, its explanation stays visible. Strawberry problems include a way to report the issue.
