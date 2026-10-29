@@ -103,24 +103,26 @@
 .hg-progress::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, var(--fg), transparent) 0 0/40% 100% no-repeat; animation: hg-indeterminate 1.2s var(--ease-out) infinite; opacity: .5; }
 
-/* ---- the flower (ui/flower.js) ---- */
+/* ---- the flower (ui/flower.js) ----
+   --petals: 10 on the mark; a gardener's look sets its own (5–9, 11, 12). The ripple keeps its length (300ms round
+   the head) and the turn is one petal, 360deg / --petals, whatever the count. */
 .flower { flex: none; overflow: visible; vertical-align: -3px; }
 .flower .petal, .flower .seed, .flower .leaf, .flower .pot { transform-box: fill-box; transform-origin: center; }
 .flower .seed { fill: var(--pollen); stroke: var(--seed-ring, var(--panel)); stroke-width: 1.4; }
 .flower .petals { transform-box: view-box; transition: transform var(--d-bloom) var(--ease-grow); }
 /* bloom: the ten petals ripple open, then the seed lights — the mark arriving, and "done" */
-.flower.bloom .petal, .flower.sprout .petal { animation: hg-petal-open var(--d-bloom) var(--ease-grow) both; animation-delay: calc(var(--i) * 30ms); }
+.flower.bloom .petal, .flower.sprout .petal { animation: hg-petal-open var(--d-bloom) var(--ease-grow) both; animation-delay: calc(var(--i) * 300ms / var(--petals, 10)); }
 .flower.bloom .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) .22s both; }
 /* sprout (potted mark): the pot settles, the stem rises out of it, the leaf unfolds, then it blooms */
 .flower.sprout .pot { transform-origin: 50% 100%; animation: hg-pot .4s var(--ease-out) both; }
 .flower.sprout .stem { stroke-dasharray: 30; animation: hg-stem .5s var(--ease-out) .25s both; }
 .flower.sprout .leaf { transform-origin: 0% 50%; animation: hg-seed .4s var(--ease-grow) .55s both; }
-.flower.sprout .petal { animation-delay: calc(.7s + var(--i) * 30ms); }
+.flower.sprout .petal { animation-delay: calc(.7s + var(--i) * 300ms / var(--petals, 10)); }
 .flower.sprout .seed { animation: hg-seed var(--d-bloom) var(--ease-grow) 1.05s both; }
 /* thinking: the plant grows, lets go, and grows again — for as long as the model works. The pot stays. */
 .flower.thinking .stem { stroke-dasharray: 30; animation: hg-loop-stem var(--d-grow-loop) var(--ease-out) infinite; }
 .flower.thinking .leaf { transform-origin: 0% 50%; animation: hg-loop-leaf var(--d-grow-loop) var(--ease-grow) infinite; }
-.flower.thinking .petal { animation: hg-loop-petal var(--d-grow-loop) var(--ease-grow) infinite; animation-delay: calc(var(--i) * 25ms); }
+.flower.thinking .petal { animation: hg-loop-petal var(--d-grow-loop) var(--ease-grow) infinite; animation-delay: calc(var(--i) * 250ms / var(--petals, 10)); }
 .flower.thinking .seed { animation: hg-loop-seed var(--d-grow-loop) var(--ease-grow) infinite; }
 /* stages: the plant held part-grown — 0 an empty pot, 1 a stem, 2 stem and leaf, 3 everything but the seed */
 .flower.stage-0 :is(.stem, .leaf, .petals, .seed), .flower.stage-1 :is(.leaf, .petals, .seed),
@@ -130,11 +132,11 @@
    The pot stays upright: the machine is fine, this attempt wasn't. */
 .flower .plant { transform-box: view-box; transform-origin: 24px 31px; transition: transform .6s var(--ease-out); }
 .flower.wilt .plant { transform: rotate(-38deg); }
-.flower.wilt .petal { transition: transform .7s ease-in, opacity .7s ease-in; transition-delay: calc(.25s + var(--i) * 40ms); }
+.flower.wilt .petal { transition: transform .7s ease-in, opacity .7s ease-in; transition-delay: calc(.25s + var(--i) * 400ms / var(--petals, 10)); }
 .flower.wilt g:nth-child(odd) > .petal { transform: translateY(9px) rotate(40deg); opacity: 0; }
 .flower.wilt .seed { fill: var(--faint); transition: fill .6s .3s; }
 /* turning toward you: hover turns the head by one petal */
-:hover > .flower .petals, .flower.turn .petals { transform: rotate(36deg); }
+:hover > .flower .petals, .flower.turn .petals { transform: rotate(calc(360deg / var(--petals, 10))); }
 
 @keyframes hg-petal-open { from { opacity: 0; transform: scale(.2); } }
 @keyframes hg-seed { from { opacity: 0; transform: scale(0); } }
@@ -154,4 +156,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  /* a still flower: no stagger either, every petal is there at once */
+  .flower * { animation-delay: 0s !important; transition-delay: 0s !important; }
 }

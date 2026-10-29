@@ -13,8 +13,8 @@ a { color: var(--link); }
 .top .name { font-size: var(--t-base); letter-spacing: -.01em; }
 .pill { font-size: var(--t-xs); color: var(--muted); background: var(--chip); border-radius: var(--r-pill); padding: 2px 8px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
-.tabs { display: flex; gap: 2px; padding: 0 8px; background: var(--card); border-bottom: 1px solid var(--line); overflow-x: auto; }
-.tabs button { flex: 1; border: 0; border-radius: 0; height: auto; box-shadow: none; background: none; color: var(--muted); font: inherit; font-weight: 500; padding: 8px 4px 9px; cursor: pointer;
+.tabs { display: flex; gap: 0; padding: 0 4px; background: var(--card); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { flex: 1; border: 0; border-radius: 0; height: auto; box-shadow: none; background: none; color: var(--muted); font: inherit; font-size: var(--t-sm); font-weight: 500; padding: 8px 4px 9px; cursor: pointer; flex-shrink: 0;
   position: relative; white-space: nowrap; transition: color var(--d-fast); }
 .tabs button:hover { color: var(--fg); background: none; }
 .tabs button:active { transform: none; }
@@ -146,3 +146,28 @@ footer b { color: var(--muted); font-weight: 600; }
 #messages .confirm { display: flex; gap: 6px; margin-top: 8px; }
 #task-models .row > span { color: var(--fg); }
 #task-models select { max-width: 60%; }
+/* Garden */
+.list li.gardener, .gardener .list li { flex-direction: column; align-items: stretch; }
+.gardener .head { display: flex; gap: 6px; align-items: flex-start; }
+.gardener .head > button, .gardener .actions > button { height: 26px; padding: 0 8px; flex: none; }
+.gardener .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.gardener .list li { background: var(--bg-2); }
+#garden details > summary { cursor: pointer; color: var(--muted); font-size: var(--t-sm); }
+#garden details[open] > summary { margin-bottom: 8px; }
+#garden > h3:first-of-type, .card > h3 { margin-top: 0; }
+#garden-runs li > .flower, #garden-requests li > .flower { flex: none; }
+#garden-runs li.enter, #garden-requests li.enter { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+#garden-runs .result, #garden-requests .result { white-space: pre-wrap; overflow-wrap: anywhere; }
+#garden-runs .t > div { overflow-wrap: anywhere; margin-top: 4px; }
+#garden-runs .draft { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px; border-radius: var(--r-sm); background: var(--chip); }
+#garden-runs .draft .text { white-space: pre-wrap; font-size: var(--t-sm); }
+#garden-runs .draft button { height: 24px; padding: 0 8px; }
+#garden-requests:empty { display: none; }
+.gardener .head > .flower { margin-top: 1px; }
+#gardener-form .look { align-items: center; }
+.gardener .notebook .list li { flex-direction: row; align-items: flex-start; }
+.notebook .list li > button { height: 26px; padding: 0 8px; flex: none; }
+.notebook form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.notebook .result { white-space: pre-wrap; overflow-wrap: anywhere; }
+#garden-requests .wait-bar { height: 2px; border-radius: 2px; background: var(--fg); opacity: .5; transform-origin: left; animation: hg-wait linear forwards; }
+@keyframes hg-wait { from { transform: scaleX(1); } to { transform: scaleX(0); } }

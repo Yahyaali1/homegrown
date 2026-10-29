@@ -1,11 +1,12 @@
 // The side panel, the home for everything: Chat (image attachments, Prompt Lab templates, settings changed by asking),
-// Missions, Library, Tasks, Settings with Models, the stats bar, and right-click actions on pages the in-page UI
+// Missions, Garden, Library, Tasks, Settings with Models, the stats bar, and right-click actions on pages the in-page UI
 // can't reach. Library and Settings are their own modules, also used as standalone pages.
-import { $ } from './shell.ts';
+import { $, busyButton, button, emptyPot, row } from './shell.ts';
 import './settings.ts';
 import './library.ts';
+import { renderGarden } from './garden.ts';
 import { h } from '../ui/dom.ts';
-import { flower, type FlowerState } from '../ui/flower.ts';
+import { flower, MISSION_STAGE, type FlowerState } from '../ui/flower.ts';
 import { MODELS, modelById, supports, TASKS, type TaskId } from '../domain/model.ts';
 import { DEFAULT_TASKS, getTasks, PROMPT_LAB } from '../shared/actions.ts';
 import { importTasks, KINDS, moveTask, type Task, type TaskKind } from '../domain/tasks.ts';
@@ -25,7 +26,6 @@ let imageData: string | null = null;
 const progress: Record<string, { done: number; total: number; complete?: boolean; error?: string }> = {};
 const streams = new Map<string, (t: string) => void>(); // generate id → token callback
 
-const button = (label: string, onclick: (e: MouseEvent) => unknown, cls = '') => h('button', { textContent: label, className: cls, onclick: (e) => void onclick(e) });
 const sync = async () => parseSettings(await chrome.storage.sync.get(null));
 const excerpt = (t: string, n = 140) => (t.length > n ? `${t.slice(0, n)}…` : t);
 const when = (ms?: number) => (ms ? new Date(ms).toLocaleString() : 'never');
@@ -94,9 +94,14 @@ function showTab(name: string): void {
   for (const b of document.querySelectorAll('.tabs [role=tab]')) b.setAttribute('aria-selected', String((b as HTMLElement).dataset.tab === name));
   for (const s of document.querySelectorAll<HTMLElement>('main > [role=tabpanel]')) s.hidden = s.id !== name;
   try { localStorage.tab = name; } catch {}
+  if (name === 'garden') void renderGarden();
 }
 for (const b of document.querySelectorAll<HTMLElement>('.tabs [role=tab]')) b.onclick = () => showTab(b.dataset.tab ?? 'chat');
 try { if (localStorage.tab && document.getElementById(localStorage.tab)) showTab(localStorage.tab); } catch {}
+// sidepanel.html#garden (a gardener's notification) opens on that tab.
+const fromHash = () => location.hash.length > 1 && document.querySelector(`main > [role=tabpanel]${location.hash}`) && showTab(location.hash.slice(1));
+fromHash();
+addEventListener('hashchange', fromHash);
 
 // ---- chat ----
 
@@ -405,16 +410,6 @@ $<HTMLFormElement>('#sched-form').onsubmit = async (e) => {
   url.value = '';
 };
 
-/** An empty list shows an empty pot (docs/design-philosophy.md). */
-const emptyPot = (text: string) => h('li', { className: 'empty-row' }, flower(26, 'stage-0'), h('span', { className: 'muted', textContent: text }));
-const busyButton = (label: string, fn: () => Promise<unknown>) => button(label, (e) => {
-  const b = e.currentTarget as HTMLButtonElement;
-  b.disabled = true;
-  return fn().finally(() => (b.disabled = false));
-});
-const row = (title: string, sub: string, result: string, ...actions: HTMLElement[]) =>
-  h('li', {}, h('span', { className: 't' }, h('b', { textContent: title }), h('span', { className: 'p', textContent: sub }), h('span', { className: 'result', textContent: result })), ...actions);
-
 interface Schedule { id: string; taskId: string; url: string; interval: string }
 interface Monitor { id: string; title: string; url: string; interval: string; checkedAt?: number; changedAt?: number; lastSummary?: string }
 async function renderSchedules(): Promise<void> {
@@ -452,16 +447,13 @@ $('#mission-goal').onkeydown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) ($<HTMLFormElement>('#mission-form').requestSubmit(), e.preventDefault());
 };
 
-// Each mission's plant: growing while it works, in bloom when the goal is met, part-grown for a best effort, wilted
-// when it failed.
-const PLANT: Record<string, FlowerState> = { planning: 'thinking', running: 'thinking', failed: 'wilt', stopped: 'stage-1' };
 interface LiveSummary { id: string; goal: string; status: string; achieved?: boolean; answer: string; best: string; error?: string; round?: number; phase?: string }
 async function renderLive(): Promise<void> {
   const list = await bg<LiveSummary[]>('missionsLive').catch(() => []);
   $('#live-list').replaceChildren(...(list.length ? list.map((m) => {
     const sub = m.status === 'done' ? m.answer || m.best : m.status === 'failed' ? m.error ?? '' : m.status === 'stopped' ? 'Stopped.'
       : m.round ? `Round ${m.round} · ${m.phase === 'checking' ? 'checking the results' : 'reading pages'}` : 'Reading your goal…';
-    return h('li', { className: 'live' }, flower(26, PLANT[m.status] ?? (m.achieved ? 'sprout' : 'stage-3')),
+    return h('li', { className: 'live' }, flower(26, MISSION_STAGE[m.status] ?? (m.achieved ? 'sprout' : 'stage-3')),
       h('span', { className: 't' }, h('b', { textContent: m.goal }), h('span', { className: 'p', textContent: sub })),
       button('Open', () => bg('missionOpen', { id: m.id }), 'secondary'));
   }) : [emptyPot('Missions you start show up here while they run.')]));

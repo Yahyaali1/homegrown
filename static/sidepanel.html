@@ -17,6 +17,7 @@
   <nav role="tablist" class="tabs">
     <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
     <button role="tab" data-tab="missions">Missions</button>
+    <button role="tab" data-tab="garden">Garden</button>
     <button role="tab" data-tab="library">Library</button>
     <button role="tab" data-tab="tasks">Tasks</button>
     <button role="tab" data-tab="settings">Settings</button>
@@ -83,6 +84,26 @@
         <div class="row"><input id="sched-url" type="url" placeholder="https://example.com/page" aria-label="Page URL" required><button class="secondary">Schedule</button></div>
       </form>
       <ul id="sched-list" class="list"></ul>
+    </section>
+
+    <section id="garden" role="tabpanel" hidden>
+      <ul id="garden-requests" class="list" aria-live="polite"></ul>
+      <h3>Gardeners</h3>
+      <ul id="gardener-list" class="list"></ul>
+      <details id="gardener-add" class="card">
+        <summary>Add a gardener</summary>
+        <form id="gardener-form" class="stack">
+        <input id="gardener-name" maxlength="40" placeholder="Name, e.g. Release notes" aria-label="Gardener name" required>
+        <textarea id="gardener-instructions" rows="3" maxlength="2000" placeholder="Instructions, e.g. Tell me what changed, in three lines" aria-label="Instructions"></textarea>
+        <textarea id="gardener-sites" rows="2" placeholder="Sites it may read signed in, one per line, e.g. github.com" aria-label="Sites, one per line"></textarea>
+        <label class="row">Minutes per run <input id="gardener-minutes" type="number" min="1" max="60" value="10" aria-label="Minutes per run"></label>
+        <div class="row look"><span id="gardener-look"></span><button id="gardener-another" type="button" class="ghost">Another look</button></div>
+        <span id="gardener-error" class="err" hidden></span>
+        <div class="row"><button class="primary">Save gardener</button><button id="gardener-cancel" type="button" class="ghost">Cancel</button></div>
+        </form>
+      </details>
+      <h3>Runs</h3>
+      <ul id="garden-runs" class="list"></ul>
     </section>
 
     <section id="library" role="tabpanel" hidden>
