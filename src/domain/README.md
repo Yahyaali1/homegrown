@@ -24,7 +24,7 @@ runtime adapters and storage live outside `domain/`.
 - `markdown.ts`: `escapeHtml`, `markdown`, `markdownWithTables`. Render a small markdown subset to HTML.
   The text is escaped before any tags are added.
 - `model.ts`: `Role`, `Part`, `Turn`, `Sampling`, `Capability`, `RuntimeId`, `ModelSpec`, `MODELS`,
-  `modelById`, `supports`, `TASKS`, `TaskId`, `userText`, `instructionWithData`. Chat-turn types that do
+  `modelById`, `supports`, `Ability`, `can` (a measured ability, ADR-18; no entry: cannot), `TASKS`, `TaskId`, `userText`, `instructionWithData`. Chat-turn types that do
   not depend on one model, the static catalog of Gemma 4 E2B/E4B LiteRT-LM models, capability lookup and
   prompt helpers. `RuntimeId` is `'litert-lm' | 'webllm' | 'prompt-api'`, but every `MODELS` entry uses
   `'litert-lm'`.
@@ -37,7 +37,7 @@ runtime adapters and storage live outside `domain/`.
   type-checked merge of stored values, the list of settings that chat may change, and the patch to store.
 - `tasks.ts`: `TaskKind`, `Task`, `KINDS`, `parseTasks`, `importTasks`, `moveTask`. The task schema,
   validation of stored tasks, JSON import merged by id, and reordering.
-- `text.ts`: `num`, `slug`, `parseJsonObject`, `defang`, `grounded`, `mentions`, `requiredTerms`, `hostOf`,
+- `text.ts`: `contextChars(maxTokens)` (the character budget), `num`, `slug`, `parseJsonObject`, `defang`, `grounded`, `mentions`, `requiredTerms`, `hostOf`,
   `cleanContinuation`. Number parsing for several locales, field slugs, the first JSON object in a reply,
   removal of prompt-injection sentences, a check that a value appears on the page, required terms, the host
   name, and cleanup of ghost-text continuations. `requiredTerms` returns at most 5 terms. `cleanContinuation`
@@ -66,7 +66,7 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener`, `Routine`, `GardenRun`, `Turn`, `Step`, `Request`, `Seen`, `Look`, `Mention`, `LIMITS`,
+  - `records.ts`: `Gardener`, `Routine`, `GardenRun`, `Turn`, `Step`, `Request`, `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
     `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
     `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`. Every record has `v: 1`; a parser returns `null` for
     a bad record or a newer `v`. A site is a bare host and matches its subdomains; a single label or a shared-hosting
@@ -82,9 +82,12 @@ runtime adapters and storage live outside `domain/`.
     and has the page left the call's hosts. Bundled into the in-page step runner (`content/scenario.ts`), so the
     check and the step run in one call on the same element.
   - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
-    `OPEN_REFUSED`, `BAD_REPLY`, `TOO_LONG`. Direct work (`read`, `mission`) issues fixed calls, then one `word`
-    think; open work (`ask`, only with `agent.loop`) runs choose → repair → call … → answer → check. Notes go in
-    the data, never the prompt.
+    `refusal`, `parsePlan`, `answerPlan`, `OPEN_REFUSED`, `PLAN_REFUSED`, `BAD_REPLY`, `TOO_LONG`. Direct work
+    (`read`, `mission`) issues fixed calls, then one `word` think; open work (`ask`, only with `agent.loop`) runs
+    choose → repair → call … → answer → check; plan work (`plan`, only with the `plan` ability or `agent.loop`) runs
+    plan → repair → the person's yes → each planned call → one `sum` think (ADR-18). A plan's `fromPlan` yes counts
+    only where `decide` asks and the call isn't sensitive now. Notes go in the data, never the prompt. `answerPlan`
+    changes the run it is given (as the worker's `updateRun` does).
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
     `read_my_tab`), `ToolSpec`, `Arg`, `parseArgs`, `toolsFor`, `mentionsOf`, `mentionedTab`, `pageLinks` (at most
     50). `parseArgs` refuses unknown keys and `evaluate` steps.
@@ -140,5 +143,5 @@ contract. Where it differs, this list says so.
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
   `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
-  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs` and `garden-notes`, 58 tests)
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes` and `garden-plan`, 71 tests)
 - Type check: `npm run check`

@@ -60,7 +60,7 @@ export const TOOLS: ToolSpec[] = [
 ];
 
 /** The tabs the person named for this run. */
-export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' ? run.work.tabs ?? [] : []);
+export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);
 
 /** The tools offered to this run: `read_my_tab` only when the person named tabs. */
 export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS): ToolSpec[] => tools.filter((t) => t.name !== 'read_my_tab' || mentionsOf(run).length > 0);

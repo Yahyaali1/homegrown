@@ -4,6 +4,8 @@ export const OUTPUT_RESERVE = 512; // tokens kept free for the answer
 // ponytail: runtimes expose no tokenizer, so a character estimate. Gemma averages ~4 chars/token in English; 3 is the
 // safe side. A runtime with a tokenizer could count exactly.
 export const CHARS_PER_TOKEN = 3;
+/** The characters of prompt and data a model with this context takes, the answer's room kept free. */
+export const contextChars = (maxTokens: number): number => (maxTokens - OUTPUT_RESERVE) * CHARS_PER_TOKEN;
 
 /** "$1,299.99", "1.299,99 €", "4.5 out of 5", "1.71E7" → number; anything else → null. */
 export function num(v: unknown): number | null {

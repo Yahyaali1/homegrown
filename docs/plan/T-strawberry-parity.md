@@ -950,11 +950,11 @@ it lands.
 
 ## Status
 
-Planned. No slice started.
+T1 built, waiting for review.
 
 | Slice | State |
 |---|---|
-| T1 | Planned |
+| T1 | Built (not reviewed): 13 unit tests, e2e passes on a planted run; `abilities.mjs plan` E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan` |
 | T2 | Planned |
 | T3 | Planned |
 | T3b | Planned |

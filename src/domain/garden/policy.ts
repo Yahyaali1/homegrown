@@ -109,7 +109,7 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
     }
     // Only a tab the person named; it is read, never acted in, and the read taints the run.
     case 'read_my_tab':
-      return run.work.kind === 'ask' && (run.work.tabs ?? []).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
+      return (run.work.kind === 'ask' || run.work.kind === 'plan') && (run.work.tabs ?? []).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
     case 'notify':
       return run.steps.some((s) => s.tool === 'notify' && s.state === 'done') ? 'deny' : 'allow';
     default:

@@ -9,8 +9,8 @@ import { recipesList } from './scrape.ts';
 import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.ts';
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
-import { DEFAULT_AGENT, modelById } from '../domain/model.ts';
-import { answerFor, approveRequest, digest, next, OPEN_REFUSED, recover, said, type Ctx } from '../domain/garden/loop.ts';
+import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
+import { answerFor, answerPlan, approveRequest, digest, next, OPEN_REFUSED, PLAN_REFUSED, recover, refusal, said, type Ctx } from '../domain/garden/loop.ts';
 import { actOf, addSeen, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known } from '../domain/garden/policy.ts';
 import { claim, expired, nextAfter } from '../domain/garden/schedule.ts';
 import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
@@ -117,17 +117,23 @@ async function nextQueued(): Promise<GardenRun | undefined> {
   return runs.filter((r) => r.status === 'queued').sort((a, b) => a.queuedAt - b.queuedAt)[0];
 }
 
-/** Pins the model when the run first goes running: what the engine's useModel rule picks, loaded. */
+/** Pins the model and its measured abilities when the run first goes running: what the engine's useModel rule picks, loaded. */
 async function pin(run: GardenRun): Promise<string | null> {
-  if (run.model && run.maxTokens && run.agent) return null;
-  try {
-    const m = await engine<{ name: string; maxTokens: number }>('resolve', { name: await modelFor('gardens') });
-    Object.assign(run, { model: m.name, maxTokens: m.maxTokens, agent: modelById(m.name)?.agent ?? DEFAULT_AGENT });
-  } catch (e) {
-    return e instanceof Error ? e.message : String(e);
+  if (!(run.model && run.maxTokens && run.agent)) {
+    try {
+      const m = await engine<{ name: string; maxTokens: number }>('resolve', { name: await modelFor('gardens') });
+      const spec = modelById(m.name);
+      Object.assign(run, { model: m.name, maxTokens: m.maxTokens, agent: spec?.agent ?? DEFAULT_AGENT, abilities: spec?.abilities ?? [] });
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
   }
-  return run.work.kind === 'ask' && !run.agent!.loop ? OPEN_REFUSED : null;
+  return refusal(run);
 }
+
+/** What policy needs from storage, read fresh: a grant revoked or a recipe edited counts at once. */
+const knownFor = async (gardenerId: string): Promise<Known> =>
+  ({ grants: (await trust.grants()).filter((x) => x.gardenerId === gardenerId), recipes: (await recipesList()).map(factsOf) });
 
 /** One run's turn in the queue: until it is done, failed, waiting or stopped. */
 async function turn(run: GardenRun): Promise<void> {
@@ -161,7 +167,7 @@ async function turn(run: GardenRun): Promise<void> {
   broadcast(run);
   live.name = gardener.name;
   // The notes that best match the work, for its choose or word data (a mission's answer is its own: none).
-  const query = run.work.kind === 'ask' ? run.work.request : run.work.kind === 'read' ? `${gardener.instructions}\n${run.work.urls.join('\n')}` : '';
+  const query = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.request : run.work.kind === 'read' ? `${gardener.instructions}\n${run.work.urls.join('\n')}` : '';
   const notes = query ? await notesFor(gardener.id, query).catch(() => []) : [];
   const budget = gardener.minutes * 60_000;
   Object.assign(tab, { title: `❀ ${gardener.name}`, prepare: (t: number) => cookieRule(t, gardener.sites), deadline: Date.now() + budget - run.usedMs });
@@ -175,8 +181,7 @@ async function turn(run: GardenRun): Promise<void> {
     }
     for (;;) {
       if (stop.signal.aborted) return;
-      // What policy needs from storage, read fresh for each action: a grant revoked or a recipe edited counts at once.
-      const known: Known = { grants: (await trust.grants()).filter((x) => x.gardenerId === gardener.id), recipes: (await recipesList()).map(factsOf) };
+      const known = await knownFor(gardener.id);
       const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }) };
       const a = next(run, ctx);
       if ('think' in a) {
@@ -245,7 +250,9 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
   const key = callKey({ tool, args }, ctx);
   const q = answerFor(run, i, tool, key);
   const impl = GARDEN_TOOLS[tool];
-  const verdict = q ? (said(q) ? 'allow' : 'deny') : decide(run, gardener, { tool, args }, ctx);
+  let verdict = q && !q.fromPlan ? (said(q) ? 'allow' : 'deny') : decide(run, gardener, { tool, args }, ctx);
+  // A plan's yes counts only where policy asks and the call isn't sensitive now (as in next()).
+  if (verdict === 'ask' && q?.fromPlan && approveRequest(run, ctx, i, tool, args)?.sensitive === false) verdict = 'allow';
   // A resumed call that now needs the person: drop its started step, and next() asks them as for a new call.
   if (impl && verdict === 'ask') return void (run.steps = run.steps.filter((s) => s.i !== i));
   if (!impl || verdict !== 'allow') {
@@ -378,7 +385,7 @@ export const handlers = {
     const g = await mustGardener(String(routine.gardenerId ?? ''));
     const w = checkWork(routine.work, g);
     // A routine finds its named tabs by URL on each run; a tab id means nothing by then.
-    const work: Work = w.kind === 'ask' && w.tabs ? { ...w, tabs: w.tabs.map(({ url, title }) => ({ url, title })) } : w;
+    const work: Work = (w.kind === 'ask' || w.kind === 'plan') && w.tabs ? { ...w, tabs: w.tabs.map(({ url, title }) => ({ url, title })) } : w;
     const tz = routine.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const r = await idb.tx(await db, 'routines', 'readwrite', async (t) => {
       const old = routine.id ? parseRoutine(await idb.req(t.objectStore('routines').get(routine.id))) : null;
@@ -402,9 +409,9 @@ export const handlers = {
     if (routineId && !routine) throw new Error('That routine no longer exists.');
     const g = await mustGardener(routine?.gardenerId ?? String(gardenerId ?? ''));
     const w = checkWork(routine?.work ?? work, g);
-    if (w.kind === 'ask') {
+    if (w.kind === 'ask' || w.kind === 'plan') {
       const name = (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
-      if (!modelById(name)?.agent?.loop) throw new Error(OPEN_REFUSED);
+      if (!modelById(name)?.agent?.loop && (w.kind === 'ask' || !can(name, 'plan'))) throw new Error(w.kind === 'ask' ? OPEN_REFUSED : PLAN_REFUSED);
     }
     const run = newRun({ id: crypto.randomUUID(), gardenerId: g.id, work: w, now: Date.now(), ...(routine && { routineId: routine.id }) });
     await saveRun(run);
@@ -494,11 +501,16 @@ export const handlers = {
     });
     return true;
   },
-  requestAnswer: async ({ runId, requestId, value }: { runId: string; requestId: string; value: string }, sender?: Sender) => {
+  /** A plan's yes may carry the calls as the person edited them: `{ runId, requestId, value, calls? }`. */
+  requestAnswer: async ({ runId, requestId, value, calls }: { runId: string; requestId: string; value: string; calls?: unknown }, sender?: Sender) => {
     page(sender);
     await ready();
     if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new Error('The answer is empty or too long.');
     let grant: Grant | null = null;
+    // A plan's yes needs policy's view (gardener, grants, recipes), read before the transaction.
+    const before = await getRun(runId);
+    const g = before?.requests.find((x) => x.id === requestId)?.kind === 'plan' ? await mustGardener(before.gardenerId) : null;
+    const known = g ? await knownFor(g.id) : {};
     await updateRun(runId, (r) => {
       const q = r.requests.find((x) => x.id === requestId);
       const now = Date.now();
@@ -509,6 +521,11 @@ export const handlers = {
       // The worker's clock: a sensitive write can't be approved within 8 s of being shown.
       if (q.kind === 'approve' && q.sensitive && value !== 'no' && (q.shownAt === undefined || now - q.shownAt < SENSITIVE_WAIT)) {
         throw new Error('Read it first: this one can be approved 8 seconds after it is shown.');
+      }
+      if (q.kind === 'plan') {
+        const why = g ? answerPlan(r, { gardener: g, tools: toolsFor(r), now, ...known }, q, value as 'yes' | 'no', calls, now) : 'That gardener no longer exists.';
+        if (why) throw new Error(why);
+        return;
       }
       q.answer = { value, at: now };
       if (value === 'always' && q.tool && q.host !== undefined && q.argsKey) grant = { gardenerId: r.gardenerId, tool: q.tool, host: q.host, argsKey: q.argsKey, at: now };

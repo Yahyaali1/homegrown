@@ -64,7 +64,9 @@ It also owns these parts:
     stores it with the mission.
 - `garden.ts` handlers (docs/plan/S-gardeners.md): `gardenerList`, `gardenerSave`, `gardenerDelete`, `routineList`,
   `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, or `{ routineId }` for Run now), `runList`,
-  `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`, `grantList` (`{ gardenerId? }`),
+  `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`
+  (`{ runId, requestId, value, calls? }`: a `plan` request's yes may carry the edited calls, parsed again; its no stops
+  the run), `grantList` (`{ gardenerId? }`),
   `grantRevoke` (`{ gardenerId, tool, host, argsKey }`).
   - `requestAnswer` (V2): `approve` takes `yes`, `no` or `always` (`always` stores a grant; not offered for a sensitive
     one), `reach` and `did-it-happen` take `yes` or `no`. It refuses after `expiresAt`, and refuses a sensitive
@@ -86,8 +88,9 @@ It also owns these parts:
     closes mid-call (`TabClosed`): a read step fails "The tab was closed."; an act stays started and asks.
   - One run at a time, oldest `queuedAt` first. The worker does each `next()` action (domain/garden/loop.ts) and
     persists the run after each; a tool call is checked with `decide` first (unless the person said yes to exactly
-    that call) and stored as `started` before it runs. The model is pinned when a run first goes `running`, through
-    the engine's `resolve`; every think uses `askAs` with owner `garden` on the background lane.
+    that call) and stored as `started` before it runs. The model, its `agent` and its measured `abilities` are pinned
+    when a run first goes `running`, through the engine's `resolve`; a pinned run is checked again with `refusal`
+    (ADR-18). Every think uses `askAs` with owner `garden` on the background lane.
   - Each run's tabs share one `Run`: group `❀ <gardener>`, the cookie rule for the gardener's sites, a deadline from
     its minutes. With no normal window open, it opens one minimized window (listed in `liveGroups`), closed at the turn's end
     once only blank tabs are left in it.

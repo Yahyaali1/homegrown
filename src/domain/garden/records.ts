@@ -1,5 +1,6 @@
 // Gardener records (docs/plan/S-gardeners.md). Each is versioned; a parser returns null for an invalid record or a
 // newer `v`, and callers ignore such records (never delete them), so an older build leaves newer data alone.
+import type { Ability } from '../model.ts';
 
 export interface Gardener {
   v: 1;
@@ -43,7 +44,11 @@ export type When =
 export type Work =
   | { kind: 'read'; urls: string[] } // direct
   | { kind: 'mission'; goal: string } // direct
-  | { kind: 'ask'; request: string; tabs?: Mention[] }; // open: needs a model with `agent.loop`
+  | { kind: 'ask'; request: string; tabs?: Mention[] } // open: needs a model with `agent.loop`
+  | { kind: 'plan'; request: string; tabs?: Mention[] }; // a plan the person approves, then direct work: needs `plan`
+
+/** One call of a plan: a tool and its parsed args. */
+export interface PlannedCall { tool: string; args: Record<string, unknown> }
 
 /**
  * A tab the person named for `read_my_tab`: its URL when named. By hand it also keeps the tab's id, and the tab must
@@ -87,6 +92,10 @@ export interface GardenRun {
   model?: string;
   maxTokens?: number;
   agent?: { loop: boolean; maxSteps: number };
+  /** The pinned model's measured abilities. */
+  abilities?: Ability[];
+  /** The plan the person approved: call j is step j. */
+  plan?: PlannedCall[];
   status: Status;
   queuedAt: number;
   startedAt?: number;
@@ -107,7 +116,7 @@ export interface GardenRun {
 }
 
 export interface Turn {
-  purpose: 'choose' | 'repair' | 'check' | 'word';
+  purpose: 'choose' | 'repair' | 'check' | 'word' | 'plan' | 'sum';
   reply: string;
   at: number;
 }
@@ -129,7 +138,7 @@ export interface Step {
 
 export interface Request {
   id: string;
-  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen';
+  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen' | 'plan';
   step?: number;
   /** The exact call an answer applies to: its tool and `argsKey(args)`. */
   tool?: string;
@@ -146,6 +155,10 @@ export interface Request {
   expiresAt?: number;
   /** approve: yes, no or always (a grant; never for a sensitive one); did-it-happen and reach: yes or no. */
   answer?: { value: 'yes' | 'no' | 'always' | string; at: number };
+  /** plan: the calls the model proposed. */
+  calls?: PlannedCall[];
+  /** An approve made by a plan's yes: it counts only where policy asks and the call is not sensitive at call time. */
+  fromPlan?: true;
 }
 
 export const LIMITS = { sites: 20, urls: 5, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
@@ -228,11 +241,12 @@ export function parseWhen(raw: unknown): When | null {
 export function parseWork(raw: unknown): Work | null {
   if (!isObj(raw)) return null;
   if (raw.kind === 'mission') return str(raw.goal, 300) ? { kind: 'mission', goal: raw.goal } : null;
-  if (raw.kind === 'ask') {
+  if (raw.kind === 'ask' || raw.kind === 'plan') {
+    const kind = raw.kind;
     if (!str(raw.request, 1000)) return null;
-    if (raw.tabs === undefined) return { kind: 'ask', request: raw.request };
+    if (raw.tabs === undefined) return { kind, request: raw.request };
     const tabs = Array.isArray(raw.tabs) && raw.tabs.length <= LIMITS.tabs ? raw.tabs.map(parseMention) : [null];
-    return tabs.every((t) => t) ? { kind: 'ask', request: raw.request, tabs: tabs as Mention[] } : null;
+    return tabs.every((t) => t) ? { kind, request: raw.request, tabs: tabs as Mention[] } : null;
   }
   if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.urls)) return null;
   const urls = raw.urls.map((u) => (typeof u === 'string' ? bare(u) : null));
@@ -269,6 +283,8 @@ export function parseRun(raw: unknown): GardenRun | null {
   if (!STATUSES.includes(raw.status as Status) || !time(raw.queuedAt) || !time(raw.usedMs) || typeof raw.tainted !== 'boolean') return null;
   if (raw.maxTokens !== undefined && !int(raw.maxTokens, 1, 1e8)) return null;
   if (raw.agent !== undefined && !(isObj(raw.agent) && typeof raw.agent.loop === 'boolean' && int(raw.agent.maxSteps, 1, 100))) return null;
+  if (raw.abilities !== undefined && !(Array.isArray(raw.abilities) && raw.abilities.every((a) => typeof a === 'string'))) return null;
+  if (raw.plan !== undefined && !(Array.isArray(raw.plan) && raw.plan.every((c) => isObj(c) && typeof c.tool === 'string' && isObj(c.args)))) return null;
   const list = (x: unknown, ok: (o: Record<string, unknown>) => boolean) => Array.isArray(x) && x.every((o) => isObj(o) && ok(o));
   if (!list(raw.turns, (t) => typeof t.reply === 'string' && typeof t.purpose === 'string')) return null;
   if (!list(raw.steps, (s) => int(s.i, 0, 1e4) && typeof s.tool === 'string' && isObj(s.args) && typeof s.state === 'string')) return null;
@@ -280,7 +296,7 @@ export function parseRun(raw: unknown): GardenRun | null {
 /** The URLs the person gave: a read's pages, or absolute http(s) URLs written in a request (fragment removed, ≤ 20). */
 export function personUrls(w: Work): string[] {
   if (w.kind === 'read') return w.urls;
-  if (w.kind !== 'ask') return [];
+  if (w.kind !== 'ask' && w.kind !== 'plan') return [];
   const urls = [...w.request.matchAll(/https?:\/\/[^\s<>"'()\[\]]+/g)].map((m) => bare(m[0].replace(/[.,;:!?]+$/, ''))).filter((u): u is string => !!u);
   return [...new Set(urls)].slice(0, 20);
 }

@@ -4,10 +4,10 @@
 import { $, busyButton, button, emptyPot } from './shell.ts';
 import { h } from '../ui/dom.ts';
 import { flower, runStage } from '../ui/flower.ts';
-import { modelById } from '../domain/model.ts';
+import { can, modelById } from '../domain/model.ts';
 import { parseSettings } from '../domain/settings.ts';
 import { nextAfter } from '../domain/garden/schedule.ts';
-import { lookOf, randomLook, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
+import { lookOf, randomLook, type Gardener, type GardenRun, type Look, type Mention, type PlannedCall, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
 import type { Note } from '../domain/garden/notes.ts';
 import { hostOf } from '../domain/text.ts';
 import { SENSITIVE_WAIT, type Grant } from '../domain/garden/policy.ts';
@@ -38,7 +38,7 @@ const at = (ms: number) => new Date(ms).toLocaleString([], { weekday: 'short', d
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 const whenText = (w: When) => (w.kind === 'every' ? `every ${w.hours === 1 ? 'hour' : `${w.hours} hours`}` : w.kind === 'daily' ? `daily at ${w.at}` : `${w.days.map((d) => DAYS[d]).join(', ')} at ${w.at}`);
-const workText = (w: Work) => (w.kind === 'read' ? `reads ${w.urls.length === 1 ? w.urls[0] : `${w.urls.length} pages`}` : w.kind === 'mission' ? `mission: ${w.goal}` : `asks: ${w.request}`);
+const workText = (w: Work) => (w.kind === 'read' ? `reads ${w.urls.length === 1 ? w.urls[0] : `${w.urls.length} pages`}` : w.kind === 'mission' ? `mission: ${w.goal}` : `${w.kind === 'plan' ? 'plans' : 'asks'}: ${w.request}`);
 const nextText = (r: Listed) => (r.paused ? 'Paused' : `Next: ${at(r.next)}`);
 const select = (label: string, opts: [string, string][]) => h('select', { attrs: { 'aria-label': label } }, ...opts.map(([v, t]) => new Option(t, v)));
 const fail = (el: HTMLElement, e: unknown) => ((el.textContent = e instanceof Error ? e.message : String(e)), (el.hidden = false));
@@ -79,16 +79,18 @@ function setLook(li: Row, look: Look): void {
   li.firstElementChild?.replaceWith(flower(26, (li.stage ?? '') as Parameters<typeof flower>[1], look));
 }
 
-/** Open requests ("Ask") need a gardens model whose measured `agent.loop` is true, as the worker checks. */
-async function canAsk(): Promise<boolean> {
+/** Open requests ("Ask") need a gardens model whose measured `agent.loop` is true; "Plan first" needs `plan` (or the loop), as the worker checks. */
+type Can = { ask: boolean; plan: boolean };
+async function canDo(): Promise<Can> {
   const { taskModels } = parseSettings(await chrome.storage.sync.get('taskModels'));
   const name = taskModels.gardens || (await engineCall<{ loaded: { name: string } | null }>('status').catch(() => null))?.loaded?.name || '';
-  return !!modelById(name)?.agent?.loop;
+  const ask = !!modelById(name)?.agent?.loop;
+  return { ask, plan: ask || can(name, 'plan') };
 }
 
 export async function renderGarden(): Promise<void> {
   try {
-    const [g, r, list, ask] = await Promise.all([bg<Gardener[]>('gardenerList'), bg<Listed[]>('routineList'), bg<GardenRun[]>('runList'), canAsk()]);
+    const [g, r, list, ask] = await Promise.all([bg<Gardener[]>('gardenerList'), bg<Listed[]>('routineList'), bg<GardenRun[]>('runList'), canDo()]);
     [gardeners, routines] = [g, r];
     runs.clear();
     for (const run of list) runs.set(run.id, run);
@@ -104,7 +106,7 @@ export async function renderGarden(): Promise<void> {
 
 // ---- gardeners and their routines ----
 
-function gardenerItem(g: Gardener, ask: boolean): HTMLLIElement {
+function gardenerItem(g: Gardener, ask: Can): HTMLLIElement {
   const mine = routines.filter((r) => r.gardenerId === g.id);
   const err = errLine();
   let add = routineForms.get(g.id);
@@ -230,7 +232,7 @@ async function refreshNext(): Promise<void> {
   }
 }
 
-function routineForm(g: Gardener, ask: boolean): HTMLFormElement {
+function routineForm(g: Gardener, ask: Can): HTMLFormElement {
   const name = h('input', { placeholder: 'Name, e.g. Morning check', required: true, maxLength: 80, attrs: { 'aria-label': 'Routine name' } });
   const kind = select('When', [['every', 'Every few hours'], ['daily', 'Daily'], ['weekly', 'Weekly']]);
   const hours = h('input', { type: 'number', min: '1', max: '24', defaultValue: '6', attrs: { 'aria-label': 'Hours between runs' } });
@@ -238,8 +240,11 @@ function routineForm(g: Gardener, ask: boolean): HTMLFormElement {
   const days = DAYS.map((d, i) => h('input', { type: 'checkbox', value: String(i), defaultChecked: i === 1, attrs: { 'aria-label': d } }));
   const dayRow = h('div', { className: 'row' }, ...days.map((c, i) => h('label', { className: 'check' }, c, DAYS[i])));
   const nextLine = h('span', { className: 'muted small' });
-  // No Ask without a loop model: the worker refuses open work then (background/garden.ts, gardenRun).
-  const work = select('Work', [['read', 'Read these pages'], ['mission', 'Run a mission'], ...(ask ? [['ask', 'Ask']] as [string, string][] : [])]);
+  // No Ask without a loop model, and Plan first is off without a plan model: the worker refuses them (gardenRun).
+  const work = select('Work', [['read', 'Read these pages'], ['mission', 'Run a mission'], ...(ask.ask ? [['ask', 'Ask']] as [string, string][] : [])]);
+  const plan = new Option(ask.plan ? 'Plan first' : 'Plan first: needs a model measured for plans', 'plan');
+  plan.disabled = !ask.plan;
+  work.append(plan);
   const urls = h('textarea', { rows: 2, placeholder: `Pages, one URL per line, on ${g.name}’s sites`, attrs: { 'aria-label': 'Pages, one per line' } });
   const goal = h('textarea', { rows: 2, maxLength: 300, placeholder: 'Goal, e.g. Find this week’s cheapest flight to Lisbon', attrs: { 'aria-label': 'Goal' } });
   const request = h('textarea', { rows: 2, maxLength: 1000, placeholder: 'What should it do?', attrs: { 'aria-label': 'Request' } });
@@ -254,14 +259,14 @@ function routineForm(g: Gardener, ask: boolean): HTMLFormElement {
     dayRow.hidden = kind.value !== 'weekly';
     urls.hidden = work.value !== 'read';
     goal.hidden = work.value !== 'mission';
-    request.hidden = picker.el.hidden = askNow.hidden = work.value !== 'ask';
+    request.hidden = picker.el.hidden = askNow.hidden = work.value !== 'ask' && work.value !== 'plan';
     const w = when();
     const ok = w.kind === 'every' ? Number.isInteger(w.hours) && w.hours >= 1 && w.hours <= 24 : /^\d\d:\d\d$/.test(w.at) && (w.kind !== 'weekly' || w.days.length > 0);
     nextLine.textContent = ok ? `Next: ${at(nextAfter(w, tz, null, Date.now()))}` : '';
   };
   // Ask now: a run by hand, with the named tabs as they are now (the same tab, on the same page).
   const askNow = busyButton('Ask now', tryIt(err, async () => {
-    await bg('gardenRun', { gardenerId: g.id, work: { kind: 'ask', request: request.value.trim(), tabs: picker.picked() } });
+    await bg('gardenRun', { gardenerId: g.id, work: { kind: work.value, request: request.value.trim(), tabs: picker.picked() } });
     picker.clear();
   }), 'secondary');
   askNow.type = 'button';
@@ -271,7 +276,8 @@ function routineForm(g: Gardener, ask: boolean): HTMLFormElement {
     e.preventDefault();
     err.hidden = true;
     // A routine keeps the named tabs' URLs and finds a tab on each exactly, each run.
-    const w: Work = work.value === 'read' ? { kind: 'read', urls: lines(urls.value) } : work.value === 'mission' ? { kind: 'mission', goal: goal.value.trim() } : { kind: 'ask', request: request.value.trim(), tabs: picker.picked() };
+    const w: Work = work.value === 'read' ? { kind: 'read', urls: lines(urls.value) } : work.value === 'mission' ? { kind: 'mission', goal: goal.value.trim() }
+      : { kind: work.value === 'plan' ? 'plan' : 'ask', request: request.value.trim(), tabs: picker.picked() };
     try {
       await bg('routineSave', { routine: { gardenerId: g.id, name: name.value.trim(), when: when(), work: w } });
       form.reset();
@@ -368,7 +374,7 @@ function renderRuns(changed?: string): void {
 const nameOf = (run: GardenRun) => [gardeners.find((x) => x.id === run.gardenerId)?.name ?? 'A deleted gardener',
   run.routineId ? routines.find((x) => x.id === run.routineId)?.name ?? 'a deleted routine' : 'by hand'].join(' · ');
 
-const ANSWERED_HERE: Request['kind'][] = ['reach', 'question', 'approve', 'did-it-happen', 'takeover'];
+const ANSWERED_HERE: Request['kind'][] = ['reach', 'question', 'approve', 'did-it-happen', 'takeover', 'plan'];
 
 /** Requests: reach, approve and did-it-happen (yes / no, plus "always" for an approve that isn't sensitive), and question (a text answer). */
 function renderRequests(list: GardenRun[]): void {
@@ -395,7 +401,7 @@ function renderRequests(list: GardenRun[]): void {
 function requestRow(run: GardenRun, q: Request): Row {
   const err = errLine();
   const textId = `req-${run.id}-${q.id}`;
-  const answer = (value: string) => bg('requestAnswer', { runId: run.id, requestId: q.id, value })
+  const answer = (value: string, more: { calls?: PlannedCall[] } = {}) => bg('requestAnswer', { runId: run.id, requestId: q.id, value, ...more })
     .then(() => (value === 'always' ? loadGrants(run.gardenerId) : undefined)).catch((e) => fail(err, e));
   const described = <T extends HTMLElement>(el: T) => (el.setAttribute('aria-describedby', textId), el);
   const yesNo = (...more: HTMLElement[]) => {
@@ -442,6 +448,11 @@ function requestRow(run: GardenRun, q: Request): Row {
     always.setAttribute('aria-describedby', hint.id);
     lead.push(h('span', { className: 'p', textContent: `On ${q.host}` }));
     reply = h('div', { className: 'stack' }, yesNo(always).el, hint);
+  } else if (q.kind === 'plan') {
+    const plan = planList(q.calls ?? []);
+    lead.push(h('span', { className: 'p', textContent: 'Yes runs these steps in this order. The pages in it may open; acts that turn sensitive, and anything not in it, still ask.' }));
+    const yes = described(busyButton('Yes', tryIt(err, async () => answer('yes', { calls: plan.calls() })), 'primary'));
+    reply = h('div', { className: 'stack' }, plan.el, h('div', { className: 'row' }, yes, described(busyButton('No', () => answer('no'), 'secondary'))));
   } else if (q.kind === 'takeover') {
     // Handing back: a read the person interrupted runs again; an act asks whether it happened.
     const who = gardeners.find((x) => x.id === run.gardenerId)?.name ?? 'the gardener';
@@ -454,6 +465,28 @@ function requestRow(run: GardenRun, q: Request): Row {
     h('span', { className: 't' }, h('b', { textContent: nameOf(run) }), ...lead, h('span', { className: 'result', id: textId, textContent: q.text }), reply, err)));
   if (sync) li.sync = sync;
   return li;
+}
+
+/** A plan to edit before Yes: delete and reorder steps, change a step's arguments (JSON; the worker checks them again). */
+function planList(calls: PlannedCall[]): { el: HTMLOListElement; calls: () => PlannedCall[] } {
+  const el = h('ol', { className: 'stack' }, ...calls.map((c) => {
+    const what = `${c.tool} ${String(Object.values(c.args)[0] ?? '').slice(0, 80)}`;
+    const args = h('textarea', { rows: 2, value: JSON.stringify(c.args), attrs: { 'aria-label': `Arguments: ${what}` } });
+    const li: HTMLLIElement = h('li', { dataset: { tool: c.tool } }, h('b', { textContent: c.tool }), args,
+      h('div', { className: 'row' },
+        labelled(button('↑', () => li.previousElementSibling?.before(li), 'ghost'), `Move up: ${what}`),
+        labelled(button('↓', () => li.nextElementSibling?.after(li), 'ghost'), `Move down: ${what}`),
+        labelled(button('✕', () => li.remove(), 'ghost'), `Delete: ${what}`)));
+    return li;
+  }));
+  const read = (li: HTMLLIElement, j: number): PlannedCall => {
+    try {
+      return { tool: li.dataset.tool!, args: JSON.parse(li.querySelector('textarea')!.value) as Record<string, unknown> };
+    } catch {
+      throw new Error(`Step ${j + 1}’s arguments aren’t valid JSON.`);
+    }
+  };
+  return { el, calls: () => [...el.querySelectorAll<HTMLLIElement>(':scope > li')].map(read) };
 }
 
 /** Refills a run's row; its flower changes only with its stage. */

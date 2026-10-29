@@ -264,3 +264,28 @@ The strongest objections, answered:
 | Taint stops useful open work after the first signed-in read. | Only new destinations wait. The person's own URLs, approved URLs and links from the gardener's own pages still read without asking; anything else is one request away. In `garden-eval` those requests were expected and answered yes. |
 | **The cookie-storage gap remains.** | Yes. A site that keeps its sign-in in page storage (localStorage, IndexedDB) instead of cookies still reads as the person, because the header rule can't see it. Requests made by a site's service worker (tab id −1) also escape per-tab rules. Reading such a page on the gardener's sites taints the run anyway; off the sites it is the known gap. The README's Privacy and safety section says so; the Garden tab doesn't show this help yet (the plan asked for it). |
 | An approval could be replayed for a different call. | An answer binds to the step index, the tool and the `argsKey`, and is used once. A grant binds to the host too, and a recipe's to the whole recipe, so an edit needs a new yes. |
+
+### ADR-18 Measured abilities, pinned per run
+
+Some features work only when the model is good enough at one thing: writing a plan, taking meeting notes, keeping
+facts to the text. Gemma 4 E2B and E4B must keep working for everything else, and a stronger model must unlock more
+without new code. ([plan](plan/T-strawberry-parity.md), decision 1)
+
+| | |
+|---|---|
+| Option A | Gate each feature on the model's name or its context size. |
+| Option B | `ModelSpec.abilities?: Ability[]` in `domain/model.ts` (`plan`, `notes`, `facts`, `skillEdit`, `evidence`, `deck`, `cite`, `workflow:<preset>/<id>`), beside the measured `agent`. Each ability has one suite in `bench/abilities.mjs` and one pass rule. The owner copies a pass into `model.ts` by hand. `can(model, ability)` reads it for the UI; no entry means "cannot". |
+| Against B | Every ability needs a suite and a run on each model before anyone can use it. |
+| Against A | A name says nothing about quality, and a context size is not a skill (ADR-15). A new model would need code changes in every feature. |
+| Decision | **B.** `pin()` stores `run.abilities` beside `agent` when a run first goes `running`, so a run keeps what it was started with across restarts. The worker's `pin()` and the loop's `next()` both check the pin (`refusal`): a `plan` run whose pin lacks `plan` (and whose `agent.loop` is false) fails with "This model can't write plans yet.", also when a routine claimed it. `gardenRun` gives the same words early from `can()`. A feature that needs an ability is shown off in words and keeps its model-free part. |
+
+**Plan first** is the first ability. The model writes the whole plan once (`plan` think: a JSON array of at most
+`maxSteps` calls, parsed with `parsePlan`, one `repair`); the person sees it as an editable card, and on Yes the run
+works it as direct work, then one `sum` think. A yes covers only this: planned `read_page` URLs join `seen` as
+`approved`, and each planned `act` or acting `collect` that is not sensitive at that moment gets a `fromPlan` yes bound
+to its step, tool and `argsKey`. At call time `decide` still runs first; the yes counts only where `decide` says `ask`
+and the approval is not sensitive now (taint since the plan, or `classify` on the live element, asks again with the 8 s
+rule). Edited calls are parsed again, and a yes binds to the edited key.
+
+**Outcome:** `bench/abilities.mjs plan`: E2B 3/8 with 1 violation, E4B 5/8 with 1 violation (pass: 6/8 and none).
+Neither has `plan`, so Plan first is off in the Garden tab; tests and benches plant runs already pinned with it.
