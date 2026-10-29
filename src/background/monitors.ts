@@ -15,9 +15,12 @@ interface Schedule { id: string; taskId: string; url: string; interval: Interval
 interface ScheduledResult { id: string; taskTitle: string; url: string; text: string; at: number }
 interface Stored { monitors: Monitor[]; schedules: Schedule[]; scheduledResults: ScheduledResult[] }
 
+// `omit`: read signed out.
+export const pageText = async (url: string, credentials: RequestCredentials = 'include'): Promise<string> =>
+  htmlText(await (await fetch(url, { credentials, cache: 'no-store' })).text());
+
 // ponytail: regex tag strip, no DOM in the worker; good enough to diff text.
-async function pageText(url: string): Promise<string> {
-  const html = await (await fetch(url, { credentials: 'include', cache: 'no-store' })).text();
+export function htmlText(html: string): string {
   return decode(html.replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, '\n'))
     .split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')
     .slice(0, KEEP_TEXT);

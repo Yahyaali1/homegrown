@@ -128,12 +128,11 @@ test('recover re-runs a started read and turns a started act into "did it happen
   assert.ok('record' in n && n.record.state === 'done', 'a notification is never shown twice');
 });
 
-test('a request expires at the routine\'s next run, or after a day when that is already past or paused', () => {
+test('a request expires a day after it is made, in a routine run too', () => {
   const choose = { turns: [turn('choose', '{"tool":"read_page","args":{"url":"https://evil.com/"}}')] };
   const routine = { v: 1 as const, id: 'r1', gardenerId: 'g1', name: 'x', when: { kind: 'every' as const, hours: 1 }, tz: 'UTC', work: ask, paused: false, nextDue: 5000, createdAt: 0 };
   const exp = (over: Partial<typeof routine>) => { const a = next(run(ask, choose), { ...ctx, routine: { ...routine, ...over } }); return 'request' in a ? a.request.expiresAt : null; };
-  assert.equal(exp({}), 5000);
-  assert.equal(exp({ nextDue: 500 }), 1000 + 24 * 3_600_000, 'Run now on an overdue routine');
+  assert.equal(exp({}), 1000 + 24 * 3_600_000);
   assert.equal(exp({ paused: true }), 1000 + 24 * 3_600_000);
 });
 

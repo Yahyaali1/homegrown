@@ -7,10 +7,10 @@ import { h } from '../ui/dom.ts';
 import { flower, runStage } from '../ui/flower.ts';
 import { can, modelById } from '../domain/model.ts';
 import { parseSettings } from '../domain/settings.ts';
-import { nextAfter } from '../domain/garden/schedule.ts';
+import { nextRuns } from '../domain/garden/schedule.ts';
 import { retryStep } from '../domain/garden/loop.ts';
 import { reportOf } from '../domain/garden/report.ts';
-import { helping, historyGroup, lookOf, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
+import { helping, historyGroup, lookOf, parseWhen, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
 import type { Note } from '../domain/garden/notes.ts';
 import { hostOf } from '../domain/text.ts';
 import type { Grant } from '../domain/garden/policy.ts';
@@ -41,9 +41,24 @@ const STATUS: Record<Status, string> = { queued: 'Waiting its turn', running: 'W
 const at = (ms: number) => new Date(ms).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-const whenText = (w: When) => (w.kind === 'every' ? `every ${w.hours === 1 ? 'hour' : `${w.hours} hours`}` : w.kind === 'daily' ? `daily at ${w.at}` : `${w.days.map((d) => DAYS[d]).join(', ')} at ${w.at}`);
+const WEEKS: [string, string][] = [['1', 'First'], ['2', 'Second'], ['3', 'Third'], ['4', 'Fourth'], ['-1', 'Last']];
+function whenText(w: When): string {
+  if (w.kind === 'every') return `every ${w.hours === 1 ? 'hour' : `${w.hours} hours`}`;
+  if (w.kind === 'daily') return `daily at ${w.at}`;
+  if (w.kind === 'weekly') return `${w.days.map((d) => DAYS[d]).join(', ')} at ${w.at}`;
+  if (w.kind === 'monthly') {
+    const on = 'date' in w.on ? `day ${w.on.date}` : `the ${WEEKS.find(([v]) => Number(v) === (w.on as { week: number }).week)![1].toLowerCase()} ${DAYS[w.on.day]}`;
+    return `monthly on ${on} at ${w.at}`;
+  }
+  if (w.kind === 'once') return `once on ${w.date} at ${w.at}${w.deadline ? `, deadline ${w.deadline} min` : ''}`;
+  return `when ${w.url} changes (checked every ${w.every} min)${w.onlyIf ? ` and mentions ${w.onlyIf.join(', ')}` : ''}`;
+}
 const workText = (w: Work) => (w.kind === 'read' ? `reads ${w.urls.length === 1 ? w.urls[0] : `${w.urls.length} pages`}` : w.kind === 'mission' ? `mission: ${w.goal}` : `${w.kind === 'plan' ? 'plans' : 'asks'}: ${w.request}`);
-const nextText = (r: Listed) => (r.paused ? 'Paused' : `Next: ${at(r.next)}`);
+const working = (s: Status) => s === 'queued' || s === 'running' || s === 'waiting';
+/** A one-off that fired: Done once no run of it (helpers too) still works. */
+const nextText = (r: Listed) => (r.when.kind === 'once' && r.paused && r.next <= Date.now()
+  ? (r.missed ? 'Missed: its deadline passed' : [...runs.values()].some((x) => x.routineId === r.id && working(x.status)) ? 'Working…' : 'Done')
+  : r.paused ? 'Paused' : `${r.when.kind === 'event' ? 'Next check' : 'Next'}: ${at(r.next)}`);
 const select = (label: string, opts: [string, string][]) => h('select', { attrs: { 'aria-label': label } }, ...opts.map(([v, t]) => new Option(t, v)));
 
 const loadError = errLine(); // a failed load
@@ -207,6 +222,7 @@ function routineItem(r: Listed): HTMLLIElement {
   const err = errLine();
   // A routine the gardener (or a preset) proposed stays off until the person turns it on here.
   const proposed = r.paused && r.by !== undefined && r.by !== 'person';
+  const fired = r.when.kind === 'once' && r.paused && r.next <= Date.now(); // nothing to resume
   const next = h('span', { className: 'result', textContent: proposed ? `Proposed by ${gardeners.find((x) => x.id === r.gardenerId)?.name ?? 'a gardener'}. Turn on?` : nextText(r) });
   nextLines.set(r.id, next);
   return h('li', {},
@@ -214,7 +230,7 @@ function routineItem(r: Listed): HTMLLIElement {
       // Proposed: every page it would read, before the person turns it on (the goal and request are in full above).
       proposed && r.work.kind === 'read' && h('span', { className: 'result', textContent: r.work.urls.join('\n') }), next),
     h('div', { className: 'actions' },
-      labelled(busyButton(proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause', tryIt(err, async () => (await bg('routineSave', { routine: { ...r, paused: !r.paused } }), await renderGarden())), 'ghost'), `${proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause'} ${r.name}`),
+      !fired && labelled(busyButton(proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause', tryIt(err, async () => (await bg('routineSave', { routine: { ...r, paused: !r.paused } }), await renderGarden())), 'ghost'), `${proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause'} ${r.name}`),
       labelled(busyButton('Run now', tryIt(err, () => bg('gardenRun', { routineId: r.id })), 'secondary'), `Run ${r.name} now`),
       labelled(busyButton('Delete', tryIt(err, async () => (await bg('routineDelete', { id: r.id }), await renderGarden())), 'ghost'), `Delete ${r.name}`)),
     err);
@@ -225,18 +241,30 @@ async function refreshNext(): Promise<void> {
   routines = await bg<Listed[]>('routineList').catch(() => routines);
   for (const r of routines) {
     const el = nextLines.get(r.id);
-    if (el && !r.paused) el.textContent = nextText(r);
+    if (el && !(r.paused && r.by !== undefined && r.by !== 'person')) el.textContent = nextText(r);
   }
 }
 
 function routineForm(g: Gardener, ask: Can): HTMLFormElement {
   const name = h('input', { placeholder: 'Name, e.g. Morning check', required: true, maxLength: 80, attrs: { 'aria-label': 'Routine name' } });
-  const kind = select('When', [['every', 'Every few hours'], ['daily', 'Daily'], ['weekly', 'Weekly']]);
+  const kind = select('When', [['every', 'Every few hours'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['once', 'Once'], ['event', 'When a page changes']]);
   const hours = h('input', { type: 'number', min: '1', max: '24', defaultValue: '6', attrs: { 'aria-label': 'Hours between runs' } });
   const time = h('input', { type: 'time', defaultValue: '08:00', attrs: { 'aria-label': 'Time' } });
   const days = DAYS.map((d, i) => h('input', { type: 'checkbox', value: String(i), defaultChecked: i === 1, attrs: { 'aria-label': d } }));
   const dayRow = h('div', { className: 'row' }, ...days.map((c, i) => h('label', { className: 'check' }, c, DAYS[i])));
-  const nextLine = h('span', { className: 'muted small' });
+  const week = select('Which week', [...WEEKS, ['date', 'Date']]);
+  const weekday = select('Day of the week', DAYS.map((d, i) => [String(i), d] as [string, string]));
+  weekday.options[1]!.defaultSelected = true;
+  const date = h('input', { type: 'number', min: '1', max: '31', defaultValue: '1', attrs: { 'aria-label': 'Day of the month' } });
+  const monthRow = h('div', { className: 'row' }, week, weekday, date);
+  const day = h('input', { type: 'date', attrs: { 'aria-label': 'Date' } });
+  const deadline = h('input', { type: 'number', min: '5', max: '10080', placeholder: 'Deadline, minutes (optional)', attrs: { 'aria-label': 'Deadline in minutes' } });
+  const onceRow = h('div', { className: 'row' }, day, deadline);
+  const page = h('input', { type: 'url', placeholder: 'Page to watch, https://…', attrs: { 'aria-label': 'Page to watch' } });
+  const every = h('input', { type: 'number', min: '15', max: '1440', defaultValue: '60', attrs: { 'aria-label': 'Minutes between checks' } });
+  const onlyIf = h('input', { placeholder: 'Only if a new line has one of these words (optional)', attrs: { 'aria-label': 'Only if' } });
+  const eventRow = h('div', { className: 'stack' }, page, h('div', { className: 'row' }, every, onlyIf));
+  const nextLine = h('ol', { className: 'muted small', attrs: { 'aria-label': 'Next runs' } });
   // No Ask without a loop model, and Plan first is off without a plan model: the worker refuses them (gardenRun).
   const work = select('Work', [['read', 'Read these pages'], ['mission', 'Run a mission'], ...(ask.ask ? [['ask', 'Ask']] as [string, string][] : [])]);
   const plan = new Option(ask.plan ? 'Plan first' : 'Plan first: needs a model measured for plans', 'plan');
@@ -248,18 +276,30 @@ function routineForm(g: Gardener, ask: Can): HTMLFormElement {
   const picker = mentionPicker();
   const err = errLine();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const when = (): When => (kind.value === 'every' ? { kind: 'every', hours: Number(hours.value) } : kind.value === 'daily' ? { kind: 'daily', at: time.value }
-    : { kind: 'weekly', days: days.filter((c) => c.checked).map((c) => Number(c.value)), at: time.value });
+  const words = () => [...new Set(onlyIf.value.split(/[\s,]+/).filter(Boolean))];
+  // Raw from the form; parseWhen says whether it is valid (the worker checks it again).
+  const when = (): unknown => ({
+    every: { kind: 'every', hours: Number(hours.value) },
+    daily: { kind: 'daily', at: time.value },
+    weekly: { kind: 'weekly', days: days.filter((c) => c.checked).map((c) => Number(c.value)), at: time.value },
+    monthly: { kind: 'monthly', on: week.value === 'date' ? { date: Number(date.value) } : { week: Number(week.value), day: Number(weekday.value) }, at: time.value },
+    once: { kind: 'once', date: day.value, at: time.value, ...(deadline.value && { deadline: Number(deadline.value) }) },
+    event: { kind: 'event', url: page.value.trim(), every: Number(every.value), ...(words().length && { onlyIf: words() }) },
+  })[kind.value];
   const update = () => {
     hours.hidden = kind.value !== 'every';
-    time.hidden = kind.value === 'every';
+    time.hidden = kind.value === 'every' || kind.value === 'event';
     dayRow.hidden = kind.value !== 'weekly';
+    monthRow.hidden = kind.value !== 'monthly';
+    weekday.hidden = week.value === 'date';
+    date.hidden = week.value !== 'date';
+    onceRow.hidden = kind.value !== 'once';
+    eventRow.hidden = kind.value !== 'event';
     urls.hidden = work.value !== 'read';
     goal.hidden = work.value !== 'mission';
     request.hidden = picker.el.hidden = askNow.hidden = work.value !== 'ask' && work.value !== 'plan';
-    const w = when();
-    const ok = w.kind === 'every' ? Number.isInteger(w.hours) && w.hours >= 1 && w.hours <= 24 : /^\d\d:\d\d$/.test(w.at) && (w.kind !== 'weekly' || w.days.length > 0);
-    nextLine.textContent = ok ? `Next: ${at(nextAfter(w, tz, null, Date.now()))}` : '';
+    const w = parseWhen(when());
+    nextLine.replaceChildren(...(w ? nextRuns(w, tz, Date.now()) : []).map((t) => h('li', { textContent: at(t) })));
   };
   // Ask now: a run by hand, with the named tabs as they are now (the same tab, on the same page).
   const askNow = busyButton('Ask now', tryIt(err, async () => {
@@ -267,7 +307,7 @@ function routineForm(g: Gardener, ask: Can): HTMLFormElement {
     picker.clear();
   }), 'secondary');
   askNow.type = 'button';
-  const form = h('form', { className: 'stack', oninput: update }, name, h('div', { className: 'row' }, kind, hours, time), dayRow, nextLine, work, urls, goal, request, picker.el, err,
+  const form = h('form', { className: 'stack', oninput: update }, name, h('div', { className: 'row' }, kind, hours, time), dayRow, monthRow, onceRow, eventRow, nextLine, work, urls, goal, request, picker.el, err,
     h('div', { className: 'row' }, h('button', { className: 'primary', textContent: 'Add routine' }), askNow));
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -580,7 +620,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   const isNew = !runs.has(run.id);
   runs.set(run.id, run);
   renderRuns(run.id);
-  if (isNew && run.routineId) void refreshNext();
+  if (run.routineId && (isNew || !working(run.status))) void refreshNext();
   // A note it took shows in its notebook once the step is done.
   if (run.steps.at(-1)?.tool === 'note' && run.steps.at(-1)?.state === 'done') void loadNotes(run.gardenerId);
   // A routine it proposed shows under it, off.

@@ -66,18 +66,23 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`), `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (`questions?`,
+  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (`questions?`,
     `editedFrom?`, `noEdit?`, `answer.args?`), `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
     `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
     `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`, `historyGroup` (Needs you, Unread: ended after `seenAt`,
     routine, by hand). Every record has `v: 1`; a parser returns `null` for
     a bad record or a newer `v`. A site is a bare host and matches its subdomains; a single label or a shared-hosting
     suffix is refused. A look never has 10 petals (the Homegrown mark's).
-  - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `localInstant`, `claim(routine, runs, now)`, `expired`,
+  - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `nextRuns(when, tz, from, n = 5)` (the form's preview),
+    `localInstant`, `claim(routine, runs, now, trigger?)`, `eventCheck`, `expired`, `overdue`, `DEADLINE`,
     `proposedRoutine` (paused, `by: 'model'`, so `claim` never runs it until the person turns it on).
-    Daily and weekly times walk local dates: a time that doesn't exist moves forward by the gap, an ambiguous one is
-    its first instant. `claim` moves `nextDue` on, fails a waiting run, and queues a new run or (while one works)
-    keeps the slot on `skipped` (last 5). A parent waiting on helpers (`helping`, records.ts) counts as working: its
+    Daily, weekly, monthly and one-off times walk local dates: a time that doesn't exist moves forward by the gap, an
+    ambiguous one is its first instant. A monthly date past the month's end is its last day. `event` checks every N
+    minutes. `claim` moves `nextDue` on and queues a new run or (while one works) keeps the slot on `skipped` (last
+    5). A waiting run doesn't block it; it fails only when its request expires (24 h). An event routine gets a run
+    only with the `trigger` its check found (`eventCheck`: signed in only on the gardener's sites; fires on added
+    lines, with `onlyIf` on one holding a word; code only). A one-off pauses when due ("Done"); its run carries
+    `deadline` (slot + minutes) and fails "Deadline passed." after it, and a slot missed by more makes no run (`missed`). A parent waiting on helpers (`helping`, records.ts) counts as working: its
     slot is skipped, never failed. `nextBatch(runs, now)`: the queue's next pick, one run or up to `HELPERS` (3) queued
     helpers of the oldest parent; a run with `retryAt` in the future waits.
   - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,

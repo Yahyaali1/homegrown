@@ -114,6 +114,10 @@ It also owns these parts:
     Helpers share one minimized window when no normal window is open.
   - Auto-retry: a read or search that timed out keeps its step `started` (`tries` + 1) and goes back to `queued` with
     `retryAt` 30 s on; the queue skips it until then and wakes by timer and the `garden:wake` alarm, so the wait holds no slot.
+  - Triggers: before an event routine's claim, `fire` fetches its page (`pageText`, monitors.ts; `omit` credentials off
+    the gardener's sites) and diffs it against its snapshot, outside the claim's transaction; none while a run of it
+    still works. A one-off's run past its `deadline` fails in the queue (also woken by `garden:wake`), and a missed
+    one-off notifies. `garden:wake` only wakes the queue; it is never a routine id.
   - The worker does each `next()` action (domain/garden/loop.ts) and
     persists the run after each; a tool call is checked with `decide` first (unless the person said yes to exactly
     that call) and stored as `started` before it runs. The model, its `agent` and its measured `abilities` are pinned
@@ -225,7 +229,7 @@ It also owns these parts:
   - `main.ts`: 6000 characters of page text in the follow-up history.
   - `tabs.ts`: 9000 characters shared across all tabs.
   - `web.ts`: 12000 characters of page text for each research source.
-  - `monitors.ts`: `KEEP_TEXT` 20000 characters for each monitor. `scheduledResults` keeps 50.
+  - `monitors.ts`: `KEEP_TEXT` 20000 characters for each monitor and event check (`pageText(url, credentials)`). `scheduledResults` keeps 50.
   - `memory.ts`: `HISTORY_CAP` 2000, `SNAPSHOT_CAP` 300, `SNAPSHOT_CHARS` 50000, `SIMILAR` 0.6. Embed text is
     cut to 1500 characters and a kb summary to 800.
   - `missions.ts`: the mission log keeps the last 150 lines. `priceBook` keeps the newest 300 products and
@@ -275,7 +279,8 @@ It also owns these parts:
   - `session`: the pending side-panel request (`pending`), `notifUrls`, `liveMissions`, `liveGroups`
     (`Record<groupId, { runId, windowId? }>`: tab groups of live runs, closed at worker start).
 - IndexedDB `hg-garden` v1: `gardeners`, `routines`, `runs` (indexes `gardenerId`, `routineId`, `status`; the newest
-  30 per gardener kept), `snapshots` (`<routineId>\n<url>` → `{ text, prev, runId }`).
+  30 per gardener kept), `snapshots` (`<routineId>\n<url>` → `{ text, prev, runId }`; an event routine's page check
+  `<routineId>\nevent <url>` → `{ text }`).
 - IndexedDB `hg-trust` v1 (store `confirmed`: the steps the user confirmed for each scheduled mission).
 - IndexedDB `eg-memory` v3 (`upgradeMemory` in domain/garden/notes.ts), with the stores `history`, `highlights`,
   `kb`, `snapshots` and `notes` (the gardeners' notebook: `{ v: 1, id, gardenerId?, text, by, at, vec? }`, at most

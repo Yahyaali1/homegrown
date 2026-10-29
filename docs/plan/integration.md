@@ -26,6 +26,8 @@ Done after the group agents report. Owner: the main session.
   step and created-card rows, and the run view's buttons. DONE.
 - T3b (plan T): `docs/architecture.md` ADR-15 gains the helpers amendment (`live` as a map, up to 3 helper runs, the
   auto-retry wait out of the call). DONE.
+- T4 (plan T): no shared file changed. `background/monitors.ts` exports `pageText(url, credentials = 'include')`
+  for the gardener event check. DONE.
 
 ## Known issues
 

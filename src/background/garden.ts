@@ -4,7 +4,8 @@
 import { askAs, engine, modelFor } from './engine.ts';
 import { closeIfEmpty, closeLiveGroups, endRun, joinGroup, markKept, markWindow, TabClosed, type Run } from './missions.ts';
 import { cookieRule, isExtensionPage } from './pagerequest.ts';
-import { factsOf, GARDEN_TOOLS, MODEL_CHANGED, NeedsYou, type ToolCtx } from './gardentools.ts';
+import { factsOf, GARDEN_TOOLS, gardenNotice, MODEL_CHANGED, NeedsYou, type ToolCtx } from './gardentools.ts';
+import { htmlText } from './monitors.ts';
 import { recipesList } from './scrape.ts';
 import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.ts';
 import * as idb from './idb.ts';
@@ -12,17 +13,17 @@ import * as trust from './trust.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
 import { answeredBy, answerFor, answerPlan, answerRefused, approveRequest, AUTO_RETRY_MS, autoRetry, digest, earlierOf, followUpRun, helpersOf, mergeHelpers, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, queuedFollowUp, recover, refusal, resumeAll, retryStep, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
 import { actOf, addSeen, approveAllOk, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
-import { claim, expired, nextAfter, nextBatch } from '../domain/garden/schedule.ts';
+import { checkFetch, claim, DEADLINE, eventCheck, expired, nextAfter, nextBatch, overdue } from '../domain/garden/schedule.ts';
 import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
-import { helping, mayStart, newRun, pruneIds, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Work } from '../domain/garden/records.ts';
+import { helping, mayStart, newRun, pruneIds, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
 const ALARM = 'garden:';
+const WAKE = `${ALARM}wake`;
 const KEEP_RUNS = 30;
-const NEEDED_YOU = 'Needed you; the next run starts now.';
-const neededYou = (r: GardenRun) => (r.parentId ? 'Needed you for too long.' : NEEDED_YOU);
+const NEEDED_YOU = 'Needed you for too long.';
 const DAY = 24 * 3_600_000;
 
 const db = idb.open('hg-garden', 1, (d, old) => {
@@ -69,15 +70,40 @@ async function prune(gardenerId: string): Promise<void> {
 
 const arm = (r: Routine) => (r.paused ? chrome.alarms.clear(ALARM + r.id) : chrome.alarms.create(ALARM + r.id, { when: r.nextDue }));
 
+interface PageSnapshot { text: string }
+
+/**
+ * A due event routine's check, before the claim (a fetch can't happen inside its transaction): the page against its
+ * snapshot. None while a run of it still works, so the change waits for the next check. A failed fetch writes nothing.
+ * `save` writes the new snapshot: the caller does it unless a change it found made no run (it would be lost).
+ */
+async function eventFor(r: Routine): Promise<{ trigger?: Trigger; save: () => Promise<unknown> } | undefined> {
+  if (r.when.kind !== 'event' || r.paused || r.nextDue > Date.now()) return;
+  const d = await db;
+  const g = parseGardener(await idb.get(d, 'gardeners', r.gardenerId));
+  const mine = parsed(await idb.all(d, 'runs', 'routineId', r.id), parseRun);
+  if (!g || mine.some((x) => x.status === 'queued' || x.status === 'running' || helping(x))) return;
+  // Its own key: a read of the same page keeps its snapshot of the page as read in a tab.
+  const key = `${r.id}\nevent ${r.when.url}`;
+  const c = await eventCheck(r.when, g.sites, (await idb.get<PageSnapshot>(d, 'snapshots', key))?.text, (u, cr) => checkFetch(u, cr).then(htmlText));
+  return { ...(c.trigger && { trigger: c.trigger }), save: () => idb.put(d, 'snapshots', { text: c.text } satisfies PageSnapshot, key) };
+}
+
 /** The alarm fired (or the worker started): claim in one transaction, then re-arm, also when nothing was due. */
 async function fire(routineId: string): Promise<void> {
+  const before = parseRoutine(await idb.get(await db, 'routines', routineId));
+  const check = before ? await eventFor(before).catch((e) => void console.warn('garden event check failed', e)) : undefined;
   const changed: GardenRun[] = [];
+  let missed = false, made = false;
   const routine = await idb.tx(await db, ['routines', 'runs'], 'readwrite', async (t) => {
     const r = parseRoutine(await idb.req(t.objectStore('routines').get(routineId)));
     if (!r) return null;
     const runs = parsed(await idb.req(t.objectStore('runs').index('routineId').getAll(routineId)), parseRun);
-    const c = claim(r, runs, Date.now());
-    for (const id of c.fail) { const x = runs.find((y) => y.id === id)!; changed.push(...followQueued(end(x, 'failed', neededYou(x)))); }
+    // The check counts only for the slot it was made for: another claim may have taken that one meanwhile.
+    const c = claim(r, runs, Date.now(), r.nextDue === before?.nextDue ? check?.trigger : undefined);
+    missed = !!c.missed;
+    made = !!c.newRun;
+    for (const id of c.fail) { const x = runs.find((y) => y.id === id)!; changed.push(...followQueued(end(x, 'failed', NEEDED_YOU))); }
     if (c.newRun) changed.push(c.newRun);
     // A slot's run id is fixed (`routine@due`): never overwrite a run that already has it.
     if (c.newRun && (await idb.req(t.objectStore('runs').getKey(c.newRun.id))) !== undefined) changed.pop();
@@ -86,7 +112,9 @@ async function fire(routineId: string): Promise<void> {
     return c.routine;
   });
   changed.forEach(broadcast);
+  if (check && (!check.trigger || made)) await check.save();
   if (routine) await arm(routine);
+  if (routine && missed) gardenNotice((await gardeners()).find((g) => g.id === routine.gardenerId)?.name ?? 'Homegrown', `${routine.name} didn’t run: its deadline passed.`);
 }
 
 // ---- the queue: one run at a time, oldest first; a read's helpers up to 3 at once ----
@@ -136,8 +164,9 @@ let waking: ReturnType<typeof setTimeout> | undefined;
 async function nextQueued(): Promise<GardenRun[]> {
   const now = Date.now();
   let runs = await allRuns();
-  for (const r of runs.filter((x) => expired(x, now))) {
-    for (const x of followQueued(end(r, 'failed', neededYou(r)))) {
+  // A one-off's run past its deadline (a running one fails in next()), or a request that expired.
+  for (const r of runs.filter((x) => expired(x, now) || (overdue(x, now) && !live.has(x.id)))) {
+    for (const x of followQueued(end(r, 'failed', overdue(r, now) ? DEADLINE : NEEDED_YOU))) {
       await saveRun(x);
       if (x !== r) runs.push(x);
     }
@@ -149,12 +178,14 @@ async function nextQueued(): Promise<GardenRun[]> {
     if (kids.every((k) => k.status === 'done' || k.status === 'failed' || k.status === 'stopped')) merged = !!(await updateRun(p.id, (r) => void mergeHelpers(r, kids, now)).catch(() => null)) || merged;
   }
   if (merged) runs = await allRuns();
-  // A read waiting out its auto-retry: the queue wakes for it (a timer, and an alarm in case the worker sleeps).
-  const due = Math.min(...runs.filter((r) => r.status === 'queued' && r.retryAt! > now).map((r) => r.retryAt!));
+  // A read waiting out its auto-retry, or a one-off's deadline: the queue wakes for it (a timer, and an alarm in case
+  // the worker sleeps).
+  const due = Math.min(...runs.filter((r) => r.status === 'queued' && r.retryAt! > now).map((r) => r.retryAt!),
+    ...runs.filter((r) => r.deadline! > now && (r.status === 'queued' || r.status === 'waiting')).map((r) => r.deadline!));
   if (Number.isFinite(due)) {
     clearTimeout(waking);
     waking = setTimeout(drain, due - now);
-    void chrome.alarms.create(`${ALARM}wake`, { when: due });
+    void chrome.alarms.create(WAKE, { when: due });
   }
   return nextBatch(runs, now);
 }
@@ -233,7 +264,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
   const before = run.followUp ? await getRun(run.followUp) : null;
   const earlier = before ? earlierOf(before) : '';
   const budget = gardener.minutes * 60_000;
-  Object.assign(tab, { title: `❀ ${gardener.name}`, prepare: (t: number) => cookieRule(t, gardener.sites), deadline: Date.now() + budget - run.usedMs });
+  Object.assign(tab, { title: `❀ ${gardener.name}`, prepare: (t: number) => cookieRule(t, gardener.sites), deadline: Math.min(Date.now() + budget - run.usedMs, run.deadline ?? Infinity) });
   try {
     // No normal window open: one minimized window for the run's tabs, closed when its turn ends.
     if (win === undefined && !(await chrome.windows.getAll({ windowTypes: ['normal'] })).length) {
@@ -255,7 +286,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
           if (stop.signal.aborted) return;
         }
         const t0 = Date.now();
-        const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(Math.max(1, budget - run.usedMs))]);
+        const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(Math.max(1, Math.min(budget - run.usedMs, (run.deadline ?? Infinity) - Date.now())))]);
         let r: { text: string; model: string } | null = null;
         let error = '';
         try {
@@ -514,7 +545,9 @@ export const handlers = {
       const now = Date.now();
       const r = parseRoutine({ v: 1, paused: false, ...old, ...routine, id: routine.id || crypto.randomUUID(), tz, work, createdAt: old?.createdAt ?? now, nextDue: now });
       if (!r) throw new Error('This routine isn’t valid: it needs a name, a time and a time zone.');
-      r.nextDue = nextAfter(r.when, r.tz, null, now);
+      // An event routine's first check is now: it only sets the snapshot later checks compare with.
+      r.nextDue = r.when.kind === 'event' ? now : nextAfter(r.when, r.tz, null, now);
+      if (r.when.kind === 'once' && !r.paused && r.nextDue <= now) throw new Error('That time has passed.');
       t.objectStore('routines').put(r);
       return r;
     });
@@ -820,10 +853,18 @@ export function init(): void {
     const back = recover(runs, now);
     for (const [k, r] of back.entries()) if (r !== runs[k]) for (const x of r.status === 'failed' ? followQueued(r) : [r]) await idb.put(await db, 'runs', x);
     await closeLiveGroups();
-    for (const r of await routines()) await fire(r.id).catch((e) => console.warn('garden claim failed', e));
+    // Time routines are claimed before the queue starts; event checks fetch pages, so they don't hold it up.
+    for (const r of await routines()) {
+      if (r.when.kind === 'event') void fire(r.id).then(drain, (e) => console.warn('garden claim failed', e));
+      else await fire(r.id).catch((e) => console.warn('garden claim failed', e));
+    }
   })().catch((e) => console.warn('garden start failed', e));
   drain();
-  chrome.alarms.onAlarm.addListener((a) => a.name.startsWith(ALARM) && void gardenFire(a.name.slice(ALARM.length)).catch((e) => console.warn('garden alarm failed', e)));
+  // `garden:wake` only wakes the queue; every other `garden:<id>` is a routine's.
+  chrome.alarms.onAlarm.addListener((a) => {
+    if (a.name === WAKE) drain();
+    else if (a.name.startsWith(ALARM)) void gardenFire(a.name.slice(ALARM.length)).catch((e) => console.warn('garden alarm failed', e));
+  });
   chrome.tabs.onUpdated.addListener((tabId, info, t) => void (info.status === 'loading' && lock(tabId, t)));
   chrome.notifications.onClicked.addListener((id) => {
     if (!id.startsWith('garden:')) return;

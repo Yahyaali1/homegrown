@@ -5,7 +5,7 @@ import type { Sampling } from '../model.ts';
 import { contextChars, defang, parseJsonObject } from '../text.ts';
 import { jsonArray } from '../html.ts';
 import { actOf, addSeen, argsKey, callKey, decide, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
-import { expired } from './schedule.ts';
+import { DEADLINE, expired } from './schedule.ts';
 import { LIMITS, newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
 import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
@@ -96,6 +96,7 @@ export function next(run: GardenRun, ctx: Ctx): Action {
   if (!run.maxTokens || !run.agent) return { fail: 'No model was pinned for this run.' };
   const refused = refusal(run);
   if (refused) return { fail: refused };
+  if (run.deadline !== undefined && run.deadline <= ctx.now) return { fail: DEADLINE };
   if (run.usedMs >= ctx.gardener.minutes * 60_000) return { done: { answer: soFar(run), best: true } };
   const last = run.steps.at(-1);
   if (last?.state === 'started') return resume(run, ctx, last);
@@ -128,6 +129,7 @@ export function helpersOf(parent: GardenRun, now: number): GardenRun[] {
   return Array.from({ length: helpersFor(urls.length) }, (_, k) => ({
     ...newRun({ id: `${parent.id}.h${k + 1}`, gardenerId: parent.gardenerId, work: { kind: 'read', urls: urls.slice(k * LIMITS.urls, (k + 1) * LIMITS.urls) }, now: now + k, ...(parent.routineId && { routineId: parent.routineId }) }),
     parentId: parent.id, seen: parent.seen, tainted: parent.tainted,
+    ...(parent.deadline !== undefined && { deadline: parent.deadline }),
     ...(parent.model && { model: parent.model }), ...(parent.maxTokens && { maxTokens: parent.maxTokens }), ...(parent.agent && { agent: parent.agent }), ...(parent.abilities && { abilities: parent.abilities }),
   }));
 }
@@ -179,11 +181,8 @@ export function resumeAll(parent: GardenRun, kids: GardenRun[], requestId: strin
 /** A request only code answers: a page's answer to it is refused. */
 export const answerRefused = (q: Request): string | null => (q.kind === 'helpers' ? 'Only Homegrown answers that: it waits for the helpers to end.' : null);
 
-/**
- * Expiry (decision 13): a routine's request lasts until its next run is due; a run started by hand, or one whose
- * routine is paused or already past due (Run now), at least 24 h.
- */
-const expiresAt = ({ routine: r, now }: Ctx) => (r && !r.paused && r.nextDue > now ? r.nextDue : Math.max(r?.nextDue ?? 0, now + 24 * HOUR));
+/** Expiry: a request lasts 24 h, by hand or in a routine run (a waiting run doesn't block the routine's next one). */
+const expiresAt = ({ now }: Ctx) => now + 24 * HOUR;
 
 // A step the worker started but never finished. A read is safe to run again; an act may already have happened.
 function resume(run: GardenRun, ctx: Ctx, step: Step): Action {
@@ -285,6 +284,9 @@ function think(run: GardenRun, purpose: Turn['purpose'], prompt: string, data: s
 // ponytail: notes get at most a third of the data room, so page results always keep the rest; tune if notes starve.
 const notesFit = (notes: Note[] | undefined, room: number) => notesBlock(notes ?? [], Math.floor(Math.max(0, room) / 3));
 
+/** An event run's data starts with the page change that started it. */
+const changed = (run: GardenRun) => (run.trigger ? `What changed on ${run.trigger.url}:\n${defang(run.trigger.diff)}\n\n` : '');
+
 // Direct reads: one `word` think over every page's change, then done.
 function word(run: GardenRun, ctx: Ctx, urls: string[]): Action {
   const read = run.steps.filter((s) => s.state === 'done');
@@ -292,11 +294,12 @@ function word(run: GardenRun, ctx: Ctx, urls: string[]): Action {
   const t = run.turns.find((x) => x.purpose === 'word');
   if (!read.length) return { fail: `None of the pages could be read: ${urls.join(', ')}` };
   if (!t) {
-    const notes = notesFit(ctx.notes, budget(run) - WORD.length);
+    const head = changed(run);
+    const notes = notesFit(ctx.notes, budget(run) - WORD.length - head.length);
     // Each page gets an equal share of the rest, so none is cut away whole.
-    const per = Math.floor((budget(run) - WORD.length - (notes ? notes.length + 2 : 0)) / read.length) - 2;
+    const per = Math.floor((budget(run) - WORD.length - head.length - (notes ? notes.length + 2 : 0)) / read.length) - 2;
     const pages = read.map((s) => `${String(s.args.url)}\n${defang(s.output) || '(no change)'}`.slice(0, Math.max(0, per))).join('\n\n');
-    return think(run, 'word', WORD, notes ? `${pages}\n\n${notes}` : pages, !!notes);
+    return think(run, 'word', WORD, head + (notes ? `${pages}\n\n${notes}` : pages), !!notes);
   }
   return { done: { answer: t.reply.trim() + (missed.length ? `\n\nCouldn't read: ${missed.join(', ')}` : '') } };
 }
@@ -411,7 +414,7 @@ function planned(run: GardenRun, ctx: Ctx, request: string): Action {
     if (t) return { done: { answer: t.reply.trim() } };
     // Each step's result gets an equal share of the room, as `word` gives each page.
     const prompt = SUM(request, !!ctx.earlier);
-    const head = ctx.earlier ? `${ctx.earlier}\n\n` : '';
+    const head = changed(run) + (ctx.earlier ? `${ctx.earlier}\n\n` : '');
     const per = Math.floor((budget(run) - prompt.length - head.length) / Math.max(1, j)) - 2;
     const data = head + run.steps.map((s) => `[${s.i}] ${s.digest ?? s.tool}\n${defang(s.output ?? s.error ?? '')}`.slice(0, Math.max(0, per))).join('\n\n');
     return think(run, 'sum', prompt, data, !!(ctx.earlier && ctx.earlierTainted));
@@ -504,7 +507,8 @@ export function retryStep(run: GardenRun, i: number): string | null {
   run.retry = { i, tries: (step.tries ?? 0) + 1 };
   // A retry is the person's: a fresh time budget and interruption count.
   Object.assign(run, { status: 'queued', usedMs: 0, interrupted: 0 });
-  for (const k of ['answer', 'best', 'why', 'endedAt'] as const) delete run[k];
+  // The person is here now: a one-off's deadline was for the unattended run.
+  for (const k of ['answer', 'best', 'why', 'endedAt', 'deadline'] as const) delete run[k];
   return null;
 }
 
@@ -539,7 +543,7 @@ export function queuedFollowUp(run: GardenRun, id: string, now: number): GardenR
  */
 export function recover(runs: GardenRun[], now: number): GardenRun[] {
   return runs.map((r) => {
-    if (expired(r, now)) return { ...r, status: 'failed', why: 'Needed you; the next run starts now.', endedAt: now };
+    if (expired(r, now)) return { ...r, status: 'failed', why: 'Needed you for too long.', endedAt: now };
     if (r.status !== 'running') return r;
     const interrupted = (r.interrupted ?? 0) + 1;
     return interrupted > 3 ? { ...r, status: 'failed', interrupted, why: 'The run was interrupted too many times.', endedAt: now } : { ...r, status: 'queued', interrupted };

@@ -955,15 +955,15 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 in progress.
 
 | Slice | State |
 |---|---|
 | T1 | Done (c4cbc5e), reviewed (0 Blockers, 1 Major fixed): 187 unit tests pass; `tests/plan.spec.mjs` passes on the real model; `garden.spec` 4/4. `abilities.mjs plan`: E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan`, and Plan first stays off in the UI |
 | T2 | Done (1efce2f), reviewed (0 Blockers, 2 Majors fixed): 196 unit tests pass (9 new in `garden-steer`); `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4 (its sensitive test now waits on Library, as Chat shows the tray); `plan.spec` 1/1 |
 | T3 | Done (3e37fce), reviewed (0 Blockers, 1 Major fixed): 205 unit tests pass (9 new in `garden-runlog`); `tests/runlog.spec.mjs` 2/2 (real model); `approvals.spec` 2/2, `garden.spec` 4/4, `plan.spec` 1/1. Retry is allowed on any ended run with a failed step (a read run with one failed page ends `done`) |
-| T3b | Built, awaiting review: 214 unit tests pass (9 new in `garden-helpers`); `tests/helpers.spec.mjs` 1/1 (real model, max 3 run tabs); `garden.spec` 4/4 (its row locator now uses the whole answer), `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2. Deviations: `LIMITS.readUrls` 25 (recipes keep `urls` 5); helpers keep the routine id; auto-retry waits as `queued` with `retryAt`; `WORD` prompt says what a first look holds |
-| T4 | Planned |
+| T3b | Done (4517f73), reviewed (0 Blockers, 1 Major fixed): 217 unit tests pass; `tests/helpers.spec.mjs` 1/1, run twice on the real model (12 pages, at most 3 tabs, one `word` think); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2. Deviations: `LIMITS.readUrls` 25 (recipes keep `urls` 5); helpers keep the routine id; auto-retry waits as `queued` with `retryAt`; `WORD` prompt says what a first look holds |
+| T4 | Built, review fixes in (3 Major, 2 Minor): 230 unit tests pass (14 new in `garden-triggers`); `tests/triggers.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1. Deviations: the event check's snapshot key is `<routineId>\nevent <url>` (a read of the same URL keeps its own); the check's pure core is `eventCheck` in `schedule.ts`; no check while a run of the routine works; first check at save (baseline only); runs carry `deadline` (slot + minutes), a person's Retry drops it; a one-off's slot never waits on a Run now; expiry message is 'Needed you for too long.'. Review: event fetch `checkFetch` (30 s, error status fails, signed-in redirect fails); event checks don't block worker start; snapshot written only if a found change made a run; `Routine.missed` shows Missed |
 | T5 | Planned |
 | T6 | Planned |
 | T7 | Planned |
@@ -978,6 +978,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T3b | code review | 0 / 1 | Fixed: a Stop race. `runStop` stops the parent first, and `turn` refuses a helper whose parent isn't waiting (pure `mayStart`). Minors fixed: `runDelete` refuses a helper of a waiting parent; `prune` (through `pruneIds`) ignores helpers; a routine slot no longer fails waiting helpers, only expiry does |
 | T3 | code review | 0 / 1 | Fixed: a follow-up reads the earlier run again on each turn, and taints itself if the earlier run is tainted now. Minors fixed: queued messages were lost on `failRun` and expiry; a report without page text keeps digests only for `read_page`, `read_my_tab`, `act` and `collect` |
 | T2 | code review | 0 / 2 | Fixed: `propose_routine` denied when the run is tainted, and its card lists all URLs; `approveAllOk(q, run)` is false for a `reach` in a tainted run (decision 5 reworded). Minors fixed: unused steer cap of 3 removed; question answers parsed as strict JSON; a running transaction merges `inbox`; `propose_routine` id `<runId>.<step>`, so a re-run is idempotent |
 | T1 | code review | 0 / 1 | Fixed: `chooseData` listed named tabs only for `ask` (loop.ts 333); now also `plan`, with a test that the plan prompt's data holds the tab URL |
@@ -1073,3 +1074,22 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
 - Note: in tools.ts, `note`, `draft` and `notify` have effect `read`. The report's digest filter is by tool name for that
   reason; keep it in mind if a tool's effect changes.
 - Open: the created-card Open action for the `file`, `doc` and `artifact` kinds waits for T5, T7 and T9.
+
+**2026-10-29: T3b landed (commit 4517f73).**
+- 217 unit tests pass; `tests/helpers.spec.mjs` 1/1, run twice on the real model (12 pages, at most 3 tabs, one `word`
+  think); `garden` 4/4, `plan` 1/1, `approvals` 2/2, `runlog` 2/2.
+- Design as built:
+  - `live` is a map. A `read` of more than 5 pages waits on `helpers`, which code answers; no ability gate, since it is
+    direct work.
+  - `nextBatch` starts up to 3 helpers of the oldest parent.
+  - Helpers keep the parent's routine id, so `claim` skips the slot while they work.
+  - `retryAt` and a `garden:wake` alarm replace the 30 s wait inside the call (the T3 ponytail is gone).
+  - Taint goes from parent to helper and from helper to parent. Resume all works.
+- Deviations, accepted: new `LIMITS.readUrls` = 25 (recipes keep `urls` 5); the `WORD` prompt changed so a first-look
+  page isn't called "no changes" (the `garden.spec` locator was adjusted).
+- Review: 0 Blockers, 1 Major fixed (the Stop race; see Review history).
+- Open items:
+  1. The model still says "No changes" for some first-look pages. A prompt or data fix is left for later.
+  2. `borrowed` stays empty until T5.
+  3. Alarm prefix `garden:wake` now shares `garden:` with routine alarms (`garden:<routineId>`). T4's event-check alarms
+     must not collide with it.

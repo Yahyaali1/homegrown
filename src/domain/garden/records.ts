@@ -39,7 +39,16 @@ export function lookOf(g: { id: string; look?: Look | undefined }): Look {
 export type When =
   | { kind: 'every'; hours: number }
   | { kind: 'daily'; at: string }
-  | { kind: 'weekly'; days: number[]; at: string };
+  | { kind: 'weekly'; days: number[]; at: string }
+  /** A weekday of a week of the month (`-1` the last), or a date (past the month's end: its last day). */
+  | { kind: 'monthly'; on: { week: 1 | 2 | 3 | 4 | -1; day: number } | { date: number }; at: string }
+  /** One time; then the routine pauses. `deadline` (minutes): its run fails after slot + deadline, a slot missed by more never runs. */
+  | { kind: 'once'; date: string; at: string; deadline?: number }
+  /** Checked every `every` minutes (code, no model): the work runs when lines were added, holding an `onlyIf` word if any. */
+  | { kind: 'event'; url: string; every: number; onlyIf?: string[] };
+
+/** What an event routine's check saw: its run's data starts with the diff. Signed in: the run starts tainted. */
+export interface Trigger { url: string; diff: string /* ≤ 4000 */; signedIn: boolean }
 
 export type Work =
   | { kind: 'read'; urls: string[] } // direct
@@ -72,6 +81,8 @@ export interface Routine {
   createdAt: number;
   /** Who wrote it; none is the person. A routine the model proposed is stored paused until the person turns it on. */
   by?: 'person' | 'model' | 'preset';
+  /** A one-off whose slot passed its deadline: it never ran. */
+  missed?: true;
 }
 
 export type Status = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
@@ -129,6 +140,10 @@ export interface GardenRun {
   parentId?: string;
   /** Queued, but not before this: a read waiting out its auto-retry, which holds no queue slot meanwhile. */
   retryAt?: number;
+  /** The page change that started it (an event routine). */
+  trigger?: Trigger;
+  /** A one-off routine's slot plus its deadline: not done by then, it fails "Deadline passed". */
+  deadline?: number;
 }
 
 export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact'; title: string; ref: string }
@@ -261,6 +276,15 @@ const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'str
 const int = (x: unknown, min: number, max: number): x is number => Number.isInteger(x) && (x as number) >= min && (x as number) <= max;
 const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const AT = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** "2026-03-02" → its UTC midnight; null unless a real date. */
+export function dateOf(s: unknown): number | null {
+  const m = typeof s === 'string' ? DATE.exec(s) : null;
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(t).toISOString().startsWith(s as string) ? t : null;
+}
 
 export function validTz(tz: unknown): tz is string {
   if (typeof tz !== 'string' || !tz) return false;
@@ -286,8 +310,25 @@ export function parseGardener(raw: unknown): Gardener | null {
 export function parseWhen(raw: unknown): When | null {
   if (!isObj(raw)) return null;
   if (raw.kind === 'every') return int(raw.hours, 1, 24) ? { kind: 'every', hours: raw.hours } : null;
+  if (raw.kind === 'event') {
+    const url = typeof raw.url === 'string' ? bare(raw.url) : null;
+    if (!url || !int(raw.every, 15, 1440)) return null;
+    if (raw.onlyIf === undefined) return { kind: 'event', url, every: raw.every };
+    const words = Array.isArray(raw.onlyIf) && raw.onlyIf.every((w) => str(w, 40)) ? (raw.onlyIf as string[]).map((w) => w.trim()) : null;
+    return words?.length && words.length <= 10 ? { kind: 'event', url, every: raw.every, onlyIf: [...new Set(words)] } : null;
+  }
   if (typeof raw.at !== 'string' || !AT.test(raw.at)) return null;
   if (raw.kind === 'daily') return { kind: 'daily', at: raw.at };
+  if (raw.kind === 'once') {
+    if (dateOf(raw.date) === null || (raw.deadline !== undefined && !int(raw.deadline, 5, 10080))) return null;
+    return { kind: 'once', date: raw.date as string, at: raw.at, ...(raw.deadline !== undefined && { deadline: raw.deadline as number }) };
+  }
+  if (raw.kind === 'monthly') {
+    const on = raw.on;
+    if (isObj(on) && int(on.date, 1, 31)) return { kind: 'monthly', on: { date: on.date }, at: raw.at };
+    if (!isObj(on) || ![1, 2, 3, 4, -1].includes(on.week as number) || !int(on.day, 0, 6)) return null;
+    return { kind: 'monthly', on: { week: on.week as 1 | 2 | 3 | 4 | -1, day: on.day }, at: raw.at };
+  }
   if (raw.kind !== 'weekly' || !Array.isArray(raw.days) || !raw.days.length || !raw.days.every((d) => int(d, 0, 6))) return null;
   return { kind: 'weekly', days: [...new Set(raw.days as number[])].sort(), at: raw.at };
 }
@@ -325,6 +366,7 @@ export function parseRoutine(raw: unknown): Routine | null {
   if (typeof raw.lastRunId === 'string') r.lastRunId = raw.lastRunId;
   if (Array.isArray(raw.skipped)) r.skipped = raw.skipped.filter(time).slice(-LIMITS.skipped);
   if (raw.by === 'person' || raw.by === 'model' || raw.by === 'preset') r.by = raw.by;
+  if (raw.missed === true) r.missed = true;
   return r;
 }
 
@@ -357,7 +399,7 @@ export function personUrls(w: Work): string[] {
 }
 
 /** A new queued run. The person's own URLs are reachable from the start. */
-export function newRun(o: { id: string; gardenerId: string; routineId?: string; work: Work; now: number; skipped?: number[] }): GardenRun {
+export function newRun(o: { id: string; gardenerId: string; routineId?: string; work: Work; now: number; skipped?: number[]; trigger?: Trigger; deadline?: number }): GardenRun {
   const run: GardenRun = {
     v: 1, id: o.id, gardenerId: o.gardenerId, work: o.work, status: 'queued', queuedAt: o.now, usedMs: 0,
     turns: [], steps: [], requests: [], tainted: false,
@@ -365,5 +407,7 @@ export function newRun(o: { id: string; gardenerId: string; routineId?: string; 
   };
   if (o.routineId) run.routineId = o.routineId;
   if (o.skipped?.length) run.skipped = o.skipped;
+  if (o.trigger) Object.assign(run, { trigger: o.trigger, tainted: o.trigger.signedIn });
+  if (o.deadline !== undefined) run.deadline = o.deadline;
   return run;
 }
