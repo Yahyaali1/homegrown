@@ -4,6 +4,8 @@
 import { inTab, waitLoaded, type Run } from './missions.ts';
 import { itemRule, type PageResult, type Recipe } from '../domain/scrape/recipe.ts';
 import { describe, isAct, SCENARIO_LIMITS, type Scenario, type StepReport } from '../domain/scrape/scenario.ts';
+import { verdict, type Check } from '../domain/garden/classify.ts';
+import { fromExtensionPage } from '../domain/garden/policy.ts';
 import { riskOf } from '../domain/scrape/tools.ts';
 import { needsDebugger, type PageOptions } from '../domain/scrape/options.ts';
 
@@ -18,8 +20,7 @@ const AD_HOSTS = ['doubleclick.net', 'googlesyndication.com', 'googleadservices.
  * content script, which a hostile page's renderer could control. Every command that takes a scenario checks this.
  */
 /** An extension page (Mission control, the side panel), not a content script in a web page. */
-export const isExtensionPage = (sender: chrome.runtime.MessageSender | null | undefined) =>
-  !!sender?.url?.startsWith(chrome.runtime.getURL('')) && !sender.tab?.url?.startsWith('http');
+export const isExtensionPage = (sender: chrome.runtime.MessageSender | null | undefined) => fromExtensionPage(sender, chrome.runtime.getURL(''));
 
 export function refuseActs(sender: chrome.runtime.MessageSender | null | undefined, ...scenarios: (Scenario | null | undefined)[]): void {
   if (sender === undefined || !scenarios.some((s) => riskOf(s) === 'act')) return; // undefined: a call inside the worker
@@ -47,6 +48,37 @@ async function tabRules(tabId: number, o: PageOptions, url: string): Promise<() 
       action: { type: 'modifyHeaders' as chrome.declarativeNetRequest.RuleActionType, requestHeaders: headers.map(([header, value]) => ({ header, value, operation: 'set' as chrome.declarativeNetRequest.HeaderOperation })) } });
   }
   if (!rules.length) return async () => {};
+  await chrome.declarativeNetRequest.updateSessionRules({ addRules: rules });
+  return () => chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: rules.map((r) => r.id) });
+}
+
+// A condition with no resourceTypes skips main_frame, so the cookie rule names every type.
+const ALL_TYPES = ['main_frame', 'sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other'] as chrome.declarativeNetRequest.ResourceType[];
+
+/**
+ * Signed out except on `keepHosts`: the tab sends no Cookie and keeps no Set-Cookie, unless the page itself is on a
+ * keep host (main frame), or a keep-host page asks a keep host. With `navHosts` (a tainted gardener run), the tab
+ * can't load a page anywhere else, so a redirect can't carry data out. Returns its cleanup, like `tabRules`.
+ */
+export async function cookieRule(tabId: number, keepHosts: string[], navHosts?: string[]): Promise<() => Promise<void>> {
+  await rulesReady;
+  const allow = { type: 'allow' as chrome.declarativeNetRequest.RuleActionType };
+  const rules: chrome.declarativeNetRequest.Rule[] = [{
+    id: ++nextRule, priority: 1, condition: { tabIds: [tabId], resourceTypes: ALL_TYPES },
+    action: { type: 'modifyHeaders' as chrome.declarativeNetRequest.RuleActionType,
+      requestHeaders: [{ header: 'cookie', operation: 'remove' as chrome.declarativeNetRequest.HeaderOperation }],
+      responseHeaders: [{ header: 'set-cookie', operation: 'remove' as chrome.declarativeNetRequest.HeaderOperation }] },
+  }];
+  if (keepHosts.length) {
+    rules.push({ id: ++nextRule, priority: 2, action: allow, condition: { tabIds: [tabId], requestDomains: keepHosts, resourceTypes: ['main_frame' as chrome.declarativeNetRequest.ResourceType] } });
+    // Subresources only to the sites from the sites (no main_frame: a link off the sites opens signed out). Requests a
+    // site's service worker makes (tabId -1) escape every tab rule: reading a site page taints the run anyway.
+    rules.push({ id: ++nextRule, priority: 2, action: allow, condition: { tabIds: [tabId], requestDomains: keepHosts, initiatorDomains: keepHosts } });
+  }
+  if (navHosts) {
+    rules.push({ id: ++nextRule, priority: 3, action: { type: 'block' as chrome.declarativeNetRequest.RuleActionType },
+      condition: { tabIds: [tabId], resourceTypes: ['main_frame' as chrome.declarativeNetRequest.ResourceType], ...(navHosts.length && { excludedRequestDomains: navHosts }) } });
+  }
   await chrome.declarativeNetRequest.updateSessionRules({ addRules: rules });
   return () => chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: rules.map((r) => r.id) });
 }
@@ -118,18 +150,45 @@ async function follow(tabId: number, before: { url?: string | undefined; status?
   return moved;
 }
 
-/** Runs the scenario's steps, one at a time, within ScrapingBee's 40 s. A click that navigates waits for the new page. */
-export async function play(tabId: number, scenario: Scenario, run: Run): Promise<{ report: StepReport[]; results: unknown[]; failed: string | null }> {
+/**
+ * A gardener's check on acting steps, as data: each act is checked in the page on the element it uses, in the same
+ * call that acts. `ran` counts acts done (across pages, for a recipe); `stop` says where and why it stopped; a
+ * per-step `ok` is used up once it passes.
+ */
+export interface Guard {
+  hosts: string[];
+  tainted: boolean;
+  ok?: Check['ok'];
+  ran: number;
+  stop?: { index: number; why: string; host?: true };
+}
+
+/**
+ * Runs the scenario's steps, one at a time, within ScrapingBee's 40 s. A click that navigates waits for the new page.
+ * With a `guard`, every act is checked on its live element first, and a stop ends the scenario there.
+ */
+export async function play(tabId: number, scenario: Scenario, run: Run, guard?: Guard): Promise<{ report: StepReport[]; results: unknown[]; failed: string | null }> {
   const report: StepReport[] = [];
   const results: unknown[] = [];
   const end = Date.now() + SCENARIO_LIMITS.budget;
-  for (const i of scenario.instructions) {
+  for (const [index, i] of scenario.instructions.entries()) {
     run.stop.signal.throwIfAborted();
     const left = end - Date.now();
     const t0 = Date.now();
     const line: StepReport = { step: describe(i), ok: true, ms: 0 };
+    let stopped = false;
     try {
       if (left <= 0) throw new Error('the 40 s for steps ran out');
+      const check: Check | undefined = guard && isAct(i) ? { hosts: guard.hosts, tainted: guard.tainted, ok: guard.ok, index } : undefined;
+      const stop = (v: { stop?: string; host?: true; passed?: true }) => {
+        if (v.passed && guard!.ok?.index !== undefined) delete guard!.ok; // that one step's yes is used
+        if (!v.stop) return;
+        guard!.stop = { index, why: v.stop, ...(v.host && { host: true }) };
+        stopped = true;
+        throw new Error(`stopped before it ran: ${v.stop}`);
+      };
+      // Code has no element: it's checked here, on the tab's URL.
+      if (check && 'evaluate' in i) stop(verdict({ action: 'evaluate', found: true, pageUrl: (await chrome.tabs.get(tabId)).url ?? '' }, check));
       if ('wait' in i) await sleep(Math.min(i.wait, left));
       else if ('evaluate' in i) {
         const before = await chrome.tabs.get(tabId);
@@ -138,25 +197,29 @@ export async function play(tabId: number, scenario: Scenario, run: Run): Promise
         // Code may submit a form or navigate, like a click; if that ended the script, the move is the result.
         const moved = await follow(tabId, before, end);
         if ('e' in out && !moved) throw out.e;
+        if (guard) guard.ran++;
         results.push((line.result = 'v' in out ? out.v : null));
       }
       else {
         const before = await chrome.tabs.get(tabId);
         await inject(tabId);
-        const ran = await chrome.scripting.executeScript({ target: { tabId }, args: [i, 'infinite_scroll' in i ? left : Math.min(left, SCENARIO_LIMITS.wait)], func: async (s: Parameters<NonNullable<Window['__hgStep']>>[0], ms: number) => {
+        const ran = await chrome.scripting.executeScript({ target: { tabId }, args: [i, 'infinite_scroll' in i ? left : Math.min(left, SCENARIO_LIMITS.wait), check ?? null], func: async (s: Parameters<NonNullable<Window['__hgStep']>>[0], ms: number, c: Check | null) => {
           try {
-            await window.__hgStep!(s, ms);
-            return null;
+            return await window.__hgStep!(s, ms, c ?? undefined);
           } catch (e) {
             return e instanceof Error ? e.message : String(e);
           }
         } }).then(([f]) => f?.result ?? null, (e: unknown) => ({ failed: e instanceof Error ? e.message : String(e) }));
         if (typeof ran === 'string') throw new Error(ran);
+        // The script died with the page (a click that navigated): count it as having acted, to be safe.
+        if (guard && check) guard.ran += ran && 'acted' in ran ? ran.acted : 1;
+        if (check && ran && 'acted' in ran) stop(ran);
         // A click may start a navigation (a link, a submit): watch for it up to 1 s, then let it load. Steps that
         // only scroll or wait can't navigate, so they don't pay for the watch.
-        const moved = isAct(i) || (ran && typeof ran === 'object') ? await follow(tabId, before, end) : false;
+        const died = ran && 'failed' in ran ? ran.failed : null;
+        const moved = isAct(i) || died !== null ? await follow(tabId, before, end) : false;
         // The script ended because the page went away: fine if it really navigated, else that's the step's error.
-        if (ran && typeof ran === 'object' && !moved) throw new Error(ran.failed);
+        if (died !== null && !moved) throw new Error(died);
       }
     } catch (e) {
       line.ok = false;
@@ -164,7 +227,7 @@ export async function play(tabId: number, scenario: Scenario, run: Run): Promise
     }
     line.ms = Date.now() - t0;
     report.push(line);
-    if (!line.ok && scenario.strict) return { report, results, failed: `${line.step}: ${line.error}` };
+    if (!line.ok && (scenario.strict || stopped)) return { report, results, failed: `${line.step}: ${line.error}` };
   }
   return { report, results, failed: null };
 }
@@ -172,7 +235,7 @@ export async function play(tabId: number, scenario: Scenario, run: Run): Promise
 export type RequestRecipe = Pick<Recipe, 'rules' | 'waitFor' | 'wait' | 'ai' | 'aiSelector' | 'page'>;
 
 /** One page, ScrapingBee style. Steps that fail in strict mode make the page an error, with the report kept. */
-export function pageRequest(url: string, recipe: RequestRecipe, run: Run): Promise<PageResult> {
+export function pageRequest(url: string, recipe: RequestRecipe, run: Run, guard?: Guard): Promise<PageResult> {
   const o = recipe.page;
   const prepare = async (tabId: number) => {
     const undoRules = await tabRules(tabId, o, url);
@@ -180,12 +243,19 @@ export function pageRequest(url: string, recipe: RequestRecipe, run: Run): Promi
     return async () => (await undoEmulate().catch(() => {}), await undoRules());
   };
   const plain = !Object.keys(o.headers).length && !o.block_ads && !o.block_resources && !needsDebugger(o);
+  // A gardener's run brings its own tab set-up (the cookie rule) and keeps it under the recipe's.
+  const outer = run.prepare;
+  const both = outer && (async (tabId: number) => {
+    const undoOuter = await outer(tabId);
+    const undo = plain ? async () => {} : await prepare(tabId).catch(async (e) => (await undoOuter(), Promise.reject(e)));
+    return async () => (await undo().catch(() => {}), await undoOuter());
+  });
   return inTab(url, run, async (tabId) => {
     if (o.wait_browser === 'domcontentloaded') await domReady(tabId, url);
     else await waitLoaded(tabId, 20000);
     await inject(tabId);
     await chrome.scripting.executeScript({ target: { tabId }, args: [{ waitBrowser: o.wait_browser, waitFor: recipe.waitFor, wait: recipe.wait }], func: (s: Parameters<NonNullable<Window['__hgSettle']>>[0]) => window.__hgSettle?.(s) });
-    const steps = o.js_scenario ? await play(tabId, o.js_scenario, run) : null;
+    const steps = o.js_scenario ? await play(tabId, o.js_scenario, run, guard) : null;
     await inject(tabId);
     const [frame] = await chrome.scripting.executeScript({
       target: { tabId },
@@ -201,5 +271,5 @@ export function pageRequest(url: string, recipe: RequestRecipe, run: Run): Promi
       if (shot) r.screenshot = shot;
     }
     return r;
-  }, o.timeout, plain ? undefined : prepare);
+  }, o.timeout, both || (plain ? undefined : prepare));
 }

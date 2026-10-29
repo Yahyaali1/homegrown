@@ -1,10 +1,12 @@
 // Memory: answer history, highlights, a small knowledge base of pages tasks ran on, page snapshots for "changed
-// since your last visit", and the savings meter. Everything stays in this browser (IndexedDB 'eg-memory',
+// since your last visit", the gardeners' notebook, and the savings meter. Everything stays in this browser (IndexedDB 'eg-memory',
 // chrome.storage.local 'savings').
 import { engine, ask } from './engine.ts';
 import { cosine, diffLines, keywordScore } from '../domain/compare.ts';
+import { forGardener, MEMORY_VERSION, NOTE_CHARS, parseNote, upgradeMemory, type Note } from '../domain/garden/notes.ts';
 
 const HISTORY_CAP = 2000;
+const NOTES_CAP = 200; // per gardener; over it, its oldest model notes go (the person's never do)
 const SNAPSHOT_CAP = 300; // pages kept for "changed since your last visit"
 const SNAPSHOT_CHARS = 50000;
 const SIMILAR = 0.6; // cosine for "same topic"; calibrated on MiniLM: related pages ~0.72, unrelated < 0.1
@@ -15,20 +17,12 @@ interface Embedded { id?: number; url: string; title: string; embedText: string;
 interface KbEntry extends Embedded { summary: string }
 interface Highlight extends Embedded { text: string; note: string }
 interface Snapshot { url: string; text: string; time: number }
-interface Stores { history: HistoryEntry; highlights: Highlight; kb: KbEntry; snapshots: Snapshot }
+interface Stores { history: HistoryEntry; highlights: Highlight; kb: KbEntry; snapshots: Snapshot; notes: Note }
 type StoreName = keyof Stores;
 
 const db = new Promise<IDBDatabase>((resolve, reject) => {
-  const r = indexedDB.open('eg-memory', 2);
-  r.onupgradeneeded = (e) => {
-    const d = r.result;
-    if (e.oldVersion < 1) {
-      d.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
-      d.createObjectStore('highlights', { keyPath: 'id', autoIncrement: true }).createIndex('url', 'url');
-      d.createObjectStore('kb', { keyPath: 'id', autoIncrement: true }).createIndex('url', 'url');
-    }
-    if (e.oldVersion < 2) d.createObjectStore('snapshots', { keyPath: 'url' });
-  };
+  const r = indexedDB.open('eg-memory', MEMORY_VERSION);
+  r.onupgradeneeded = (e) => upgradeMemory(r.result, e.oldVersion);
   r.onsuccess = () => resolve(r.result);
   r.onerror = () => reject(r.error);
 });
@@ -41,18 +35,69 @@ async function embed(texts: string[]): Promise<number[][]> {
   return Array.isArray(r) ? r : r.vectors ?? [];
 }
 
-/** Fills in embeddings that failed earlier (the embedding model may not have been ready). */
-async function withVectors<N extends 'kb' | 'highlights'>(name: N): Promise<Stores[N][]> {
-  const items = await all(name);
+/**
+ * Fills in embeddings that failed earlier (the embedding model may not have been ready). `parse` drops records this
+ * build can't read: they are neither embedded nor written back.
+ */
+async function withVectors<N extends 'kb' | 'highlights' | 'notes'>(name: N, parse: (x: Stores[N]) => Stores[N] | null = (x) => x): Promise<Stores[N][]> {
+  const items = (await all(name)).flatMap((i) => parse(i) ?? []);
   const missing = items.filter((i) => !i.vec);
   if (missing.length) {
     try {
-      const vecs = await embed(missing.map((i) => i.embedText));
+      const vecs = await embed(missing.map((i) => ('embedText' in i ? i.embedText : i.text)));
       const s = await store(name, 'readwrite');
       missing.forEach((i, k) => ((i.vec = Array.from(vecs[k] ?? [])), s.put(i)));
     } catch {} // still not ready: callers fall back to keywords
   }
   return items;
+}
+
+/** Best match first: cosine to the question's embedding, or keywords when there is none. */
+async function rank<T extends { vec?: number[] | null }>(query: string, items: T[], textOf: (i: T) => string): Promise<{ i: T; score: number }[]> {
+  const q = await embed([query]).then((v) => v[0] ?? null, () => null);
+  return items.map((i) => ({ i, score: q && i.vec ? cosine(q, i.vec) : keywordScore(query, textOf(i)) })).sort((a, b) => b.score - a.score);
+}
+
+// ---- the gardeners' notebook ----
+
+const notes = async () => (await all('notes')).flatMap((n) => parseNote(n) ?? []); // a newer build's notes are left alone
+
+/** A gardener's notes and the shared ones, best match first. The loop fits as many as its data budget holds. */
+export async function notesFor(gardenerId: string, query: string): Promise<Note[]> {
+  const mine = forGardener(await withVectors('notes', parseNote), gardenerId);
+  return mine.length ? (await rank(query, mine, (n) => n.text)).map(({ i }) => i) : []; // no notes: no embedding call
+}
+
+export async function addNote(n: Pick<Note, 'gardenerId' | 'text' | 'by'>): Promise<Note> {
+  const note = parseNote({ v: 1, id: crypto.randomUUID(), at: Date.now(), ...n, text: n.text.trim() });
+  if (!note) throw new Error(`A note is 1–${NOTE_CHARS} characters.`);
+  await done((await store('notes', 'readwrite')).add(note));
+  if (note.gardenerId) {
+    const mine = (await notes()).filter((x) => x.gardenerId === note.gardenerId);
+    const extra = mine.filter((x) => x.by !== 'person').sort((a, b) => a.at - b.at).slice(0, Math.max(0, mine.length - NOTES_CAP));
+    if (extra.length) await deleteIds(extra.map((x) => x.id));
+  }
+  return note;
+}
+
+async function deleteIds(ids: string[]): Promise<void> {
+  const s = await store('notes', 'readwrite');
+  await Promise.all(ids.map((id) => done(s.delete(id))));
+}
+
+/** Every note of a deleted gardener, a newer build's too (by the raw record's gardenerId). */
+export async function deleteNotes(gardenerId: string): Promise<void> {
+  await deleteIds((await all('notes')).filter((n) => (n as { gardenerId?: unknown }).gardenerId === gardenerId).map((n) => n.id));
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await deleteIds([id]);
+}
+
+/** A gardener's notebook (its own and the shared notes), or every note; newest first, without vectors. */
+export async function listNotes(gardenerId?: string): Promise<Omit<Note, 'vec'>[]> {
+  const list = gardenerId ? forGardener(await notes(), gardenerId) : await notes();
+  return list.sort((a, b) => b.at - a.at).map(({ vec: _, ...n }) => n);
 }
 
 async function addHistory(entry: HistoryEntry): Promise<void> {
@@ -169,11 +214,7 @@ export const handlers = {
   async memAsk({ question }: { question: string }) {
     const items: (KbEntry | Highlight)[] = [...(await withVectors('kb')), ...(await withVectors('highlights'))];
     if (!items.length) return { answer: 'Your library is empty. Run a task on a page or save a highlight first.', sources: [] };
-    const q = await embed([question]).then((v) => v[0] ?? null, () => null);
-    const scored = items
-      .map((i) => ({ i, score: q && i.vec ? cosine(q, i.vec) : keywordScore(question, i.embedText) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
+    const scored = (await rank(question, items, (i) => i.embedText)).slice(0, 5);
     const sources = scored.map(({ i }, n) => ({ n: n + 1, title: i.title, url: i.url }));
     const notes = scored.map(({ i }, n) => `[${n + 1}] ${i.title}\n${'summary' in i ? i.summary : i.text}${'note' in i && i.note ? `\nNote: ${i.note}` : ''}`).join('\n\n');
     const answer = await ask(`Answer this question using only the saved notes below. Cite them like [1]. If they don't answer it, say so.\nQuestion: ${question}`, notes);

@@ -33,7 +33,9 @@ interface Loaded { name: string; maxTokens: number; loadMs: number; image: boole
 let loaded: (Loaded & { spec: ModelSpec; runtime: ModelRuntime }) | null = null;
 let current: AbortController | null = null;
 let currentId = '';
+let currentOwner: { owner?: string | undefined; at?: number | undefined } = {};
 const cancelled = new Set<string>(); // ids cancelled while still queued
+const dropBefore = new Map<string, number>(); // owner → requests it made before this time are dropped (cancelOwner)
 const lanes = new Lanes();
 
 const byName = (name: string) => {
@@ -104,10 +106,13 @@ async function describeForModel(id: string, turn: PageTurn): Promise<PageTurn> {
   return { role: 'user', text: `${turn.text}\n\nA local image-reading model looked at the image and reported:\nDescription: ${seen.description || 'none'}\nText in the image: ${seen.text || 'none'}` };
 }
 
-interface GenerateRequest { id: string; turns: PageTurn[]; config?: Record<string, number>; model?: string; priority?: Lane }
+/** `owner` and `at` (when it was asked) let `cancelOwner` drop what a stopped service worker left queued. */
+interface GenerateRequest { id: string; turns: PageTurn[]; config?: Record<string, number>; model?: string; priority?: Lane; owner?: string; at?: number }
 
-async function generateNow({ id, turns, config = {}, model }: GenerateRequest) {
-  if (cancelled.delete(id)) throw new DOMException('Stopped', 'AbortError');
+const dropped = ({ owner, at = 0 }: { owner?: string | undefined; at?: number | undefined }) => !!owner && at < (dropBefore.get(owner) ?? 0);
+
+async function generateNow({ id, turns, config = {}, model, owner, at }: GenerateRequest) {
+  if (cancelled.delete(id) || dropped({ owner, at })) throw new DOMException('Stopped', 'AbortError');
   const m = await useModel(model);
   let imageReader: string | null = null;
   if (turns.at(-1)?.image && !m.image) {
@@ -133,6 +138,7 @@ async function generateNow({ id, turns, config = {}, model }: GenerateRequest) {
     const text = selection === undefined ? last.text : `${last.text}\n\n${selection}`;
     current = new AbortController();
     currentId = id;
+    currentOwner = { owner, at };
     try {
       b = await loaded!.runtime.generate([...turns.slice(0, -1).map((t) => toTurn(t)), toTurn(last, text)], sampling, onText, current.signal);
       break;
@@ -143,6 +149,7 @@ async function generateNow({ id, turns, config = {}, model }: GenerateRequest) {
     } finally {
       current = null;
       currentId = '';
+      currentOwner = {};
     }
   }
   const stats = { model: m.name, ...b, latencyMs: Math.round(performance.now() - t0), truncated, imageReader };
@@ -165,6 +172,18 @@ const handlers: Record<string, (msg: never) => unknown> = {
   ensureLoaded: () => lanes.schedule(ensureLoaded),
   generate: (msg: GenerateRequest) => lanes.schedule(() => generateNow(msg), msg.priority === 'background' ? 'background' : 'user'),
   queue: () => lanes.state,
+  // useModel's rule (the chosen model if downloaded, else the loaded one, else the first downloaded), loaded, without
+  // generating: a gardener run pins what it gets.
+  resolve: ({ name }: { name?: string }) => lanes.schedule(async () => {
+    const m = await useModel(name);
+    return { name: m.name, maxTokens: m.maxTokens };
+  }, 'background'),
+  // A restarted worker's owner: abort its old generation and drop its old queued ones.
+  cancelOwner: ({ owner, before }: { owner: string; before: number }) => {
+    dropBefore.set(owner, Math.max(before, dropBefore.get(owner) ?? 0));
+    if (dropped(currentOwner)) current?.abort();
+    return true;
+  },
   // With an id, only that request: running → aborted, still queued → dropped when its turn comes. Without, whatever runs.
   cancel: ({ id }: { id?: string }) => {
     if (!id || id === currentId) return current?.abort();

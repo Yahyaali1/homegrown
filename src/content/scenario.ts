@@ -3,6 +3,7 @@
 import type { Instruction, SelectorType } from '../domain/scrape/scenario.ts';
 import type { WaitBrowser } from '../domain/scrape/options.ts';
 import { toMarkdown } from './markdown.ts';
+import { verdict, type Check, type Target } from '../domain/garden/classify.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,21 +46,70 @@ function fill(el: Element, value: string): void {
 
 const height = () => document.scrollingElement?.scrollHeight ?? document.body.scrollHeight;
 
-/** Runs one instruction (evaluate runs in the worker through userScripts). Throws with a readable message. */
-export async function step(i: Instruction, ms: number): Promise<void> {
+/** Facts about the element a step is about to use (a gardener's check). */
+function facts(el: Element | null, action: Target['action']): Target {
+  const pageUrl = location.href;
+  if (!el) return { action, found: false, pageUrl };
+  const c = el.closest('a, button, [role=button], input[type=submit], input[type=button], input[type=image]') ?? el;
+  // The control's own form (also a form="id" one), else the nearest. Attributes, not .action: a field named
+  // "action" would hide the form's own.
+  const form = (el as HTMLInputElement).form ?? (c as HTMLInputElement).form ?? el.closest('form');
+  const to = c.getAttribute('formaction') ?? form?.getAttribute('action') ?? (form ? '' : null);
+  const href = c instanceof HTMLAnchorElement ? c.getAttribute('href') : null;
+  const resolve = (u: string) => new URL(u, location.href).href;
+  const words = [(c as HTMLElement).innerText, (c as HTMLInputElement).value, c.getAttribute('title'), c.getAttribute('alt'), ...[...c.querySelectorAll('img[alt]')].map((i) => i.getAttribute('alt'))];
+  return {
+    action, found: true, pageUrl, tag: el.tagName.toLowerCase(), type: el.getAttribute('type') ?? '', autocomplete: el.getAttribute('autocomplete') ?? '',
+    text: words.filter((w) => typeof w === 'string' && w.trim()).join(' ').slice(0, 300),
+    label: (c.getAttribute('aria-label') ?? el.getAttribute('aria-label') ?? '').slice(0, 200),
+    ...(to !== null && { formAction: resolve(to) }), ...(href !== null && { href: resolve(href) }),
+  };
+}
+
+/** What one step did: acts done (clicks, fills), or why a gardener's check stopped it before the next one. */
+export interface StepOut { acted: number; stop?: string; host?: true; passed?: true }
+
+/**
+ * Runs one instruction (evaluate runs in the worker through userScripts). Throws with a readable message. With a
+ * `check`, each act is checked on the very element it uses, just before, in this same call.
+ */
+export async function step(i: Instruction, ms: number, check?: Check): Promise<StepOut> {
+  const out: StepOut = { acted: 0 };
+  // false: the check stopped it (out says why).
+  const ok = (el: Element | null, action: Target['action']) => {
+    // Set by the lock bar (same isolated world) when the person takes the tab over or stops: no act after that.
+    if (window.__hgHalt) throw new Error('The person took over this tab.');
+    if (!check) return true;
+    const v = verdict(facts(el, action), check);
+    Object.assign(out, v);
+    return !v.stop;
+  };
   if ('click' in i) {
     const el = first(i.click);
+    if (!ok(el, 'click')) return out;
     if (!el) throw new Error(`${i.click} not found`);
-    return click(el);
+    click(el);
+    out.acted++;
+    return out;
   }
-  if ('wait_for' in i) return void (await waitFor(i.wait_for, ms));
-  if ('wait_for_and_click' in i) return click(await waitFor(i.wait_for_and_click, ms));
-  if ('scroll_x' in i) return window.scrollBy(i.scroll_x, 0);
-  if ('scroll_y' in i) return window.scrollBy(0, i.scroll_y);
+  if ('wait_for' in i) return await waitFor(i.wait_for, ms), out;
+  if ('wait_for_and_click' in i) {
+    const el = await waitFor(i.wait_for_and_click, ms).catch((e: unknown) => (check ? null : Promise.reject(e)));
+    if (!ok(el, 'click')) return out;
+    if (!el) throw new Error(`${i.wait_for_and_click} not found`);
+    click(el);
+    out.acted++;
+    return out;
+  }
+  if ('scroll_x' in i) return window.scrollBy(i.scroll_x, 0), out;
+  if ('scroll_y' in i) return window.scrollBy(0, i.scroll_y), out;
   if ('fill' in i) {
     const el = first(i.fill[0]);
+    if (!ok(el, 'fill')) return out;
     if (!el) throw new Error(`${i.fill[0]} not found`);
-    return fill(el, i.fill[1]);
+    fill(el, i.fill[1]);
+    out.acted++;
+    return out;
   }
   if ('infinite_scroll' in i) {
     const { max_count, delay, end_click } = i.infinite_scroll;
@@ -71,12 +121,14 @@ export async function step(i: Instruction, ms: number): Promise<void> {
       if (height() > before) continue;
       const more = end_click && first(end_click.selector, end_click.selector_type);
       if (!more) break; // the end, and nothing to load more with
+      if (!ok(more, 'click')) return out; // checked before every click
       click(more);
+      out.acted++;
       await sleep(delay);
     }
-    return;
+    return out;
   }
-  if ('wait' in i) return void (await sleep(i.wait));
+  if ('wait' in i) return await sleep(i.wait), out;
   throw new Error('This step runs in the worker.');
 }
 

@@ -14,6 +14,7 @@ import * as monitors from './monitors.ts';
 import * as memory from './memory.ts';
 import * as livecaptions from './livecaptions.ts';
 import * as scrape from './scrape.ts';
+import * as garden from './garden.ts';
 
 type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
 /** A feature module: its handlers become bg commands; the hooks are optional. */
@@ -25,7 +26,7 @@ interface BackgroundModule {
   /** Called after every answer to a page request. */
   onAnswer?(req: unknown, result: { text: string }, sender?: chrome.runtime.MessageSender): unknown;
 }
-const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape];
+const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden];
 const handlers: Record<string, Handler> = Object.assign({}, ...modules.map((m) => m.handlers ?? {}));
 // The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
 handlers.toPage = async ({ msg }: { msg: object }) => {
@@ -196,4 +197,4 @@ for (const m of modules) m.init?.();
 chrome.storage.sync.onChanged.addListener((c) => c.tasks && buildMenus());
 
 // For tests that drive the worker directly (Playwright can't click native context menus).
-Object.assign(self, { ensureEngine, handleMenuClick, seedTasks, bgHandlers: handlers, missionScheduled: missions.scheduled });
+Object.assign(self, { ensureEngine, handleMenuClick, seedTasks, bgHandlers: handlers, missionScheduled: missions.scheduled, gardenFire: garden.gardenFire });

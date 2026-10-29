@@ -325,7 +325,7 @@ export async function readPage({ scroll = true, shadow = false, terms = [] }: Re
 
 // Injected entry: one reader per frame, callable by chrome.scripting.executeScript({ func }).
 declare global {
-  interface Window { __hgReadPage?: typeof readPage; __hgScrape?: typeof scrape; __hgStep?: typeof step; __hgSettle?: typeof settle; __hgFirst?: typeof first }
+  interface Window { __hgReadPage?: typeof readPage; __hgScrape?: typeof scrape; __hgStep?: typeof step; __hgHalt?: boolean; __hgSettle?: typeof settle; __hgFirst?: typeof first }
 }
 window.__hgReadPage ??= readPage;
 window.__hgScrape ??= scrape;

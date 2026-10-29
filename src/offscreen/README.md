@@ -27,9 +27,12 @@ the following:
       selection.
     - `queue` → `Lanes.state`, `{running, user, background}`.
     - `cancel({id?})`.
+    - `resolve({name?})` → `{name, maxTokens}` (background lane): `useModel`'s rule, loaded, no generation.
+    - `cancelOwner({owner, before})`: aborts the running generation, and drops queued ones, whose `owner` matches
+      and whose `at` is before `before`. `generate` takes optional `owner` and `at` for this.
     - The commands from [`helpers/`](./helpers/README.md): `embed`, `generateImage`, `transcribe`,
       `liveStart`, `liveStop`, `livePause`, `ocrRegions`.
-  - `generate` request, `GenerateRequest`: `{id, turns: PageTurn[], config?, model?, priority?}`.
+  - `generate` request, `GenerateRequest`: `{id, turns: PageTurn[], config?, model?, priority?, owner?, at?}`.
     - `PageTurn` is `{role: 'user'|'model', text, image?, selection?}`. `image` is a URL or data URL.
     - `config` keys: `temperature`, `topK`, `topP`, `randomSeed` (sent to the runtime as `seed`) and
       `maxOutputTokens`. Other keys are ignored.

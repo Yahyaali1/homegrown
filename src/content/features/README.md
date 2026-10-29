@@ -2,7 +2,7 @@
 
 ## Overview
 
-The 18 on-page feature modules of the content script. Each one exports `install()` and uses the shared
+The 19 on-page feature modules of the content script. Each one exports `install()` and uses the shared
 `ui` object (`PageUI` from [`../core.ts`](../core.ts)) to add the following:
 
 - toolbar, launcher, palette or image actions
@@ -12,7 +12,7 @@ The 18 on-page feature modules of the content script. Each one exports `install(
 
 [`../main.ts`](../main.ts) installs the modules in this order: writing, ghost, replies, jargon, forms,
 youtube, reading, translate, scrollscrape, images, search, links, tabs, memory, voice, livecaptions, missions,
-palette.
+palette, gardenlock.
 
 ## Interface
 
@@ -189,6 +189,15 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
   - Gates: the Alt+K handler checks `ui.enabled()`.
   - Guard: top frame only.
 
+- `gardenlock.ts`
+  - No actions. On `{type:'garden-lock', run, name}` (answered `locked`) it shows "<name> is working here · Take
+    over · Stop" in its own closed shadow root (`<homegrown-lock>`, not `ui.root`); the name is text only. Only the
+    buttons take pointer events, and only `isTrusted` clicks act (`runTakeover`, `runStop`). It sits in the top
+    layer (`popover="manual"`) with `!important` inline styles, and is put back and raised when the page removes,
+    restyles or closes it. Removed on `garden-unlock`, `pagehide`, or a click; unlock and a click also set
+    `window.__hgHalt`, which stops `__hgStep` before any further click or fill.
+  - Guard: top frame, `http(s)` pages only. Not gated by `ui.enabled()`: a gardener's tab always shows it.
+
 ### Worker and engine commands by module
 
 - `images.ts`: `generateImage`, `depthMap`, `capture`. `livephoto.ts`: WebGL parallax + MediaRecorder → WebM
@@ -200,6 +209,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 - `scrollscrape.ts`: `scrollList`, `scrollOrganize`
 - `search.ts`: `research`, `researchTerm`, `related`, `checkClaim`
 - `tabs.ts`: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`, `watchPage`
+- `gardenlock.ts`: `runTakeover`, `runStop`
 - `voice.ts`: `transcribe`
 - `youtube.ts`: `ytCaptions`
 - Engine (`engineCall`): `embed` (`reading.ts`) and `ocrRegions` (`translate.ts`)
@@ -220,7 +230,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
   - Direct changes to core markup: `writing.ts` and `translate.ts` call `ui.$('.bar').replaceChildren`.
     `voice.ts` appends its player to the `.actions` of `ui.$('.card')`.
 - Calls to the worker go through `ui.bg` and `engineCall` (`shared/protocol.ts`). Exceptions:
-  `ghost.ts` opens its own `run` port, and `images.ts`, `livecaptions.ts` and `search.ts` add
+  `ghost.ts` opens its own `run` port, and `images.ts`, `livecaptions.ts`, `search.ts` and `gardenlock.ts` add
   `chrome.runtime.onMessage` listeners.
 - `engineCall` first sends the worker command `ensure`. It throws when `ensure` replies `{ok: false, error}`
   or when the engine reply is not ok.
@@ -278,7 +288,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 - Background messaging:
   - `ui.bg` commands (see the list above) and `engineCall`.
   - Runtime message types that features handle: `eg-status` (`images.ts`), `livecaption`
-    (`livecaptions.ts`) and `web-progress` (`search.ts`).
+    (`livecaptions.ts`), `web-progress` (`search.ts`), and `garden-lock` / `garden-unlock` (`gardenlock.ts`).
   - A `run` port in `ghost.ts`.
 - The microphone (`getUserMedia` in `voice.ts`) and `speechSynthesis` (`voice.ts`, `reading.ts`).
 - `chrome.storage.local`: `voiceSamples`, `flashcards`, `captionSize`.

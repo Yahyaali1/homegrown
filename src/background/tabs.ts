@@ -5,14 +5,17 @@ import { jsonArray } from '../domain/html.ts';
 const BUDGET = 9000; // ponytail: chars of page text shared across all tabs, so the prompt fits a 4k-token context
 type Sender = chrome.runtime.MessageSender | undefined;
 
-async function tabText(tabId: number, cap: number): Promise<string> {
+/** A tab's main text, and the URL it was read at. */
+export async function tabPage(tabId: number, cap: number): Promise<{ text: string; url: string }> {
   const [r] = await chrome.scripting.executeScript({
     target: { tabId },
     args: [cap],
-    func: (n: number) => ((document.querySelector('article, main, [role=main]') as HTMLElement | null) ?? document.body).innerText.replace(/\n{3,}/g, '\n\n').trim().slice(0, n),
+    func: (n: number) => ({ url: location.href, text: ((document.querySelector('article, main, [role=main]') as HTMLElement | null) ?? document.body).innerText.replace(/\n{3,}/g, '\n\n').trim().slice(0, n) }),
   });
-  return r?.result ?? '';
+  return r?.result ?? { text: '', url: '' };
 }
+
+export const tabText = async (tabId: number, cap: number): Promise<string> => (await tabPage(tabId, cap)).text;
 
 const windowOf = (sender: Sender) => sender?.tab?.windowId ?? chrome.windows.WINDOW_ID_CURRENT;
 

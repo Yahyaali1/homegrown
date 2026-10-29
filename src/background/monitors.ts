@@ -78,6 +78,7 @@ export function init(): void {
     if (kind === 'sched') runSchedule(id).catch((e) => console.warn('scheduled task failed', e));
   });
   chrome.notifications.onClicked.addListener(async (id) => {
+    if (!id.startsWith('eg-')) return; // other modules' notifications
     const { notifUrls } = await chrome.storage.session.get('notifUrls');
     const url = (notifUrls as Record<string, string> | undefined)?.[id];
     if (url) void chrome.tabs.create({ url });

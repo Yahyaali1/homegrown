@@ -53,3 +53,24 @@ export async function ask(prompt: string, selection?: string, config: Partial<Sa
     signal?.removeEventListener('abort', stop);
   }
 }
+
+/**
+ * Like `ask`, for callers that pin a model (gardeners): names the model and an owner (so a restarted worker can
+ * cancel what the old one left queued), and returns the model that answered.
+ */
+export async function askAs(prompt: string, data: string, o: { task: TaskId; model: string; owner: string; signal?: AbortSignal; sampling?: Partial<Sampling> }): Promise<{ text: string; model: string }> {
+  o.signal?.throwIfAborted();
+  const id = crypto.randomUUID();
+  const stop = () => void engine('cancel', { id }).catch(() => {});
+  o.signal?.addEventListener('abort', stop, { once: true });
+  const { seed, ...rest } = o.sampling ?? {};
+  try {
+    const r = await engine<{ text: string; stats: { model: string } }>('generate', {
+      id, turns: [{ role: 'user', text: prompt, selection: data }], config: { ...rest, ...(seed !== undefined && { randomSeed: seed }) },
+      model: o.model, priority: 'background', owner: o.owner, at: Date.now(),
+    });
+    return { text: r.text, model: r.stats.model };
+  } finally {
+    o.signal?.removeEventListener('abort', stop);
+  }
+}

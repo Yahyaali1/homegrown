@@ -11,7 +11,7 @@ import { parseWorkflow } from '../domain/mission/workflow.ts';
 import { applyFilter } from '../domain/mission/rows.ts';
 import { productKey } from '../domain/mission/brief.ts';
 import { hostOf, num } from '../domain/text.ts';
-import { columns, type Row, type SearchResult, type Workflow } from '../domain/mission/types.ts';
+import { columns, type LoopResult, type Row, type SearchResult, type Workflow } from '../domain/mission/types.ts';
 import type { Ask, MissionEvent, MissionPorts } from '../domain/mission/ports.ts';
 import { mergeFrames, type PageModel } from '../shared/pagemodel.ts';
 import { isExtensionPage, play, refuseActs } from './pagerequest.ts';
@@ -31,20 +31,104 @@ interface SearchEngine {
   settleMs: number;
   select: { item: string; title: string; link: string; snippet: string };
 }
-const ENGINES: readonly SearchEngine[] = [
+export const ENGINES: readonly SearchEngine[] = [
   { url: (q) => `https://www.bing.com/search?q=${encodeURIComponent(q)}&setlang=en`, settleMs: 0, select: { item: 'li.b_algo', title: 'h2', link: 'h2 a', snippet: '.b_caption p, p' } },
   { url: (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}&kl=us-en`, settleMs: 2000, select: { item: 'article[data-testid=result]', title: 'h2', link: 'a[data-testid=result-title-a]', snippet: '[data-result=snippet]' } },
   { url: (q) => `https://search.brave.com/search?q=${encodeURIComponent(q)}`, settleMs: 2000, select: { item: '#results .snippet[data-type=web]', title: '.title', link: 'a', snippet: '.snippet-description, .generic-snippet' } },
 ];
 
 /** A running mission's handles: Stop, and the tab group its tabs live in. */
-export interface Run { stop: AbortController; group?: number | undefined; regrouping?: Promise<number | undefined> | undefined }
+export interface Run {
+  stop: AbortController;
+  group?: number | undefined;
+  regrouping?: Promise<number | undefined> | undefined;
+  /** Its owner's id in `liveGroups` (missions: the run id; gardeners: the garden run id). */
+  id?: string;
+  /** The group's title; '❀ Mission' when unset. */
+  title?: string;
+  /** Tabs open in this window (a gardener's minimized one), else the focused one. */
+  windowId?: number;
+  /** Set-up for every tab the run opens, before its first request (a gardener's cookie rule). */
+  prepare?: (tabId: number) => Promise<() => Promise<void>>;
+  /** Epoch ms: no tab waits past it. */
+  deadline?: number;
+  /** Tabs handed to the person (a gardener's take-over): never closed by the run. */
+  kept?: Set<number>;
+}
+
+/** The person closed the tab a call was working in. */
+export class TabClosed extends Error {
+  constructor() {
+    super('The tab was closed.');
+  }
+}
+
+// Groups (and a gardener's window) that live runs own, in chrome.storage.session: a restarted worker closes them.
+// Keys: a group id, or `win:<windowId>`.
+type LiveGroups = Record<string, { runId: string; windowId?: number }>;
+// What the old worker left, read before this worker writes anything: only these are ever closed at start.
+const oldGroups = chrome.storage.session.get('liveGroups').then(({ liveGroups: g }) => (g ?? {}) as LiveGroups, () => ({}) as LiveGroups);
+let groupsChain: Promise<unknown> = oldGroups;
+const listed = new Set<number>(); // groups this worker already wrote
+function liveGroups(change: (g: LiveGroups) => void): Promise<unknown> {
+  return (groupsChain = groupsChain.then(async () => {
+    const { liveGroups: g = {} } = (await chrome.storage.session.get('liveGroups')) as { liveGroups?: LiveGroups };
+    change(g);
+    await chrome.storage.session.set({ liveGroups: g });
+  }).catch(() => {}));
+}
+
+/** Records a window a run opened (a gardener's minimized one), so a restarted worker can close it. */
+export const markWindow = (runId: string, windowId: number) => liveGroups((g) => (g[`win:${windowId}`] = { runId, windowId }));
+
+/** Closes the window if only blank tabs are left in it: tabs the person opened there keep it. */
+export async function closeIfEmpty(windowId: number): Promise<void> {
+  const tabs = await chrome.tabs.query({ windowId }).catch(() => null);
+  if (tabs && tabs.every((t) => !t.url || t.url === 'about:blank')) await chrome.windows.remove(windowId).catch(() => {});
+}
+
+/** At worker start: closes the groups (and their windows, once empty) the old worker listed, and forgets them. */
+export async function closeLiveGroups(): Promise<void> {
+  const old = Object.entries(await oldGroups);
+  await liveGroups((g) => { for (const [k] of old) delete g[k]; });
+  const kept = new Set(old.filter(([k]) => k.startsWith('kept:')).map(([k]) => Number(k.slice(5))));
+  for (const [k] of old.filter(([k]) => !k.includes(':'))) {
+    const tabs = await chrome.tabs.query({ groupId: Number(k) }).catch(() => []);
+    const ids = tabs.flatMap((t) => (t.id === undefined || kept.has(t.id) ? [] : [t.id]));
+    if (ids.length) await chrome.tabs.remove(ids).catch(() => {});
+  }
+  for (const w of new Set(old.flatMap(([, v]) => (v.windowId === undefined ? [] : [v.windowId])))) await closeIfEmpty(w);
+}
+
+/** A tab a run handed to the person: start-up cleanup skips it even if it is still in a listed group. */
+export const markKept = (runId: string, tabId: number) => liveGroups((g) => (g[`kept:${tabId}`] = { runId }));
+
+/** Closes whatever tabs are left in the run's group, and drops its `liveGroups` entries. */
+export async function endRun(run: Run): Promise<void> {
+  if (run.group !== undefined) {
+    await chrome.tabs.query({ groupId: run.group }).then((ts) => {
+      const ids = ts.map((t) => t.id!).filter((id) => !run.kept?.has(id));
+      if (ids.length) return chrome.tabs.remove(ids);
+    }).catch(() => {});
+  }
+  if (run.id !== undefined) void liveGroups((g) => { for (const [k, v] of Object.entries(g)) if (v.runId === run.id) delete g[k]; });
+}
 
 /**
  * Puts a tab in the run's "❀ Mission" group. The group is gone once its last tab closed (the search tab, or the
  * page before in Collect): then one new group, made by the first tab to find out; tabs opening alongside join it.
  */
-async function joinGroup(run: Run, tabId: number): Promise<void> {
+export async function joinGroup(run: Run, tabId: number): Promise<void> {
+  await group(run, tabId);
+  if (run.group === undefined) return;
+  chrome.tabGroups.update(run.group, { title: run.title ?? '❀ Mission', collapsed: true }).catch(() => {});
+  const g = run.group;
+  if (run.id === undefined || listed.has(g)) return;
+  listed.add(g);
+  void liveGroups((l) => (l[g] = { runId: run.id!, ...(run.windowId !== undefined && { windowId: run.windowId }) }));
+}
+
+async function group(run: Run, tabId: number): Promise<void> {
   const into = (groupId: number) => chrome.tabs.group({ tabIds: tabId, groupId }).then(() => true, () => false);
   const tried = run.group;
   if (tried !== undefined && (await into(tried))) return;
@@ -74,17 +158,19 @@ export async function waitLoaded(tabId: number, ms: number): Promise<void> {
  * a page that hangs for `timeoutMs`, ends the wait at once: a busy or hostile page can't hold the run. `prepare` runs
  * on a blank tab before the page loads (request rules, device emulation) and returns its own cleanup.
  */
-export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Promise<T>, timeoutMs = 90000, prepare?: (tabId: number) => Promise<() => Promise<void>>): Promise<T> {
+export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Promise<T>, timeoutMs = 90000, prepare = run.prepare): Promise<T> {
   run.stop.signal.throwIfAborted();
-  const tab = await chrome.tabs.create({ url: prepare ? 'about:blank' : url, active: false });
+  if (run.deadline !== undefined) timeoutMs = Math.min(timeoutMs, run.deadline - Date.now());
+  if (timeoutMs <= 0) throw new Error('Out of time.');
+  const tab = await chrome.tabs.create({ url: prepare ? 'about:blank' : url, active: false, ...(run.windowId !== undefined && { windowId: run.windowId }) });
   const tabId = tab.id!;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let onAbort = () => {};
+  let onRemoved = (_id: number) => {};
   let cleanup = async () => {};
   try {
     // Grouped first: a worker that stops mid-setup leaves a tab the start-up cleanup can find.
     await joinGroup(run, tabId);
-    if (run.group !== undefined) chrome.tabGroups.update(run.group, { title: '❀ Mission', collapsed: true }).catch(() => {});
     if (prepare) {
       cleanup = await prepare(tabId);
       await chrome.tabs.update(tabId, { url });
@@ -94,17 +180,20 @@ export async function inTab<T>(url: string, run: Run, use: (tabId: number) => Pr
       onAbort = () => reject(new DOMException('Stopped', 'AbortError'));
       run.stop.signal.addEventListener('abort', onAbort, { once: true });
       if (run.stop.signal.aborted) onAbort(); // Stop pressed while the tab was opening
+      onRemoved = (id) => id === tabId && reject(new TabClosed());
+      chrome.tabs.onRemoved.addListener(onRemoved);
     });
     return await Promise.race([use(tabId), cut]);
   } finally {
     clearTimeout(timer);
     run.stop.signal.removeEventListener('abort', onAbort);
+    chrome.tabs.onRemoved.removeListener(onRemoved);
     await cleanup().catch(() => {});
-    chrome.tabs.remove(tabId).catch(() => {});
+    if (!run.kept?.has(tabId)) chrome.tabs.remove(tabId).catch(() => {});
   }
 }
 
-function searchInTab(query: string, n: number, run: Run, engine: SearchEngine): Promise<SearchResult[]> {
+export function searchInTab(query: string, n: number, run: Run, engine: SearchEngine): Promise<SearchResult[]> {
   return inTab(engine.url(query), run, async (tabId) => {
     await waitLoaded(tabId, 15000);
     if (engine.settleMs) await sleep(engine.settleMs);
@@ -121,7 +210,8 @@ function searchInTab(query: string, n: number, run: Run, engine: SearchEngine): 
 
 // Every frame is read, cross-origin iframes included (embedded shops, widgets). A background tab is ours to change:
 // lib/pageread.js may flatten shadow DOM and click controls named after the goal's terms.
-function readInTab(url: string, run: Run, terms: string[], scenario?: Scenario): Promise<PageModel | null> {
+/** `tabUrl` and `frameUrls`: where the tab and its frames ended up (taint follows them); missing when unknown. */
+export function readInTab(url: string, run: Run, terms: string[], scenario?: Scenario): Promise<(PageModel & { tabUrl?: string; frameUrls?: string[] }) | null> {
   return inTab(url, run, async (tabId) => {
     await waitLoaded(tabId, 20000);
     await sleep(1200); // late-rendered prices
@@ -134,13 +224,16 @@ function readInTab(url: string, run: Run, terms: string[], scenario?: Scenario):
       func: (t: string[]) => window.__hgReadPage?.({ shadow: true, terms: t, scroll: window === top }) ?? null,
     });
     const models = frames.sort((a, b) => a.frameId - b.frameId).map((f) => f.result).filter((p): p is PageModel => !!p);
-    return mergeFrames(models, url);
+    const page = mergeFrames(models, url);
+    const tabUrl = (await chrome.tabs.get(tabId).catch(() => null))?.url;
+    const urls = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: () => location.href }).catch(() => null);
+    return page && { ...page, ...(tabUrl && { tabUrl }), ...(urls && { frameUrls: urls.map((f) => f.result ?? '') }) };
   });
 }
 
-function portsFor(runId: string, run: Run): MissionPorts {
+function portsFor(runId: string, run: Run, ask_: Ask = ask): MissionPorts {
   return {
-    ask,
+    ask: ask_,
     // The tab engines first; the service worker's own fetch last (engines often challenge it, but it needs no tab).
     engines: ENGINES.length + 1,
     search: (q, n, e) => (ENGINES[e] ? searchInTab(q, n, run, ENGINES[e]) : webSearch({ q, n })),
@@ -152,14 +245,23 @@ function portsFor(runId: string, run: Run): MissionPorts {
 
 /** Runs `go` with a fresh Run, then closes whatever tabs are left in its group. */
 async function withRun<T>(runId: string, go: (ports: MissionPorts) => Promise<T>): Promise<T> {
-  const run: Run = { stop: new AbortController() };
+  const run: Run = { id: runId, stop: new AbortController() };
   runs.set(runId, run);
   try {
     return await go(portsFor(runId, run));
   } finally {
     runs.delete(runId);
-    if (run.group !== undefined) chrome.tabs.query({ groupId: run.group }).then((ts) => { if (ts.length) return chrome.tabs.remove(ts.map((t) => t.id!)); }).catch(() => {});
+    void endRun(run);
   }
+}
+
+/**
+ * A mission as one awaited call inside someone else's run (a gardener's): its tabs, model and Stop. No live entry,
+ * no nudge; the caller ends the run. Progress still goes out as agent-progress under `run.id`.
+ */
+export async function missionRun(goal: string, run: Run, ask_: Ask): Promise<LoopResult> {
+  const wf = await plan(ask_, goal, '');
+  return runMission(portsFor(run.id ?? crypto.randomUUID(), run, ask_), wf);
 }
 
 // ---- live missions: several at once, each attachable, kept across a service-worker restart as summaries ----
