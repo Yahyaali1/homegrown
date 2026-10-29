@@ -955,14 +955,14 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b in progress.
 
 | Slice | State |
 |---|---|
 | T1 | Done (c4cbc5e), reviewed (0 Blockers, 1 Major fixed): 187 unit tests pass; `tests/plan.spec.mjs` passes on the real model; `garden.spec` 4/4. `abilities.mjs plan`: E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan`, and Plan first stays off in the UI |
 | T2 | Done (1efce2f), reviewed (0 Blockers, 2 Majors fixed): 196 unit tests pass (9 new in `garden-steer`); `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4 (its sensitive test now waits on Library, as Chat shows the tray); `plan.spec` 1/1 |
-| T3 | Built, awaiting review: 205 unit tests pass (9 new in `garden-runlog`; review fixes: follow-up taint read fresh, queued messages kept on failRun and expiry, report digests); `tests/runlog.spec.mjs` 2/2 (real model); `approvals.spec` 2/2, `garden.spec` 4/4, `plan.spec` 1/1. Retry is allowed on any ended run with a failed step (a read run with one failed page ends `done`, so "failed or best-effort" only would block the e2e) |
-| T3b | Planned |
+| T3 | Done (3e37fce), reviewed (0 Blockers, 1 Major fixed): 205 unit tests pass (9 new in `garden-runlog`); `tests/runlog.spec.mjs` 2/2 (real model); `approvals.spec` 2/2, `garden.spec` 4/4, `plan.spec` 1/1. Retry is allowed on any ended run with a failed step (a read run with one failed page ends `done`) |
+| T3b | Built, awaiting review: 214 unit tests pass (9 new in `garden-helpers`); `tests/helpers.spec.mjs` 1/1 (real model, max 3 run tabs); `garden.spec` 4/4 (its row locator now uses the whole answer), `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2. Deviations: `LIMITS.readUrls` 25 (recipes keep `urls` 5); helpers keep the routine id; auto-retry waits as `queued` with `retryAt`; `WORD` prompt says what a first look holds |
 | T4 | Planned |
 | T5 | Planned |
 | T6 | Planned |
@@ -978,6 +978,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 in progress.
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T3 | code review | 0 / 1 | Fixed: a follow-up reads the earlier run again on each turn, and taints itself if the earlier run is tainted now. Minors fixed: queued messages were lost on `failRun` and expiry; a report without page text keeps digests only for `read_page`, `read_my_tab`, `act` and `collect` |
 | T2 | code review | 0 / 2 | Fixed: `propose_routine` denied when the run is tainted, and its card lists all URLs; `approveAllOk(q, run)` is false for a `reach` in a tainted run (decision 5 reworded). Minors fixed: unused steer cap of 3 removed; question answers parsed as strict JSON; a running transaction merges `inbox`; `propose_routine` id `<runId>.<step>`, so a re-run is idempotent |
 | T1 | code review | 0 / 1 | Fixed: `chooseData` listed named tabs only for `ask` (loop.ts 333); now also `plan`, with a test that the plan prompt's data holds the tab URL |
 | 1 | design | 1 / 10 | All accepted after checking the code. Plan yes no longer outlives taint: planned reads join `seen` as approved, non-sensitive acts get `fromPlan` pre-approvals that `approveRequest` re-checks at call time (decision 2). Abilities pinned on the run in `pin()` (decision 1). `plan` treated like `ask` for tabs. Edited approvals stored as `answer.args` and used by `attempt`/`call`. Explicit `decide` cases for `propose_routine`, `remember`, `doc_read`, `doc_write`. Helpers moved to T3b with `live` as a map. `runRetry` drops the step, later steps and later turns; direct work only. `act_my_tab`: in `actOf`, fill sensitive whatever the taint, borrowed tab in `owned()`. MCP: only person-confirmed `describe` reaches the prompt; names checked. Presets: `workflow:<preset>/<id>` abilities gate turn-on. New `deck` and `cite` abilities with model-free fallbacks; chat Plan mode needs `plan` |
@@ -1055,3 +1056,20 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
      claim that a model has `plan`.
   3. The act approval card shows the steps as one JSON field. A per-step editor is left for later.
   4. The `draft` and `notify` editable entries are unused until T11 adds `app_call`.
+
+**2026-10-29: T3 landed (commit 3e37fce).**
+- 205 unit tests pass; `tests/runlog.spec.mjs` 2/2 on the real model; `approvals` 2/2, `garden` 4/4, `plan` 1/1.
+- Builder deviations, accepted:
+  - Retry works on any ended run with a failed step, not only failed or best-effort runs (a read run with one bad page
+    ends `done`).
+  - Retry drops the step and every later step, turn and request (so acts are asked again), and resets `usedMs` and
+    `interrupted`.
+  - The 30 s auto-retry wait is held inside the call, so it blocks the one-run queue. It is marked `ponytail:`; T3b's
+    `live` map must revisit it.
+  - A queued message becomes a follow-up when the run ends done, failed or expired, is claimed, or fails in
+    `recover`, but not when it is stopped. Leftover queued messages are shown.
+  - The answer is plain text. The pure report code is in the new `domain/garden/report.ts`.
+- Review: 0 Blockers, 1 Major fixed (see Review history).
+- Note: in tools.ts, `note`, `draft` and `notify` have effect `read`. The report's digest filter is by tool name for that
+  reason; keep it in mind if a tool's effect changes.
+- Open: the created-card Open action for the `file`, `doc` and `artifact` kinds waits for T5, T7 and T9.

@@ -24,6 +24,8 @@ Done after the group agents report. Owner: the main session.
   `tray` on both trays; `static/sidepanel.css` styles `.tray`. DONE.
 - T3 (plan T): `static/sidepanel.css` styles the run history's group heads (`li.group-head`), a failed run's `why`,
   step and created-card rows, and the run view's buttons. DONE.
+- T3b (plan T): `docs/architecture.md` ADR-15 gains the helpers amendment (`live` as a map, up to 3 helper runs, the
+  auto-retry wait out of the call). DONE.
 
 ## Known issues
 

@@ -10,7 +10,7 @@ import { parseSettings } from '../domain/settings.ts';
 import { nextAfter } from '../domain/garden/schedule.ts';
 import { retryStep } from '../domain/garden/loop.ts';
 import { reportOf } from '../domain/garden/report.ts';
-import { historyGroup, lookOf, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
+import { helping, historyGroup, lookOf, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
 import type { Note } from '../domain/garden/notes.ts';
 import { hostOf } from '../domain/text.ts';
 import type { Grant } from '../domain/garden/policy.ts';
@@ -374,7 +374,7 @@ function renderRuns(changed?: string): void {
     let li = runRows.get(run.id);
     if (!li) runRows.set(run.id, (li = fresh(h('li', {}, flower(26, '')))));
     setLook(li, lookFor(run.gardenerId));
-    if (!changed || changed === run.id || !li.stage) fillRun(li, run);
+    if (!changed || changed === run.id || runs.get(changed)?.parentId === run.id || !li.stage) fillRun(li, run); // a helper's change can show Resume all
     return li;
   })] : []));
   place($('#garden-runs'), nodes.length ? nodes : [emptyPot('No runs yet.')]);
@@ -391,7 +391,8 @@ function groupHead(key: string): HTMLLIElement {
 }
 
 const nameOf = (run: GardenRun) => [gardeners.find((x) => x.id === run.gardenerId)?.name ?? 'A deleted gardener',
-  run.routineId ? routines.find((x) => x.id === run.routineId)?.name ?? 'a deleted routine' : 'by hand'].join(' · ');
+  run.routineId ? routines.find((x) => x.id === run.routineId)?.name ?? 'a deleted routine' : 'by hand',
+  ...(run.parentId ? [`helper ${run.id.slice(run.id.lastIndexOf('.h') + 2)}`] : [])].join(' · ');
 
 const ANSWERED_HERE: Request['kind'][] = ['reach', 'question', 'approve', 'did-it-happen', 'takeover', 'plan'];
 
@@ -424,6 +425,7 @@ function fillRun(li: Row, run: GardenRun): void {
   const status = run.status === 'done' && run.best ? 'Best effort'
     : locked ? 'Working in a tab (locked)'
     : run.status === 'waiting' && run.requests.some((q) => q.kind === 'takeover' && !q.answer) ? 'You have its tab'
+    : helping(run) ? 'Its helpers are reading'
     : STATUS[run.status];
   // A failed run says why first, in plain words.
   const result = run.status === 'failed' ? run.why ?? '' : run.answer ?? run.why ?? '';
@@ -446,13 +448,16 @@ function fillRun(li: Row, run: GardenRun): void {
     }), 'ghost'), `Delete this run of ${name}`);
   // Here too, not only on the page: a page can try to hide its lock bar.
   const take = locked ? labelled(busyButton('Take over', tryIt(err, () => bg('runTakeover', { id: run.id })), 'secondary'), `Take over from ${name}`) : null;
+  // Resume all: on a parent with a helper that failed or stopped, while it waits on them or once it ended.
+  const resume = (helping(run) || !active) && [...runs.values()].some((k) => k.parentId === run.id && (k.status === 'failed' || k.status === 'stopped'))
+    ? labelled(busyButton('Resume all', tryIt(err, () => bg('runResumeAll', { id: run.id })), 'secondary'), `Resume all helpers of ${name}`) : null;
   const flowerEl = li.firstElementChild!;
   // A run that ended swaps its Steer box for a follow-up box (and back, when retried).
   if (steerForms.get(run.id)?.dataset.active !== String(active)) steerForms.delete(run.id);
   li.replaceChildren(flowerEl,
     h('span', { className: 't' }, h('b', { textContent: name }), h('span', { className: 'p', textContent: `${status} · ${at(run.endedAt ?? run.startedAt ?? run.queuedAt)}` }),
       result && h('span', { className: run.status === 'failed' ? 'result why' : 'result', textContent: result }), view, active ? steerBox(run.id) : followUpBox(run), err),
-    take ? h('div', { className: 'actions' }, take, act) : act);
+    take || resume ? h('div', { className: 'actions' }, take, resume, act) : act);
 }
 
 /** The run as a chat, top to bottom: the request, each step, what it made, then how it worked and a report. */

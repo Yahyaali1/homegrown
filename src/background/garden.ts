@@ -1,5 +1,5 @@
 // Gardeners in the service worker: records in IndexedDB 'hg-garden', routines on alarms 'garden:<routineId>', and one
-// queue that runs one gardener run at a time. The loop itself is pure (domain/garden/loop.ts); this file does each
+// queue that runs one gardener run at a time (or up to 3 helper runs of one read together). The loop itself is pure (domain/garden/loop.ts); this file does each
 // action, stores the result, and persists after every one, so a stopped worker resumes where it was.
 import { askAs, engine, modelFor } from './engine.ts';
 import { closeIfEmpty, closeLiveGroups, endRun, joinGroup, markKept, markWindow, TabClosed, type Run } from './missions.ts';
@@ -10,18 +10,19 @@ import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
-import { answeredBy, answerFor, answerPlan, approveRequest, AUTO_RETRY_MS, autoRetry, digest, earlierOf, followUpRun, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, queuedFollowUp, recover, refusal, retryStep, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
+import { answeredBy, answerFor, answerPlan, answerRefused, approveRequest, AUTO_RETRY_MS, autoRetry, digest, earlierOf, followUpRun, helpersOf, mergeHelpers, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, queuedFollowUp, recover, refusal, resumeAll, retryStep, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
 import { actOf, addSeen, approveAllOk, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
-import { claim, expired, nextAfter } from '../domain/garden/schedule.ts';
+import { claim, expired, nextAfter, nextBatch } from '../domain/garden/schedule.ts';
 import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
-import { newRun, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Work } from '../domain/garden/records.ts';
+import { helping, mayStart, newRun, pruneIds, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
 const ALARM = 'garden:';
 const KEEP_RUNS = 30;
 const NEEDED_YOU = 'Needed you; the next run starts now.';
+const neededYou = (r: GardenRun) => (r.parentId ? 'Needed you for too long.' : NEEDED_YOU);
 const DAY = 24 * 3_600_000;
 
 const db = idb.open('hg-garden', 1, (d, old) => {
@@ -58,11 +59,10 @@ const followQueued = (run: GardenRun): GardenRun[] => {
   return f ? [run, f] : [run];
 };
 
-/** The newest 30 runs per gardener stay; queued, running and waiting runs always do. */
+/** The newest 30 runs per gardener stay, with their helpers; queued, running and waiting runs always do. */
 async function prune(gardenerId: string): Promise<void> {
   const d = await db;
-  const mine = parsed(await idb.all(d, 'runs', 'gardenerId', gardenerId), parseRun).sort((a, b) => b.queuedAt - a.queuedAt);
-  for (const r of mine.slice(KEEP_RUNS)) if (r.status === 'done' || r.status === 'failed' || r.status === 'stopped') await idb.del(d, 'runs', r.id);
+  for (const id of pruneIds(parsed(await idb.all(d, 'runs', 'gardenerId', gardenerId), parseRun), KEEP_RUNS)) await idb.del(d, 'runs', id);
 }
 
 // ---- routines: alarms and claims ----
@@ -77,7 +77,7 @@ async function fire(routineId: string): Promise<void> {
     if (!r) return null;
     const runs = parsed(await idb.req(t.objectStore('runs').index('routineId').getAll(routineId)), parseRun);
     const c = claim(r, runs, Date.now());
-    for (const id of c.fail) changed.push(...followQueued(end(runs.find((x) => x.id === id)!, 'failed', NEEDED_YOU)));
+    for (const id of c.fail) { const x = runs.find((y) => y.id === id)!; changed.push(...followQueued(end(x, 'failed', neededYou(x)))); }
     if (c.newRun) changed.push(c.newRun);
     // A slot's run id is fixed (`routine@due`): never overwrite a run that already has it.
     if (c.newRun && (await idb.req(t.objectStore('runs').getKey(c.newRun.id))) !== undefined) changed.pop();
@@ -89,9 +89,10 @@ async function fire(routineId: string): Promise<void> {
   if (routine) await arm(routine);
 }
 
-// ---- the queue: one run at a time, oldest first ----
+// ---- the queue: one run at a time, oldest first; a read's helpers up to 3 at once ----
 
-let live: { id: string; name: string; tab: Run; run: GardenRun } | null = null;
+/** Runs working now, by id: Stop, take over and the lock bar act on the entry of the run they name. */
+const live = new Map<string, { name: string; tab: Run; run: GardenRun; borrowed: Set<number> }>();
 let draining: Promise<void> | null = null;
 let dirty = false;
 
@@ -101,7 +102,7 @@ function drain(): void {
     await started;
     while (dirty) {
       dirty = false;
-      for (let run = await nextQueued(); run; run = await nextQueued()) await turn(run).catch((e) => failRun(run.id, e));
+      for (let batch = await nextQueued(); batch.length; batch = await nextQueued()) await together(batch);
     }
   })().finally(() => {
     draining = null;
@@ -119,15 +120,43 @@ async function failRun(id: string, e: unknown): Promise<void> {
   for (const x of f) await saveRun(x);
 }
 
-async function nextQueued(): Promise<GardenRun | undefined> {
-  const now = Date.now(), runs = await allRuns();
+/** One run, or one parent's helpers side by side in one window; their model calls still queue in the background lane. */
+async function together(batch: GardenRun[]): Promise<void> {
+  const parentId = batch[0]!.parentId;
+  let win: number | undefined;
+  if (parentId && !(await chrome.windows.getAll({ windowTypes: ['normal'] })).length) {
+    win = (await chrome.windows.create({ url: 'about:blank', state: 'minimized', focused: false }))?.id;
+    if (win !== undefined) await markWindow(parentId, win);
+  }
+  await Promise.all(batch.map((run) => turn(run, win).catch((e) => failRun(run.id, e))));
+  if (win !== undefined) await closeIfEmpty(win);
+}
+
+let waking: ReturnType<typeof setTimeout> | undefined;
+async function nextQueued(): Promise<GardenRun[]> {
+  const now = Date.now();
+  let runs = await allRuns();
   for (const r of runs.filter((x) => expired(x, now))) {
-    for (const x of followQueued(end(r, 'failed', NEEDED_YOU))) {
+    for (const x of followQueued(end(r, 'failed', neededYou(r)))) {
       await saveRun(x);
       if (x !== r) runs.push(x);
     }
   }
-  return runs.filter((r) => r.status === 'queued').sort((a, b) => a.queuedAt - b.queuedAt)[0];
+  // A parent whose helpers all ended: code answers its wait, and it is queued for its one think.
+  let merged = false;
+  for (const p of runs.filter(helping)) {
+    const kids = runs.filter((r) => r.parentId === p.id);
+    if (kids.every((k) => k.status === 'done' || k.status === 'failed' || k.status === 'stopped')) merged = !!(await updateRun(p.id, (r) => void mergeHelpers(r, kids, now)).catch(() => null)) || merged;
+  }
+  if (merged) runs = await allRuns();
+  // A read waiting out its auto-retry: the queue wakes for it (a timer, and an alarm in case the worker sleeps).
+  const due = Math.min(...runs.filter((r) => r.status === 'queued' && r.retryAt! > now).map((r) => r.retryAt!));
+  if (Number.isFinite(due)) {
+    clearTimeout(waking);
+    waking = setTimeout(drain, due - now);
+    void chrome.alarms.create(`${ALARM}wake`, { when: due });
+  }
+  return nextBatch(runs, now);
 }
 
 /** Pins the model and its measured abilities when the run first goes running: what the engine's useModel rule picks, loaded. */
@@ -148,12 +177,17 @@ async function pin(run: GardenRun): Promise<string | null> {
 const knownFor = async (gardenerId: string): Promise<Known> =>
   ({ grants: (await trust.grants()).filter((x) => x.gardenerId === gardenerId), recipes: (await recipesList()).map(factsOf) });
 
-/** One run's turn in the queue: until it is done, failed, waiting or stopped. */
-async function turn(run: GardenRun): Promise<void> {
+/**
+ * One run's turn in the queue: until it is done, failed, waiting or stopped (or queued again: a read waiting out its
+ * auto-retry). `win`: the window its helpers share.
+ */
+async function turn(run: GardenRun, win?: number): Promise<void> {
   const stop = new AbortController();
   // Set before any await: runStop finds the run and aborts it, and a stopped turn saves nothing more.
-  const tab: Run = { id: run.id, stop };
-  live = { id: run.id, name: '', tab, run };
+  const tab: Run = { id: run.id, stop, ...(win !== undefined && { windowId: win }) };
+  const me = { name: '', tab, run, borrowed: new Set<number>() };
+  live.set(run.id, me);
+  let made: number | undefined; // a window this turn opened, closed when it ends
   const save = () => (stop.signal.aborted ? Promise.resolve() : saveRun(run));
   // An ended run's oldest queued message becomes a follow-up run.
   const finish = async (status: Status, why?: string) => {
@@ -167,28 +201,34 @@ async function turn(run: GardenRun): Promise<void> {
   const routine = run.routineId ? parseRoutine(await idb.get(d, 'routines', run.routineId)) ?? undefined : undefined;
   const why = gardener ? await pin(run) : 'Its gardener was deleted.';
   if (why || !gardener) {
-    live = null;
+    live.delete(run.id);
     return await finish('failed', why ?? '');
   }
   run.status = 'running';
   run.startedAt ??= Date.now();
+  delete run.retryAt;
   // Only a run still queued in the database starts: a Stop may have landed since the queue read it.
   const going = await idb.tx(d, 'runs', 'readwrite', async (t) => {
     const now = parseRun(await idb.req(t.objectStore('runs').get(run.id)));
     if (now?.status !== 'queued' || stop.signal.aborted) return false;
+    // A helper whose parent no longer waits on it (stopped meanwhile) stops instead.
+    if (!mayStart(now, run.parentId ? parseRun(await idb.req(t.objectStore('runs').get(run.parentId))) : null)) {
+      t.objectStore('runs').put(end(now, 'stopped'));
+      return false;
+    }
     // A Steer message sent after the queue read the run, before it went live.
     for (const m of now.inbox ?? []) if (!run.inbox?.some((x) => x.id === m.id)) (run.inbox ??= []).push(m);
     t.objectStore('runs').put(run);
     return true;
   });
   if (!going) {
-    live = null;
+    live.delete(run.id);
     return;
   }
   broadcast(run);
-  live.name = gardener.name;
-  // The notes that best match the work, for its choose or word data (a mission's answer is its own: none).
-  const query = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.request : run.work.kind === 'read' ? `${gardener.instructions}\n${run.work.urls.join('\n')}` : '';
+  me.name = gardener.name;
+  // The notes that best match the work, for its choose or word data (a mission's answer is its own; a helper makes no think).
+  const query = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.request : run.work.kind === 'read' && !run.parentId ? `${gardener.instructions}\n${run.work.urls.join('\n')}` : '';
   const notes = query ? await notesFor(gardener.id, query).catch(() => []) : [];
   const before = run.followUp ? await getRun(run.followUp) : null;
   const earlier = before ? earlierOf(before) : '';
@@ -196,9 +236,9 @@ async function turn(run: GardenRun): Promise<void> {
   Object.assign(tab, { title: `❀ ${gardener.name}`, prepare: (t: number) => cookieRule(t, gardener.sites), deadline: Date.now() + budget - run.usedMs });
   try {
     // No normal window open: one minimized window for the run's tabs, closed when its turn ends.
-    if (!(await chrome.windows.getAll({ windowTypes: ['normal'] })).length) {
+    if (win === undefined && !(await chrome.windows.getAll({ windowTypes: ['normal'] })).length) {
       const w = await chrome.windows.create({ url: 'about:blank', state: 'minimized', focused: false });
-      if (w?.id !== undefined) await markWindow(run.id, (tab.windowId = w.id));
+      if (w?.id !== undefined) await markWindow(run.id, (made = tab.windowId = w.id));
       const blank = w?.tabs?.[0]?.id;
       if (blank !== undefined) await joinGroup(tab, blank);
     }
@@ -232,13 +272,15 @@ async function turn(run: GardenRun): Promise<void> {
           for (const m of run.inbox ?? []) if (a.think.steer?.includes(m.id)) m.usedAt = Date.now();
         }
       } else if ('call' in a) {
-        if ((await call(run, ctx, tab, a.call, save)) === 'wait') {
-          run.status = 'waiting';
+        const c = await call(run, ctx, tab, a.call, save);
+        if (c === 'wait' || c === 'later') {
+          run.status = c === 'wait' ? 'waiting' : 'queued';
           return await save();
         }
       } else if ('record' in a) {
         setStep(run, a.record);
       } else if ('request' in a) {
+        if (a.request.kind === 'helpers') return void (stop.signal.aborted || (await split(run, a.request)));
         run.requests.push({ id: crypto.randomUUID().slice(0, 8), ...a.request });
         run.status = 'waiting';
         return await save();
@@ -251,11 +293,26 @@ async function turn(run: GardenRun): Promise<void> {
       await save();
     }
   } finally {
-    live = null;
+    live.delete(run.id);
     await endRun(tab);
-    if (tab.windowId !== undefined) await closeIfEmpty(tab.windowId);
+    if (made !== undefined) await closeIfEmpty(made);
     await prune(run.gardenerId);
   }
+}
+
+/** The parent waits on its helpers, stored with them in one transaction; a helper already stored is kept. */
+async function split(run: GardenRun, request: Omit<Request, 'id'>): Promise<void> {
+  if (!run.requests.some((q) => q.kind === 'helpers' && !q.answer)) run.requests.push({ id: crypto.randomUUID().slice(0, 8), ...request });
+  run.status = 'waiting';
+  const kids = helpersOf(run, Date.now());
+  const going = await idb.tx(await db, 'runs', 'readwrite', async (t) => {
+    const s = t.objectStore('runs');
+    if (parseRun(await idb.req(s.get(run.id)))?.status !== 'running') return false; // stopped meanwhile
+    s.put(run);
+    for (const k of kids) if ((await idb.req(s.getKey(k.id))) === undefined) s.put(k);
+    return true;
+  });
+  if (going) [run, ...kids].forEach(broadcast);
 }
 
 function setStep(run: GardenRun, step: Step): void {
@@ -268,7 +325,7 @@ function setStep(run: GardenRun, step: Step): void {
  * One tool call: policy first (unless the person answered exactly this call, or the action names its answer), stored
  * as started, then run. 'wait': the page showed an acting step to be sensitive, and the person was asked.
  */
-async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: string; args: Record<string, unknown>; answered?: string }, save: () => Promise<void>): Promise<'wait' | void> {
+async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: string; args: Record<string, unknown>; answered?: string }, save: () => Promise<void>): Promise<'wait' | 'later' | void> {
   const { i, tool, args } = c;
   const { gardener } = ctx;
   const act = actOf({ tool, args }, ctx);
@@ -306,20 +363,17 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     const ok = q?.sensitive && said(q) && q.why && !q.answer?.args ? { why: q.why, ...(q.index !== undefined && { index: q.index }) } : undefined;
     const reach = (url: string) => decide(run, gardener, { tool: 'read_page', args: { url } }) === 'allow';
     const go = async () => impl(args as never, { run, gardener, tab, i, db: await db, key, reach, ...(ok && { ok }) } satisfies ToolCtx);
-    // A read or search that timed out or hit a network error: once more after 30 s (stored first, so a restart resumes it).
-    // ponytail: the wait holds the one-run queue; a waiting state would free it if 30 s ever matters.
-    const r = await go().catch(async (e: unknown) => {
-      if (!autoRetry({ i, tool, args, effect, state: 'failed', error: e instanceof Error ? e.message : String(e), at: 0, ...(tries && { tries }) })) throw e;
-      tries = (tries ?? 0) + 1;
-      setStep(run, { i, tool, args, effect, state: 'started', at: Date.now(), tries });
-      await save();
-      if (tab.stop.signal.aborted) throw e;
-      await new Promise((ok, no) => {
-        const t = setTimeout(ok, AUTO_RETRY_MS);
-        tab.stop.signal.addEventListener('abort', () => (clearTimeout(t), no(e)), { once: true });
-      });
-      return go();
-    });
+    let r: Awaited<ReturnType<typeof go>>;
+    try {
+      r = await go();
+    } catch (e) {
+      // A read or search that timed out or hit a network error: once more after 30 s. The step stays started and the
+      // run is queued again with `retryAt`, so the wait holds no queue slot and a restart resumes it.
+      if (tab.stop.signal.aborted || !autoRetry({ i, tool, args, effect, state: 'failed', error: e instanceof Error ? e.message : String(e), at: 0, ...(tries && { tries }) })) throw e;
+      setStep(run, { i, tool, args, effect, state: 'started', at: Date.now(), tries: (tries ?? 0) + 1 });
+      run.retryAt = Date.now() + AUTO_RETRY_MS;
+      return 'later';
+    }
     setStep(run, { i, tool, args, effect, state: 'done', output: r.output, digest: digest(tool, args, { n: r.n, unit: r.unit }), at: Date.now(),
       ...(r.links && { links: r.links }), ...(r.url && { url: r.url }), ...(tries && { tries }) });
     if (r.created) run.created = [...(run.created ?? []).filter((x) => x.kind !== r.created!.kind || x.ref !== r.created!.ref), r.created];
@@ -355,9 +409,11 @@ function page(sender: Sender): void {
 }
 const ready = () => started;
 
-/** The tab is in the live run's group: the run works in it right now. */
-const owned = (id: string, tab: chrome.tabs.Tab | undefined): boolean =>
-  !!tab && live?.id === id && live.tab.group !== undefined && tab.groupId === live.tab.group;
+/** The run works in this tab right now: it is in the run's group, or one the run borrowed. */
+const owned = (id: string, tab: chrome.tabs.Tab | undefined): boolean => {
+  const e = live.get(id);
+  return !!tab && !!e && ((e.tab.group !== undefined && tab.groupId === e.tab.group) || (tab.id !== undefined && e.borrowed.has(tab.id)));
+};
 
 async function mustGardener(id: string): Promise<Gardener> {
   const g = parseGardener(await idb.get(await db, 'gardeners', id));
@@ -368,7 +424,7 @@ async function mustGardener(id: string): Promise<Gardener> {
 /** A read's URLs must be on the gardener's sites. */
 function checkWork(work: unknown, g: Gardener): Work {
   const w = parseWork(work);
-  if (!w) throw new Error('This work isn’t valid: up to 5 http(s) pages, a goal of up to 300 characters, or a request of up to 1000.');
+  if (!w) throw new Error('This work isn’t valid: up to 25 http(s) pages, a goal of up to 300 characters, or a request of up to 1000.');
   const off = w.kind === 'read' ? w.urls.filter((u) => !onSites(hostOf(u), g.sites)) : [];
   if (off.length) throw new Error(`Not on ${g.name}’s sites: ${off.join(', ')}`);
   return w;
@@ -509,23 +565,50 @@ export const handlers = {
       const r = parseRun(await idb.req(t.objectStore('runs').get(id)));
       if (!r) throw new Error('That run no longer exists.');
       if (r.status !== 'done' && r.status !== 'failed' && r.status !== 'stopped') throw new Error('Stop the run before deleting it.');
+      // Its pages are merged into the parent only when all helpers end.
+      if (r.parentId && helping(parseRun(await idb.req(t.objectStore('runs').get(r.parentId))) ?? r)) throw new Error('Its parent run still needs it.');
       t.objectStore('runs').delete(id);
     });
     return true;
   },
-  // Also from a tab in the run's own group (the lock bar).
+  // Also from a tab in the run's own group (the lock bar). Stop on a parent stops its helpers; on a helper, only it.
   runStop: async ({ id }: { id: string }, sender?: Sender) => {
     if (!owned(id, sender?.tab)) page(sender);
     await ready();
-    if (live?.id === id) {
-      // Halted first: a step already running in a tab can't click after Stop.
-      const g = live.tab.group;
-      if (g !== undefined) for (const t of await chrome.tabs.query({ groupId: g }).catch(() => [])) if (t.id !== undefined) await release(t.id);
-      live.tab.stop.abort();
-    }
-    await updateRun(id, (r) => {
-      if (r.status === 'queued' || r.status === 'running' || r.status === 'waiting') end(r, 'stopped');
+    const working = (r: GardenRun) => r.status === 'queued' || r.status === 'running' || r.status === 'waiting';
+    // The parent is stopped first, so a split that commits after it refuses, and the helpers listed next are all there are.
+    const stopOne = async (x: string) => {
+      const e = live.get(x);
+      if (e) {
+        // Halted first: a step already running in a tab can't click after Stop.
+        const g = e.tab.group;
+        if (g !== undefined) for (const t of await chrome.tabs.query({ groupId: g }).catch(() => [])) if (t.id !== undefined) await release(t.id);
+        for (const t of e.borrowed) await release(t);
+        e.tab.stop.abort();
+      }
+      await updateRun(x, (r) => void (working(r) && end(r, 'stopped')));
+    };
+    await stopOne(id);
+    for (const r of await allRuns()) if (r.parentId === id && working(r)) await stopOne(r.id);
+    drain(); // a stopped helper may be the last its parent waited on
+    return true;
+  },
+  /** Resume all: a parent's failed and stopped helpers run again, and the parent waits on them. */
+  runResumeAll: async ({ id }: { id: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const changed = await idb.tx(await db, 'runs', 'readwrite', async (t) => {
+      const s = t.objectStore('runs');
+      const p = parseRun(await idb.req(s.get(String(id))));
+      if (!p) throw new Error('That run no longer exists.');
+      const kids = parsed(await idb.req(s.index('gardenerId').getAll(p.gardenerId)), parseRun).filter((r) => r.parentId === p.id);
+      const out = resumeAll(p, kids, crypto.randomUUID().slice(0, 8));
+      if (typeof out === 'string') throw new Error(out);
+      for (const r of out) s.put(r);
+      return out;
     });
+    changed.forEach(broadcast);
+    drain();
     return true;
   },
   /**
@@ -537,12 +620,13 @@ export const handlers = {
   runTakeover: async ({ id, tabId }: { id: string; tabId?: number }, sender?: Sender) => {
     const ext = sender === undefined || isExtensionPage(sender);
     let target = ext ? tabId : sender?.tab?.id;
-    if (ext && target === undefined && live?.id === id && live.tab.group !== undefined) {
-      target = (await chrome.tabs.query({ groupId: live.tab.group })).filter((x) => /^https?:/.test(x.url ?? '')).sort((a, b) => b.id! - a.id!)[0]?.id;
+    const e = live.get(id);
+    if (ext && target === undefined && e?.tab.group !== undefined) {
+      target = (await chrome.tabs.query({ groupId: e.tab.group })).filter((x) => /^https?:/.test(x.url ?? '')).sort((a, b) => b.id! - a.id!)[0]?.id;
     }
     const t = typeof target === 'number' ? await chrome.tabs.get(target).catch(() => undefined) : undefined;
-    if (!t || !owned(id, t) || !live) throw new Error('That tab isn’t one this gardener is working in.');
-    const { tab, name } = live;
+    if (!t || !e || !owned(id, t)) throw new Error('That tab isn’t one this gardener is working in.');
+    const { tab, name } = e;
     const tid = t.id!;
     // Halted first, so a step already running there can't click; kept before the abort (also in liveGroups, for a
     // restart), so neither the call's cleanup nor start-up closes it.
@@ -590,6 +674,8 @@ export const handlers = {
       const q = r.requests.find((x) => x.id === requestId);
       const now = Date.now();
       if (r.status !== 'waiting' || !q || q.answer) throw new Error('That request isn’t waiting for an answer.');
+      const refused = answerRefused(q);
+      if (refused) throw new Error(refused);
       if (!open(r, q, now)) throw new Error('That request has expired.');
       const values = q.kind === 'approve' && !q.sensitive ? ['yes', 'no', 'always'] : ['yes', 'no'];
       if (q.kind !== 'question' && !values.includes(value)) throw new Error(values.length > 2 ? 'Answer yes, no or always.' : 'Answer yes or no.');
@@ -640,9 +726,10 @@ export const handlers = {
     // At most 3 unused of each kind, so the next think's instruction part still fits.
     const unused = (r: GardenRun) => (r.inbox ?? []).filter((x) => x.steer === steer && !x.usedAt).length;
     const full = steer ? 'It hasn’t read your last 3 messages yet.' : 'Three messages are already queued.';
-    if (live?.id === id && unused(live.run) >= 3) throw new Error(full);
+    const now = live.get(id)?.run;
+    if (now && unused(now) >= 3) throw new Error(full);
     // A working run is saved from memory after each action: the message goes there too, or the next save drops it.
-    if (live?.id === id) (live.run.inbox ??= []).push(m);
+    if (now) (now.inbox ??= []).push(m);
     await updateRun(String(id), (r) => {
       if (r.status !== 'queued' && r.status !== 'running' && r.status !== 'waiting') throw new Error('That run has ended.');
       if (r.inbox?.some((x) => x.id === m.id)) return;
@@ -690,14 +777,15 @@ export const handlers = {
  */
 const locking = new Map<number, object>(); // one try-loop per tab: a newer load replaces it
 async function lock(tabId: number, t: chrome.tabs.Tab): Promise<void> {
-  if (!live || !owned(live.id, t) || !/^https?:/.test(t.url ?? '')) return;
-  const msg = { type: 'garden-lock', run: live.id, name: live.name };
+  const id = [...live.keys()].find((x) => owned(x, t));
+  if (id === undefined || !/^https?:/.test(t.url ?? '')) return;
+  const msg = { type: 'garden-lock', run: id, name: live.get(id)!.name };
   const me = {};
   locking.set(tabId, me);
   for (let k = 0; k < 30 && locking.get(tabId) === me; k++) {
     if ((await chrome.tabs.sendMessage(tabId, msg).catch(() => null)) === 'locked') break;
     await new Promise((r) => setTimeout(r, 300));
-    if (!live || live.id !== msg.run || !owned(live.id, await chrome.tabs.get(tabId).catch(() => undefined))) break;
+    if (!owned(id, await chrome.tabs.get(tabId).catch(() => undefined))) break;
   }
   if (locking.get(tabId) === me) locking.delete(tabId);
 }

@@ -6,7 +6,7 @@ import { contextChars, defang, parseJsonObject } from '../text.ts';
 import { jsonArray } from '../html.ts';
 import { actOf, addSeen, argsKey, callKey, decide, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
 import { expired } from './schedule.ts';
-import { newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
+import { LIMITS, newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
 import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
 import { notesBlock, type Note } from './notes.ts';
@@ -39,7 +39,7 @@ export const OPEN_REFUSED = 'This model runs routines with set steps. A model me
 export const PLAN_REFUSED = 'This model can’t write plans yet.';
 export const BAD_REPLY = "The model's reply couldn't be read.";
 export const TOO_LONG = 'The instructions are too long for this model.';
-const WORD = 'Here is what changed on each page since the last check (lines with + were added, − removed). In two or three sentences, say what changed that matters. If nothing did, say so.';
+const WORD = 'Here is what changed on each page since the last check (lines with + were added, − removed; a page under "First look:" is new, so say briefly what it holds). In two or three sentences, say what changed that matters. If nothing did, say so.';
 const REPAIR = 'Your reply was not one valid JSON object for a listed tool or an answer. Reply with only the JSON.';
 const PLAN_REPAIR = 'Your reply was not one JSON array of calls to listed tools with valid args. Reply with only the array.';
 const SUM = (request: string, followUp: boolean) => `The task: ${request}. Below are ${followUp ? 'an earlier answer and ' : ''}the results of the planned steps. Answer the task from them in a few sentences. If they don't answer it, say what is missing.`;
@@ -106,9 +106,78 @@ export function next(run: GardenRun, ctx: Ctx): Action {
     return last.state === 'done' ? { done: { answer: last.output ?? '' } } : { fail: last.error ?? 'The mission failed.' };
   }
   const { urls } = run.work;
+  // More pages than one run reads: helper runs read them, and this run waits until code answers that they ended.
+  if (urls.length > LIMITS.urls && !run.parentId && !run.requests.some((q) => q.kind === 'helpers' && q.answer)) {
+    return { request: { kind: 'helpers', text: `${count(helpersFor(urls.length))} read ${urls.length} pages.`, sensitive: false } };
+  }
   if (run.steps.length < urls.length) return attempt(run, ctx, run.steps.length, 'read_page', { url: urls[run.steps.length] });
+  // A helper only reads: its parent makes the one think over every helper's pages.
+  if (run.parentId) return { done: { answer: run.steps.map((s) => s.digest ?? `${s.tool} ${s.state}`).join('\n') } };
   return word(run, ctx, urls);
 }
+
+const helpersFor = (n: number) => Math.ceil(n / LIMITS.urls);
+const count = (n: number) => `${n} helper${n === 1 ? '' : 's'}`;
+const ended = (r: GardenRun) => r.status === 'done' || r.status === 'failed' || r.status === 'stopped';
+const NOT_READ = 'Not read: its helper stopped.';
+
+/** A parent's helpers: 5 of its pages each, with its gardener, routine, model pin, `seen` and taint. Fixed ids, so a restart makes no more. */
+export function helpersOf(parent: GardenRun, now: number): GardenRun[] {
+  if (parent.work.kind !== 'read') return [];
+  const { urls } = parent.work;
+  return Array.from({ length: helpersFor(urls.length) }, (_, k) => ({
+    ...newRun({ id: `${parent.id}.h${k + 1}`, gardenerId: parent.gardenerId, work: { kind: 'read', urls: urls.slice(k * LIMITS.urls, (k + 1) * LIMITS.urls) }, now: now + k, ...(parent.routineId && { routineId: parent.routineId }) }),
+    parentId: parent.id, seen: parent.seen, tainted: parent.tainted,
+    ...(parent.model && { model: parent.model }), ...(parent.maxTokens && { maxTokens: parent.maxTokens }), ...(parent.agent && { agent: parent.agent }), ...(parent.abilities && { abilities: parent.abilities }),
+  }));
+}
+
+/**
+ * Code's answer to a parent's helpers wait, once every helper ended: their steps become the parent's (page j is step
+ * j; one a helper didn't finish is failed), any helper's taint taints the parent, and the parent is queued for its
+ * word think. False while one still works.
+ */
+export function mergeHelpers(parent: GardenRun, kids: GardenRun[], now: number): boolean {
+  const q = parent.requests.findLast((x) => x.kind === 'helpers' && !x.answer);
+  if (parent.status !== 'waiting' || !q || parent.work.kind !== 'read' || !kids.every(ended)) return false;
+  parent.steps = parent.work.urls.map((url, j): Step => {
+    const s = kids.find((k) => k.id === `${parent.id}.h${Math.floor(j / LIMITS.urls) + 1}`)?.steps.find((x) => x.i === j % LIMITS.urls);
+    if (s && s.state !== 'started') return { ...s, i: j };
+    return { i: j, tool: 'read_page', args: { url }, effect: 'read', state: 'failed', error: NOT_READ, digest: digest('read_page', { url }, { error: NOT_READ }), at: now };
+  });
+  parent.tainted ||= kids.some((k) => k.tainted);
+  q.answer = { value: 'done', at: now };
+  parent.status = 'queued';
+  return true;
+}
+
+/**
+ * Resume all: each failed or stopped helper is queued again from its first unfinished page (with the parent's taint,
+ * and a fresh interruption count). An ended parent waits on them again, its merged pages and answer gone. Returns the
+ * runs it changed, or why not.
+ */
+export function resumeAll(parent: GardenRun, kids: GardenRun[], requestId: string): GardenRun[] | string {
+  if (!parent.requests.some((q) => q.kind === 'helpers')) return 'This run has no helpers.';
+  const waiting = parent.status === 'waiting' && parent.requests.some((q) => q.kind === 'helpers' && !q.answer);
+  if (!waiting && !ended(parent)) return 'It’s still working.';
+  const again = kids.filter((k) => k.parentId === parent.id && (k.status === 'failed' || k.status === 'stopped'));
+  if (!again.length) return 'No helper failed or stopped.';
+  for (const k of again) {
+    const cut = k.steps.findIndex((s) => s.state !== 'done');
+    if (cut >= 0) k.steps = k.steps.slice(0, cut);
+    Object.assign(k, { status: 'queued', interrupted: 0, tainted: k.tainted || parent.tainted });
+    for (const x of ['answer', 'best', 'why', 'endedAt', 'retryAt'] as const) delete k[x];
+  }
+  if (waiting) return again;
+  Object.assign(parent, { status: 'waiting', steps: [], turns: [], usedMs: 0, interrupted: 0 });
+  parent.requests = [...parent.requests.filter((q) => q.kind !== 'helpers' && q.step === undefined),
+    { id: requestId, kind: 'helpers', text: `${count(again.length)} read again.`, sensitive: false }];
+  for (const x of ['answer', 'best', 'why', 'endedAt', 'retry'] as const) delete parent[x];
+  return [parent, ...again];
+}
+
+/** A request only code answers: a page's answer to it is refused. */
+export const answerRefused = (q: Request): string | null => (q.kind === 'helpers' ? 'Only Homegrown answers that: it waits for the helpers to end.' : null);
 
 /**
  * Expiry (decision 13): a routine's request lasts until its next run is due; a run started by hand, or one whose
@@ -422,6 +491,7 @@ const RETRY_OPEN = 'An open request can’t retry one step: ask a follow-up inst
  */
 export function retryStep(run: GardenRun, i: number): string | null {
   if (run.work.kind === 'ask') return RETRY_OPEN;
+  if (run.parentId) return 'Retry it from its parent run.';
   if (run.status === 'queued' || run.status === 'running' || run.status === 'waiting') return 'It’s still working.';
   const step = run.steps.find((s) => s.i === i);
   if (step?.state !== 'failed') return 'That step didn’t fail.';

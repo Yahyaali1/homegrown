@@ -77,7 +77,9 @@ runtime adapters and storage live outside `domain/`.
     `proposedRoutine` (paused, `by: 'model'`, so `claim` never runs it until the person turns it on).
     Daily and weekly times walk local dates: a time that doesn't exist moves forward by the gap, an ambiguous one is
     its first instant. `claim` moves `nextDue` on, fails a waiting run, and queues a new run or (while one works)
-    keeps the slot on `skipped` (last 5).
+    keeps the slot on `skipped` (last 5). A parent waiting on helpers (`helping`, records.ts) counts as working: its
+    slot is skipped, never failed. `nextBatch(runs, now)`: the queue's next pick, one run or up to `HELPERS` (3) queued
+    helpers of the oldest parent; a run with `retryAt` in the future waits.
   - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,
     `sensitiveSteps`, `onSites`, `addSeen`, `fromExtensionPage`, `approveAllOk`, `SENSITIVE_WAIT` (8000 ms), `Grant`.
     Reach, taint, acts and grants (ADR-16). `approveAllOk(q, run)` refuses any reach in a tainted run.
@@ -88,10 +90,12 @@ runtime adapters and storage live outside `domain/`.
     check and the step run in one call on the same element.
   - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
     `refusal`, `parsePlan`, `answerPlan`, `answeredBy`, `parseEdit`, `stopRequest`, `retryStep`, `autoRetry`,
-    `AUTO_RETRY_MS`, `earlierOf`, `followUpRun`, `queuedFollowUp`, `OPEN_REFUSED`, `PLAN_REFUSED`,
+    `AUTO_RETRY_MS`, `helpersOf`, `mergeHelpers`, `resumeAll`, `answerRefused`, `earlierOf`, `followUpRun`, `queuedFollowUp`, `OPEN_REFUSED`, `PLAN_REFUSED`,
     `BAD_REPLY`, `TOO_LONG`. An answer with edited `args` makes the edited call a new call: a `noEdit` follow-up
     (`editedFrom`) settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
-    unless it is sensitive now. Unused Steer messages end every think's instruction part ("The person adds: …"). Direct work
+    unless it is sensitive now. A read of more than 5 pages (up to 25) asks for `helpers`: helper runs of 5 pages each
+    (`parentId`) read without a think and end; their steps, failed where unfinished, and their taint merge into the
+    parent, which makes the one `word` think. Unused Steer messages end every think's instruction part ("The person adds: …"). Direct work
     (`read`, `mission`) issues fixed calls, then one `word` think; open work (`ask`, only with `agent.loop`) runs
     choose → repair → call … → answer → check; plan work (`plan`, only with the `plan` ability or `agent.loop`) runs
     plan → repair → the person's yes → each planned call → one `sum` think (ADR-18). A plan's `fromPlan` yes counts
@@ -160,5 +164,5 @@ contract. Where it differs, this list says so.
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
   `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
-  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan`, `garden-steer` and `garden-runlog`)
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan`, `garden-steer`, `garden-runlog` and `garden-helpers`)
 - Type check: `npm run check`

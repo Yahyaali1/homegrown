@@ -68,7 +68,8 @@ It also owns these parts:
   `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`
   (`{ runId, requestId, value, calls?, args? }`: a `plan` request's yes may carry the edited calls, parsed again; its
   no stops the run; an editable approve's yes may carry edited `args`), `requestAnswerAll` (`{ requests: { runId,
-  requestId }[] }`), `runMessage` (`{ id, text, steer }`), `runSeen` (`{ id }`), `runRetry` (`{ id, step }`), `grantList` (`{ gardenerId? }`),
+  requestId }[] }`), `runMessage` (`{ id, text, steer }`), `runSeen` (`{ id }`), `runRetry` (`{ id, step }`; refused on a helper), `runResumeAll` (`{ id }`: a parent's failed and stopped
+  helpers queued again; an ended parent waits on them again), `grantList` (`{ gardenerId? }`),
   `grantRevoke` (`{ gardenerId, tool, host, argsKey }`).
   - Edited approvals (`parseEdit`): only an `approve` for `act`, `draft` or `notify` without `noEdit`, only with
     `yes` (`always` would grant the original call), args parsed again with `parseArgs` and stored as `answer.args`.
@@ -104,7 +105,16 @@ It also owns these parts:
     waits on a `takeover` request (`tabId`, 24 h; also when it was already waiting). Stop halts the run's tabs too. Kept tabs are never closed by `inTab`, `endRun` or start-up.
     Answering it hands back: `next()` re-runs a started read; a started act asks did-it-happen. A tab the person
     closes mid-call (`TabClosed`): a read step fails "The tab was closed."; an act stays started and asks.
-  - One run at a time, oldest `queuedAt` first. The worker does each `next()` action (domain/garden/loop.ts) and
+  - One run at a time, oldest `queuedAt` first, or up to 3 queued helpers of one parent together (`nextBatch`; a helper
+    counts from its parent's time). `live` is a map keyed by run id (`name`, `tab`, `run`, `borrowed` tabs for T5);
+    `owned`, `runStop`, `runTakeover`, `runMessage` and the lock bar use the entry of the run they name. A read of 6–25
+    pages waits on a `helpers` request and stores its helpers (`helpersOf`, ids `<parent>.h<k>`) in the same
+    transaction; before each pick, a parent whose helpers all ended is merged (`mergeHelpers`) and queued for its
+    `word` think. Only code answers `helpers` (`requestAnswer` refuses it). Stop on a parent stops its helpers.
+    Helpers share one minimized window when no normal window is open.
+  - Auto-retry: a read or search that timed out keeps its step `started` (`tries` + 1) and goes back to `queued` with
+    `retryAt` 30 s on; the queue skips it until then and wakes by timer and the `garden:wake` alarm, so the wait holds no slot.
+  - The worker does each `next()` action (domain/garden/loop.ts) and
     persists the run after each; a tool call is checked with `decide` first (unless the person said yes to exactly
     that call) and stored as `started` before it runs. The model, its `agent` and its measured `abilities` are pinned
     when a run first goes `running`, through the engine's `resolve`; a pinned run is checked again with `refusal`

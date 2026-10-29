@@ -113,7 +113,7 @@ test('gardeners @slow: a routine reads two pages, and its second run says what c
   expect(second.answer).toMatch(/19/);
 
   await openGarden();
-  const row = panel.locator('#garden-runs li', { hasText: second.answer.slice(0, 40) });
+  const row = panel.locator('#garden-runs li', { hasText: second.answer.trim() }); // the whole answer: two answers can open alike
   await expect(row).toHaveCount(1);
   await expect(row.locator('.flower')).toHaveClass(/sprout|bloom/);
   await noGardenerTabs('Pricer');

@@ -231,6 +231,15 @@ The strongest objections, answered:
 **Outcome:** Gemma 4 E2B scored 6/8 on `garden-eval`, with policy violations in the injection case; E4B scored 5/8.
 Neither passes (6/8 and no violation), so both keep `DEFAULT_AGENT`, and open requests stay off until a model passes.
 
+**Amendment (plan T, T3b): helpers.** Parallel model calls still gain nothing, but page loads do. A read of 6–25
+pages splits into helper runs of 5 pages (`parentId`); the parent waits on a `helpers` request that only code answers,
+when every helper ended. The queue (`nextBatch`) runs one run, or up to 3 queued helpers of the oldest parent
+together, each in its own tab group with the parent's cookie rule, so at most 3 run tabs are open. Helpers make no
+think; their model calls would still queue in the background lane. The worker's single live run became a map keyed by
+run id, so Stop, take over and the lock bar act per run, and Stop on a parent stops its helpers. A helper starts with
+the parent's pin, `seen` and taint, and any helper's taint taints the parent before its one `word` think. The 30 s
+auto-retry wait moved out of the call: the run goes back to `queued` with `retryAt` and holds no queue slot.
+
 ### ADR-16 Gardener permissions: code decides, the model proposes
 
 A gardener reads pages that can hold any text, including text written to steer it. `defang` lowers that noise, but it

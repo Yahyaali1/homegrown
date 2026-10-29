@@ -1,6 +1,6 @@
 // When routines run. Daily and weekly times walk local calendar dates, not instants, so a fall-back day can't run
 // twice and a spring-forward day still runs once.
-import { LIMITS, newRun, type GardenRun, type Routine, type When, type Work } from './records.ts';
+import { helping, LIMITS, newRun, type GardenRun, type Routine, type When, type Work } from './records.ts';
 
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 
@@ -48,6 +48,19 @@ export function nextAfter(when: When, tz: string, prevDue: number | null, now: n
 export const expired = (run: GardenRun, now: number): boolean =>
   run.status === 'waiting' && run.requests.some((q) => !q.answer && q.expiresAt !== undefined && q.expiresAt <= now);
 
+export const HELPERS = 3;
+
+/**
+ * What the queue runs next: the oldest queued run (a helper counts from its parent's time), or up to 3 queued helpers
+ * of that parent together. A run waiting out its auto-retry (`retryAt`) is skipped until then.
+ */
+export function nextBatch(runs: GardenRun[], now: number): GardenRun[] {
+  const at = (r: GardenRun) => (r.parentId ? runs.find((p) => p.id === r.parentId)?.queuedAt ?? r.queuedAt : r.queuedAt);
+  const ready = runs.filter((r) => r.status === 'queued' && !(r.retryAt! > now)).sort((a, b) => at(a) - at(b) || a.queuedAt - b.queuedAt || (a.id < b.id ? -1 : 1));
+  const first = ready[0];
+  return !first ? [] : first.parentId ? ready.filter((r) => r.parentId === first.parentId).slice(0, HELPERS) : [first];
+}
+
 /**
  * The routine's alarm fired (or the worker started). Due: move `nextDue` on, fail its waiting runs, and queue a new
  * run unless one is still queued or running, in which case the slot is kept on `skipped`.
@@ -55,10 +68,12 @@ export const expired = (run: GardenRun, now: number): boolean =>
 export function claim(routine: Routine, runs: GardenRun[], now: number): { routine: Routine; newRun?: GardenRun; fail: string[] } {
   const mine = runs.filter((r) => r.routineId === routine.id);
   const due = !routine.paused && routine.nextDue <= now;
-  const fail = mine.filter((r) => r.status === 'waiting' && (due || expired(r, now))).map((r) => r.id);
+  // A parent waiting on its helpers is working, not waiting for the person.
+  // A helper isn't failed for a new slot (no next run starts for it); only when its wait expires.
+  const fail = mine.filter((r) => r.status === 'waiting' && !helping(r) && ((due && !r.parentId) || expired(r, now))).map((r) => r.id);
   if (!due) return { routine, fail };
   const next: Routine = { ...routine, nextDue: nextAfter(routine.when, routine.tz, routine.nextDue, now) };
-  if (mine.some((r) => r.status === 'queued' || r.status === 'running')) {
+  if (mine.some((r) => r.status === 'queued' || r.status === 'running' || helping(r))) {
     next.skipped = [...(routine.skipped ?? []), routine.nextDue].slice(-LIMITS.skipped);
     return { routine: next, fail };
   }

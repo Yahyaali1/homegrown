@@ -74,7 +74,8 @@ async function readPage({ url }: { url: string }, c: ToolCtx): Promise<ToolResul
   if (c.run.work.kind === 'read' && c.run.routineId) {
     const key = `${c.run.routineId}\n${url}`;
     const snap = await idb.get<Snapshot>(c.db, 'snapshots', key);
-    const old = snap?.runId === c.run.id ? snap.prev : snap?.text;
+    // A parent re-reading a page its helper read this run: that snapshot is its own too.
+    const old = snap?.runId === c.run.id || snap?.runId.startsWith(`${c.run.id}.h`) ? snap.prev : snap?.text;
     output = old === undefined ? `First look:\n${md}` : diffText(old, md);
     await idb.put(c.db, 'snapshots', { text: md, ...(old !== undefined && { prev: old }), runId: c.run.id } satisfies Snapshot, key);
   } else if (c.run.work.kind === 'read') output = `First look:\n${md}`;

@@ -125,15 +125,34 @@ export interface GardenRun {
   created?: Created[];
   /** The step the person last retried, and how many tries it has had: its re-run keeps the count. */
   retry?: { i: number; tries: number };
+  /** A helper run: the read of more than 5 pages it is a part of (decision 8). */
+  parentId?: string;
+  /** Queued, but not before this: a read waiting out its auto-retry, which holds no queue slot meanwhile. */
+  retryAt?: number;
 }
 
 export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact'; title: string; ref: string }
 
 /** Where a run sits in the history: Needs you, Unread (ended after it was last opened), then by routine, then by hand. */
 export function historyGroup(r: GardenRun): 'needs' | 'unread' | 'routine' | 'hand' {
-  if (r.status === 'waiting') return 'needs';
+  if (r.status === 'waiting' && !helping(r)) return 'needs';
   if (r.endedAt !== undefined && (r.seenAt ?? -1) < r.endedAt) return 'unread';
   return r.routineId ? 'routine' : 'hand';
+}
+
+/** A parent waiting on its helpers: working, not waiting for the person. */
+export const helping = (r: GardenRun): boolean => r.status === 'waiting' && r.requests.some((q) => q.kind === 'helpers' && !q.answer);
+
+/** A helper starts only while its parent still waits on helpers: a Stop may have landed since it was stored. */
+export const mayStart = (run: GardenRun, parent: GardenRun | null | undefined): boolean => !run.parentId || (!!parent && helping(parent));
+
+const over = (r: GardenRun) => r.status === 'done' || r.status === 'failed' || r.status === 'stopped';
+/** Ids to delete: ended runs past the newest `keep` (helpers don't count, and go with their parent or when it is gone). */
+export function pruneIds(runs: GardenRun[], keep: number): string[] {
+  const top = runs.filter((r) => !r.parentId).sort((a, b) => b.queuedAt - a.queuedAt);
+  const gone = new Set(top.slice(keep).filter(over).map((r) => r.id));
+  const kept = new Set(top.map((r) => r.id).filter((id) => !gone.has(id)));
+  return [...gone, ...runs.filter((r) => r.parentId && !kept.has(r.parentId) && over(r)).map((r) => r.id)];
 }
 
 export interface Message { id: string; text: string /* ≤ 1000 */; at: number; steer: boolean; usedAt?: number }
@@ -163,7 +182,8 @@ export interface Step {
 
 export interface Request {
   id: string;
-  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen' | 'plan';
+  /** `helpers`: a parent waits on its helper runs; only code answers it, when they all end. */
+  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen' | 'plan' | 'helpers';
   step?: number;
   /** The exact call an answer applies to: its tool and `argsKey(args)`. */
   tool?: string;
@@ -194,7 +214,8 @@ export interface Request {
   noEdit?: true;
 }
 
-export const LIMITS = { sites: 20, urls: 5, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
+// `urls`: a recipe's, and each helper's share of a read; `readUrls`: a read, split into helpers above `urls`.
+export const LIMITS = { sites: 20, urls: 5, readUrls: 25, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
 
 // Shared-hosting suffixes: anyone can publish under them, so one entry would trust every tenant.
 export const PUBLIC_SUFFIXES = [
@@ -281,7 +302,7 @@ export function parseWork(raw: unknown): Work | null {
     const tabs = Array.isArray(raw.tabs) && raw.tabs.length <= LIMITS.tabs ? raw.tabs.map(parseMention) : [null];
     return tabs.every((t) => t) ? { kind, request: raw.request, tabs: tabs as Mention[] } : null;
   }
-  if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.urls)) return null;
+  if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.readUrls)) return null;
   const urls = raw.urls.map((u) => (typeof u === 'string' ? bare(u) : null));
   return urls.every((u) => u) ? { kind: 'read', urls: urls as string[] } : null;
 }
