@@ -1,0 +1,132 @@
+Get the Desktop App
+Release 0.0.98
+What's new
+in Strawberry
+Released
+April 27, 2026
+A new
+Knowledge hub
+pulls your memory, reports, and skills together with personalized ideas for what to try. Your companion can also now
+work inside real folders on your Mac or PC
+, safely. A new
+Agent Control Center
+shows every running task at a glance, and you can
+drag any tab off the bar
+to pop it into its own window or split the view. Plus a long list of fixes.
+Work in a Folder
+Your companion can now work with real folders on your Mac or PC. Pick a folder, approve it, and it can read, edit, and create files in there, changes show up in your actual files, not a copy. Everything stays inside a safe sandbox, so it can only touch what you open up.
+Knowledge Hub & Things to Try
+A new Knowledge page brings your Memory, Reports, and Skills together in one searchable place. Under "Things to try," you'll find ideas tailored to your role and connected apps, tap one to start, or open "Discover use cases" for a guided Q&A that suggests something useful.
+Agent Control Center
+A new button in the top right corner shows every running task at a glance. Blue dot for new replies, amber dot for ones waiting on you. If a task is stuck on a CAPTCHA or asking a question, answer inline, no more hunting through tabs.
+Skip Approval, Your Rules
+Next to the "Start browsing" button, a new menu lets you choose: always allow, allow in this chat, or ask every time. For when you already trust your companion to just run.
+Drag Tabs to Split or Pop Out
+Grab any tab and pull it off the bar. Drop it anywhere to pop it into its own window, no reload, your page stays live. On Mac, you can also drop it on the left or right of the current page to split side by side with what you're already viewing.
+Improvements and Bug Fixes
+Smarter research: Your companion can now collect information from several URLs in one step, making multi-source research faster and more reliable.
+Reasoning blocks: When your companion works through a harder problem, its reasoning now appears in a tidy collapsible block instead of mixing into the chat as plain text.
+Team credits: Team members now see personal top-ups and shared team credits as separate balances, so it's clear which credits are being used. Starting a team also preserves any personal credits left in your current billing period.
+Gmail send-as: If you have more than one verified Gmail address, your companion now sends from the address you chose instead of falling back to the default.
+Bookmark shortcut: The shortcut to bookmark the current tab had been broken for a while, it works again now.
+Agent downloads: Files your companion downloads now live inside the chat where they were made, instead of one shared pile.
+Approve All: Groups several pending steps into one approval, even when they're different types, fewer clicks to let it run.
+File attachments: Files you attach to a message actually arrive with the message now, instead of getting deleted mid-send.
+Tab cycling: Cmd+P keeps cycling through tabs correctly even when the tab switcher is already open.
+Tab bar polish: Tabs now move more smoothly, with less flicker and cleaner translucent panels.
+Closing tabs: Closing the rightmost tab no longer freezes the neighboring tabs on hover, and your companion no longer accidentally closes tabs you opened yourself.
+Scrollbars: Long chats and sidebars show scrollbars again when there's more to see.
+Enter to send: Enter sends your message in chat and in the agent instruction box; Shift+Enter adds a new line, the way most chat apps work.
+Credit warnings: Strawberry now gives clearer warnings before actions that may use a lot of credits, and credit totals stay consistent while they update.
+Misleading notifications: Removed the "Task completed" popup in cases where the task was still running.
+GitHub files: Reading code files from GitHub now shows the actual file contents.
+Password manager: "Manage passwords" now opens the password settings screen.
+Password import on Windows: Password imports now work better with enterprise antivirus and EDR tools.
+Routines: Routines now run reliably for people with multiple profiles, and routines created from chat show up with readable names and instructions.
+Previous updates
+See what shipped in earlier Strawberry releases.
+October 26, 2026
+Strawberry 1.0
+Strawberry 1.0 is here. Your companions have a new look you design yourself, and a plaza to hang out in between jobs. Press play for the short film, then scroll for a thank-you and the road that got us here.
+Read release notes
+October 21, 2026
+Feature update - October 21
+A new everyday chat mode, a quicker way back to any conversation, and routines that only run when it matters. This update also brings WhatsApp, side-by-side browsing, and meeting transcripts that know who is speaking.
+Read release notes
+October 8, 2026
+Feature update - October 8
+Follow your companion's work more easily and see when it needs you. This update brings a clearer chat, quick previews while you browse, polished password and bookmark managers, and tasks that run just once.
+Read release notes
+October 1, 2026
+Feature update - October 1
+A clearer chat, a more useful sidebar, and a better home for your files. This update makes everyday work easier to follow, review, and pick up again.
+Read release notes
+August 15, 2026
+Feature update - August 15
+Chats now follow you between computers, companion-opened websites live inside the chat instead of cluttering your tab bar, and the first version of Workspace brings your Strawberry files and context together.
+We’ve also spent the summer rebuilding the foundation behind your companions and made connected apps easier to discover.
+Read release notes
+May 26, 2026
+Beta 0.1.0
+Our biggest update yet. We rebuilt how your companion handles complex tasks from the ground up. It is much faster, more reliable on longer jobs, can spin up sub-agents to tackle several things at once, and is generally cheaper on credits. This release also brings meeting recording and voice dictation, Chrome extension support, over 100 new apps, and a new way to create slides.
+Read release notes
+March 26, 2026
+Beta 0.0.96
+Picture-in-Picture is here, sites like Google Meet can now pop video into a floating window while you keep browsing. Setting up split-screen is now easier too, with a new picker for choosing which tabs to view side by side. We also cut the app size by over 60% and significantly reduced memory usage.
+Read release notes
+March 15, 2026
+Beta 0.0.94
+Introducing Routines. Your companion can now run things on a schedule or react when something happens in your apps, like drafting a reply whenever a client emails, or briefing you every morning. This update also brings fluid tab animations, a refreshed chat history sidebar, stronger security, and a long list of fixes.
+Read release notes
+March 5, 2026
+Beta 0.0.90
+Big quality-of-life update. We've added safety countdowns before risky actions, better email and Slack drafting, and a redesigned final report you can share straight to Slack or Gmail. Plenty of polish under the hood too.
+Read release notes
+February 24, 2026
+Beta 0.0.88
+Split tabs are here, work across two pages side by side without leaving your window. We also rebuilt the address bar from the ground up, made your companion smarter about handling complex tasks, and gave tab groups a visual refresh. A lot of polish in this one.
+Read release notes
+February 22, 2026
+Beta 0.0.87
+Strawberry is now open beta, anyone can download it at strawberrybrowser.com. This update brings a major engine upgrade, a smarter default model with automatic failover, and tab hover actions for faster browsing. We've also squashed a long list of bugs since going public.
+Read release notes
+February 17, 2026
+0.0.83
+Strawberry Browser is now in open beta. After months of closed development, we're opening the product to everyone.
+Read release notes
+February 16, 2026
+Beta 0.0.82
+Strawberry now launches 57% faster, Slack and Notion got a stability overhaul, and there's a brand-new floating AI controller for when your companion takes the wheel. Plus a new invite system, share your code with a friend and you both get free credits.
+Read release notes
+February 9, 2026
+Beta 0.0.79
+We've been busy under the hood and Strawberry's interface is now 78.5% faster. There are new features to explore, but the real story is what's happening behind the scenes. We've completed a massive engine swap to make everything feel faster and snappier.
+Read release notes
+January 22, 2026
+Beta 0.0.77
+Smoother starts, simpler exports. Updates this week are all about giving you a better view of your work. We've refreshed the Home page so you can easily see what your agents are doing, improved their email skills, and added a quick way to save reports as PDFs.
+Read release notes
+January 14, 2026
+Beta 0.0.76
+New year, tidier workspace. This update brings Tab Groups to combat tab overload, native Passkey support (including iCloud Keychain), and Profile Colors so you separate work-you from personal-you at a glance. We've also polished up some details based on your feedback.
+Read release notes
+December 10, 2025
+Beta 0.0.72 (& 73)
+This update focuses on efficiency, significantly reducing memory usage and improving performance. It introduces a Salesforce integration and enhanced controls for companion credit consumption.
+Read release notes
+November 17, 2025
+Beta 0.0.71
+This release focuses on collaboration features, sharing companions, and a new team plan. It also includes improvements to Gmail and Google Sheets integrations, and general bug fixes.
+Read release notes
+November 6, 2025
+Beta 0.0.70
+This release introduces Team Plans, making Strawberry more collaborative. It focuses on faster browsing, upfront credit estimation, redesigned chat history, and multiple account support for Apps. Performance improvements make tasks 20-30% faster.
+Read release notes
+October 22, 2025
+Alpha 0.0.68
+This release is all about stability improvements and critical bug fixes! Freezing in chat is gone and bookmarks are more functional. After valuable input from our new users since the Beta launch, we have resolved many of the friction points mentioned.
+Read release notes
+October 1, 2025
+Alpha 0.0.65
+This release marks the transition to Beta, emphasizing major performance and stability improvements. It introduces a new brand profile, redesigned companion views, upgraded app integrations, dark mode, and enhanced large file handling.
+Read release notes

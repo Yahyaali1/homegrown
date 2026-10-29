@@ -317,7 +317,7 @@ export function start(): boolean {
     Write: ['Write…'],
     Translate: ['Translate page (bilingual)', 'Live captions'],
     Images: ['Create image', 'Ask about an area'],
-    Web: ['Mission…', 'Research…', 'Related reading', 'Find the best price'],
+    Web: ['Mission…', 'Research…', 'Related reading', 'Find the best price', 'Scrape as you scroll'],
     Tabs: ['Compare tabs…', 'Tidy tabs', 'Watch this page'],
     Voice: ['Speak…'],
   };

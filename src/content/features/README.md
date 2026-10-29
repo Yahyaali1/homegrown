@@ -2,7 +2,7 @@
 
 ## Overview
 
-The 17 on-page feature modules of the content script. Each one exports `install()` and uses the shared
+The 18 on-page feature modules of the content script. Each one exports `install()` and uses the shared
 `ui` object (`PageUI` from [`../core.ts`](../core.ts)) to add the following:
 
 - toolbar, launcher, palette or image actions
@@ -11,7 +11,8 @@ The 17 on-page feature modules of the content script. Each one exports `install(
 - calls to the background worker and the engine
 
 [`../main.ts`](../main.ts) installs the modules in this order: writing, ghost, replies, jargon, forms,
-youtube, reading, translate, images, search, links, tabs, memory, voice, livecaptions, missions, palette.
+youtube, reading, translate, scrollscrape, images, search, links, tabs, memory, voice, livecaptions, missions,
+palette.
 
 ## Interface
 
@@ -94,6 +95,28 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
   - Automatic alt text: an IntersectionObserver writes alt text for visible images of at least 80×80 px
     that have none, one at a time. It runs only when `autoAltText` is on and `ui.enabled()` is true.
   - Dropping an image file on the shadow root asks about it.
+- `scrollscrape.ts` (top frame only)
+  - Page action: "Scrape as you scroll". Blocks: data tables (2 rows or more, 2 cells in the first, no nested
+    table, not `role=presentation`), `<dl>`s and lists whose children are about one "Label: value" each with 3
+    distinct labels or more, and containers with 3 or more repeated children (same tag and classes, 60% of the
+    children, 15 characters of text each; not paragraphs, headings, links or inline tags). The innermost
+    wins, whichever scan finds it: a container of sections around other blocks is not one (and stops being one
+    when a grid loads inside it later). But when most items each hold the same kind of block (every card has
+    a <dl> of specs), the list is the block and the details belong to it. Nothing inside `nav`, `header`, `footer`,
+    `aside`, `menu`, navigation roles or our own UI.
+  - The whole page is scanned at start; after that only the subtrees a mutation added, and the 3 nearest
+    ancestors themselves (not their subtrees), when the browser is idle; text changes count too (recycled rows). Blocks that left the page are dropped.
+  - A block within 200 px of the view is collected, one at a time: tables (direct rows and cells) and facts on
+    the page; repeated blocks through `bg('scrollList')` with the session id (the model picks or skips, then
+    fills; 20 new items a request). Items are remembered by their text, so a feed that appends, prepends,
+    recycles nodes or re-renders adds only new ones, while the block is in view. A block that stops being one
+    while the model reads it, or a stopped session, drops the answer. Budgets per page: 25 blocks, 40 model
+    requests, 5 per list. A "No model" error stops lists only; another error gets one retry.
+  - Collected blocks get `data-eg-scraped` (dashed outline); skipped ones `skip` (dotted, counted in the bar).
+    Sections show once they have rows. The bar: the count, Show, Copy JSON, CSV (`collected.csv`, with a
+    `section` column) and ✕. ✕ closes the session's `scrape:<id>` port (the worker cancels the model call; the port
+    is opened again if the worker restarted meanwhile),
+    removes the outlines, and a late answer from the stopped session is dropped.
 - `search.ts`
   - Exports: `research(q, rect)`, the deep-research card (`bg('research')`).
   - Page actions: "Research…" and "Related reading" (`bg('related')`).
@@ -162,6 +185,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
 - `memory.ts`: `memHighlightSave`, `memHighlights`, `memChanged`, `memSnapshot`, `memSimilar`
 - `missions.ts`: `agentOpen`, `missionSave`, `priceSeen`, `shopCheck`
 - `palette.ts`: `missionsList`, and `agentOpen` (with `tabs: true` for "Across my open tabs:")
+- `scrollscrape.ts`: `scrollList`
 - `search.ts`: `research`, `researchTerm`, `related`, `checkClaim`
 - `tabs.ts`: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`, `watchPage`
 - `voice.ts`: `transcribe`

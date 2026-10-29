@@ -1,0 +1,13 @@
+<!doctype html><html><head><title>Late grid</title><style>.card{border:1px solid #ccc;margin:8px;padding:8px}</style></head>
+<body><div id="wrap">
+<div class="band"><h2>Welcome to the shop</h2><p>Fresh plants every week, grown in our own greenhouse.</p></div>
+<div class="band"><h2>Our ferns</h2><p>Loading the catalogue, one moment please…</p></div>
+<div class="band"><h2>Visit us</h2><p>Oak Lane 4, open on Saturday and Sunday from nine.</p></div>
+</div>
+<script>
+setTimeout(() => {
+  const g = document.createElement('div'); g.id = 'late';
+  g.innerHTML = ['Boston fern $12', 'Holly fern $9', 'Bird nest fern $15', 'Staghorn fern $30'].map((t) => `<div class="card"><h3>${t.split(' $')[0]}</h3><p>Price: $${t.split(' $')[1]}.00</p></div>`).join('');
+  document.querySelectorAll('.band')[1].append(g);
+}, 4000);
+</script></body></html>

@@ -711,6 +711,38 @@ test('missions: the Open step runs the user\'s js_scenario on each page before r
   expect(count(more)).toBe(6);
 });
 
+test('scrape as you scroll: the local model decides a product grid is records, picks its fields, and keeps up with an infinite feed', async () => {
+  const page = await openPage('scrape/scroll.html');
+  await palette(page, 'Scrape as you scroll');
+  const bar = ui(page).locator('.sasbar');
+  await expect(bar.locator('span')).toContainText('1 table');
+  await page.locator('#grid').scrollIntoViewIfNeeded();
+  await expect(bar.locator('span')).toContainText(/\d+ lists?/, { timeout: 120000 });
+  await expect(page.locator('#grid')).toHaveAttribute('data-eg-scraped', 'list');
+  await page.evaluate(() => scrollTo(0, document.body.scrollHeight)); // the feed adds 3 more cards
+  await expect.poll(async () => Number((await bar.locator('span').innerText()).match(/(\d+) rows/)?.[1] ?? 0), { timeout: 120000 }).toBeGreaterThanOrEqual(2 + 1 + 7);
+  await bar.getByRole('button', { name: 'Show' }).click();
+  const shown = await ui(page).locator('.card').innerText();
+  console.log(`  [scroll scrape] ${(await bar.locator('span').innerText())} · ${shown.replace(/\s+/g, ' ').slice(0, 220)}`);
+  expect(shown).toMatch(/Boston fern/);
+  expect(shown).toMatch(/Staghorn fern/); // from the first four cards
+  expect(shown).toMatch(/Holly fern|Rabbit foot fern|Lemon button fern/); // and the ones the feed added
+  await expect(page.locator('nav ul')).not.toHaveAttribute('data-eg-scraped');
+  await expect(page.locator('article')).not.toHaveAttribute('data-eg-scraped'); // prose is not records
+  await expect(page.locator('main')).not.toHaveAttribute('data-eg-scraped'); // the grid inside the sections is the block
+  await page.close();
+});
+
+test('scrape as you scroll: a grid that loads after the start, inside sections already read, is still the block', async () => {
+  const page = await openPage('scrape/late.html');
+  await palette(page, 'Scrape as you scroll');
+  const bar = ui(page).locator('.sasbar');
+  await expect(page.locator('#late')).toHaveAttribute('data-eg-scraped', 'list', { timeout: 180000 });
+  await expect(page.locator('#wrap')).not.toHaveAttribute('data-eg-scraped', /list|table|facts/);
+  console.log(`  [late grid] ${await bar.locator('span').innerText()}`);
+  await page.close();
+});
+
 test('side panel missions: a mission over the open tabs runs in the background and shows up as done', async () => {
   const tabs = await Promise.all(['a', 'b', 'c'].map((s) => openPage(`shop/${s}.html`)));
   panel ??= await ctx.newPage();

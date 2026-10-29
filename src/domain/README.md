@@ -44,6 +44,10 @@ runtime adapters and storage live outside `domain/`.
   keeps at most 15 words.
 - `csv.ts`: `csvCell`, `toCsv(keys, rows)`. Quotes every cell and prefixes `'` to a cell that starts like a
   spreadsheet formula (`= + - @`, tab, CR) unless it is a plain number.
+- `scroll.ts`: scrape as you scroll. `PICK_INSTRUCTION` (fixed) and `pickData(heading, items)` (3 items, 400
+  characters each, defanged) for the model's choice; `parsePick(reply)` (anything unusable is a skip; up to 6
+  slugged fields); `pickRules(fields)`; `labelPairs(text)` and `factsRow(pairs)` (3 pairs or more);
+  `SCROLL_LIMITS` (25 blocks, 40 model requests and 5 per list per page, 20 items a request).
 - `research.ts`: `isTerm(text)` (1–8 words, at most 80 characters), `termQuery(ask, term, context, title)` and
   `termReport` (a fixed instruction). The term, title and sentence go to the model as data, defanged; the query is the
   reply's first line without quotes or a "Query:" label, at most 100 characters. A query that doesn't name
@@ -96,5 +100,5 @@ contract. Where it differs, this list says so.
 ## Verification
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
-  `reading`, `settings`, `tasks`, `zip`, `research`, and `csv` in `scrape.test.ts`)
+  `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, and `csv` in `scrape.test.ts`)
 - Type check: `npm run check`

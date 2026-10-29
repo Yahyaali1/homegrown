@@ -9,6 +9,7 @@ import * as forms from './features/forms.ts';
 import * as youtube from './features/youtube.ts';
 import * as reading from './features/reading.ts';
 import * as translate from './features/translate.ts';
+import * as scrollscrape from './features/scrollscrape.ts';
 import * as images from './features/images.ts';
 import * as search from './features/search.ts';
 import * as links from './features/links.ts';
@@ -19,7 +20,7 @@ import * as livecaptions from './features/livecaptions.ts';
 import * as missions from './features/missions.ts';
 import * as palette from './features/palette.ts';
 
-const FEATURES: { install(): void }[] = [writing, ghost, replies, jargon, forms, youtube, reading, translate, images, search, links, tabs, memory, voice, livecaptions, missions, palette];
+const FEATURES: { install(): void }[] = [writing, ghost, replies, jargon, forms, youtube, reading, translate, scrollscrape, images, search, links, tabs, memory, voice, livecaptions, missions, palette];
 
 if (start()) {
   for (const f of FEATURES) {

@@ -7,6 +7,7 @@ import { ask as engineAsk } from './engine.ts';
 import { itemRule, LIMITS, parseRecipe, type PageResult, type Recipe } from '../domain/scrape/recipe.ts';
 import { aiAnswer, aiFill } from '../domain/scrape/ai.ts';
 import { TOOLS } from '../domain/scrape/tools.ts';
+import { parsePick, pickData, pickRules, PICK_INSTRUCTION, SCROLL_LIMITS } from '../domain/scroll.ts';
 import type { Ask } from '../domain/mission/ports.ts';
 
 
@@ -118,7 +119,10 @@ async function recipeDelete({ id }: { id: string }): Promise<boolean> {
 /** The page that started a run holds a 'scrape:<runId>' port: when it closes, reloads or navigates, the run stops. */
 export function init(): void {
   chrome.runtime.onConnect.addListener((port) => {
-    if (port.name.startsWith('scrape:')) port.onDisconnect.addListener(() => runs.get(port.name.slice(7))?.stop.abort());
+    if (!port.name.startsWith('scrape:')) return;
+    const runId = port.name.slice(7);
+    if (!runs.has(runId)) runs.set(runId, { stop: new AbortController() }); // a scroll session (Collect makes its own)
+    port.onDisconnect.addListener(() => (runs.get(runId)?.stop.abort(), runs.delete(runId)));
   });
 }
 
@@ -146,7 +150,28 @@ async function pageRequestHandler({ url, params = {}, runId = crypto.randomUUID(
   }
 }
 
+/**
+ * Scrape as you scroll, one repeated block: the model picks fields (or skips it as page furniture), then fills them
+ * from each item, grounded. With `fields`, more items of a block already picked (an infinite feed) skip the choice.
+ * Only text comes in and only values go out: a content script may call this.
+ */
+async function scrollList({ heading = '', items = [], fields, runId }: { heading?: string; items?: unknown[]; fields?: unknown[]; runId?: string }) {
+  const texts = items.filter((t): t is string => typeof t === 'string' && !!t.trim()).slice(0, SCROLL_LIMITS.items);
+  // The page's session holds a 'scrape:<runId>' port: Stop or closing the tab ends it and cancels the model call.
+  const run = runId ? runs.get(runId) : undefined;
+  if (runId && !run) return { use: false, name: '', fields: [], rows: [], stopped: true }; // its page stopped (or lost its line)
+  const signal = run?.stop.signal;
+  const ask: Ask = (instruction, data = '', sampling = {}) => engineAsk(instruction, data, { task: 'missions', ...sampling, ...(signal && { signal }) });
+  const known = Array.isArray(fields) ? parsePick(JSON.stringify({ use: true, name: heading || 'Items', fields })) : null;
+  if (!known && texts.length < 3) return { use: false, name: '', fields: [], rows: [] };
+  const pick = known ?? parsePick(await ask(PICK_INSTRUCTION, pickData(heading, texts), { temperature: 0 }));
+  if (!pick.use) return { ...pick, rows: [] };
+  const got = await aiFill(ask, pickRules(pick.fields), texts, signal);
+  return { ...pick, rows: got.values, dropped: got.dropped };
+}
+
 export const handlers = {
+  scrollList,
   pageRequest: pageRequestHandler,
   pageTools: () => TOOLS,
   scrapeRun,

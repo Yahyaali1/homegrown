@@ -266,6 +266,44 @@ test('Collect: more ScrapingBee parameters, and steps that act are confirmed fir
   await page.close();
 });
 
+test('scrape as you scroll: tables and fact lists are collected as they come into view; lists need the model', async () => {
+  const page = await ctx.newPage();
+  await page.goto(`${site.url}/scrape/scroll.html`);
+  const ui = page.locator('edge-gallery');
+  await expect.poll(() => page.evaluate(() => !!document.querySelector('edge-gallery')?.shadowRoot)).toBe(true);
+  await page.keyboard.press('Alt+KeyK');
+  await expect(ui.locator('.pal input')).toBeFocused();
+  await page.keyboard.type('Scrape as you scroll');
+  await page.keyboard.press('Enter');
+  const bar = ui.locator('.sasbar');
+  await expect(bar).toBeVisible();
+  await expect(bar.locator('span')).toContainText('1 table'); // the care table is in view at once
+  await expect(page.locator('#facts')).not.toHaveAttribute('data-eg-scraped'); // below the fold: not yet
+  await page.locator('#facts').scrollIntoViewIfNeeded();
+  await expect(bar.locator('span')).toContainText('1 fact list');
+  await expect(page.locator('#care')).toHaveAttribute('data-eg-scraped', 'table');
+  await page.locator('#grid').scrollIntoViewIfNeeded();
+  await expect(bar.locator('span')).toContainText('No model downloaded'); // the product grid asks the model, and there is none here
+  await expect(bar.locator('span')).toContainText('Tables and facts are still collected');
+  await bar.getByRole('button', { name: 'Show' }).click();
+  const card = ui.locator('.card');
+  await expect(card).toContainText('Plant care · table · 2');
+  await expect(card).toContainText('Boston fern facts · facts · 1');
+  await expect(card).toContainText('Tropical Americas');
+  await expect(page.locator('nav ul')).not.toHaveAttribute('data-eg-scraped'); // navigation is never a block
+  await expect(page.locator('main')).not.toHaveAttribute('data-eg-scraped'); // the sections around the blocks are not one
+  await expect(page.locator('#layout')).not.toHaveAttribute('data-eg-scraped'); // a layout table is structure
+  await expect(page.locator('#deals')).not.toHaveAttribute('data-eg-scraped', 'facts'); // cards with a "Price:" line are a list
+  await page.locator('#specials').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
+  await expect(page.locator('#specials [data-eg-scraped]')).toHaveCount(0); // each card's <dl> belongs to the card list, not a block of its own
+  await expect(page.locator('#cardfacts')).not.toHaveAttribute('data-eg-scraped', 'facts'); // several "Label:" lines per card: a list
+  // Stop: outlines go, and a late model answer can't bring them back.
+  await ui.locator('.sasbar').getByRole('button', { name: 'Stop collecting' }).click();
+  await expect(page.locator('[data-eg-scraped]')).toHaveCount(0);
+  await page.close();
+});
+
 test('scrape: Stop ends a run between pages', async () => {
   const r = await sw.evaluate(async (url) => {
     const going = self.bgHandlers.scrapeRun({ recipe: { urls: [url], extract_rules: { h: 'h1' }, pages: 5 }, runId: 'stop-me' });
