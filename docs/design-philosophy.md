@@ -29,6 +29,14 @@ answer card, menu rows, page headers and every app icon down to 16px. The pot an
 are what make it Homegrown, so they stay even when small. Small placements size it up a little
 instead (launcher 28px, toolbar and card 22px, menu rows 18px).
 
+**Gardener flowers: one form, many plants.** Each gardener grows its own flower from the same form: the pot, the
+leaning stem, one leaf, the pollen seed. Only two things change, picked at random when it is planted and changeable
+with "Another look": the number of petals (5–9, 11 or 12, wider when there are fewer, so each weighs about the same)
+and how far it leans. It never has 10 petals, which stay the Homegrown mark's, so a gardener is never mistaken for
+Homegrown itself. It always leans left, toward you, with the leaf on the right to balance it. Its motion is the
+mark's: the ripple round the head takes the same time whatever the count, and a turn is one of its own petals
+(360° / petals).
+
 **The five promises** stay as copy, not geometry:
 1. On your device.
 2. Private.

@@ -63,6 +63,33 @@ runtime adapters and storage live outside `domain/`.
   ports.
 - [`scrape/`](./scrape/README.md): recipes for Collect from pages (ScrapingBee `extract_rules` syntax) and
   the rows they give.
+- `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
+  ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
+  `background/garden.ts` and `background/gardentools.ts`.
+  - `records.ts`: `Gardener`, `Routine`, `GardenRun`, `Turn`, `Step`, `Request`, `Seen`, `Look`, `Mention`, `LIMITS`,
+    `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
+    `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`. Every record has `v: 1`; a parser returns `null` for
+    a bad record or a newer `v`. A site is a bare host and matches its subdomains; a single label or a shared-hosting
+    suffix is refused. A look never has 10 petals (the Homegrown mark's).
+  - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `localInstant`, `claim(routine, runs, now)`, `expired`.
+    Daily and weekly times walk local dates: a time that doesn't exist moves forward by the gap, an ambiguous one is
+    its first instant. `claim` moves `nextDue` on, fails a waiting run, and queues a new run or (while one works)
+    keeps the slot on `skipped` (last 5).
+  - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,
+    `sensitiveSteps`, `onSites`, `addSeen`, `fromExtensionPage`, `SENSITIVE_WAIT` (8000 ms), `Grant`. Reach, taint,
+    acts and grants (ADR-16).
+  - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
+    and has the page left the call's hosts. Bundled into the in-page step runner (`content/scenario.ts`), so the
+    check and the step run in one call on the same element.
+  - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
+    `OPEN_REFUSED`, `BAD_REPLY`, `TOO_LONG`. Direct work (`read`, `mission`) issues fixed calls, then one `word`
+    think; open work (`ask`, only with `agent.loop`) runs choose → repair → call … → answer → check. Notes go in
+    the data, never the prompt.
+  - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
+    `read_my_tab`), `ToolSpec`, `Arg`, `parseArgs`, `toolsFor`, `mentionsOf`, `mentionedTab`, `pageLinks` (at most
+    50). `parseArgs` refuses unknown keys and `evaluate` steps.
+  - `notes.ts`: `Note`, `NOTE_CHARS` (500), `parseNote`, `forGardener`, `notesBlock`, `MEMORY_VERSION` (3),
+    `upgradeMemory`. Notes as labelled data, whole notes only; the `eg-memory` upgrade runs one step per version.
 
 ## Invariants
 
@@ -86,6 +113,12 @@ contract. Where it differs, this list says so.
   - `markdown` escapes the text first.
   - `defang` strips sentences that look like prompt injection.
   - The `reading.ts` parsers drop malformed items.
+- `garden/` follows the same rules, with these notes:
+  - `schedule.ts` uses `Intl.DateTimeFormat` for zone offsets, so its results depend on the runtime's time-zone data.
+  - `randomLook` takes an injected `rand` (default `Math.random`); `lookOf` is deterministic from the id.
+  - `notes.ts` `upgradeMemory` calls `createObjectStore` on the database it is given (the worker's upgrade handler).
+  - The model never decides a permission: `decide` and `classify` read only the run, the gardener, the person's
+    grants and recipes, and the live element's facts.
 - Inputs are not mutated. Exceptions:
   - `resample` returns the input array (not a copy) when `from === to`.
   - `mission/extract.ts` `normalize()` changes the row passed to it.
@@ -106,5 +139,6 @@ contract. Where it differs, this list says so.
 ## Verification
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
-  `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`)
+  `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs` and `garden-notes`, 58 tests)
 - Type check: `npm run check`

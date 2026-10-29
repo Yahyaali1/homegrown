@@ -10,7 +10,8 @@ each feature to the test that holds it.
 
 ```
 src/
-  domain/      pure TypeScript: no chrome.*, no DOM. Missions (brief, planning, extraction, rows, the loop), the
+  domain/      pure TypeScript: no chrome.*, no DOM. Missions (brief, planning, extraction, rows, the loop), gardeners
+               (records, schedule, policy, the loop), the
                model registry, settings schema, tasks, markdown, citations, captions, parsers for the model's
                replies, link checks, comparisons, zip reading. Everything here is unit-tested.
   shared/      what crosses between contexts: request and message types (protocol.ts), tasks, the page model.
@@ -203,3 +204,63 @@ Search answers, research, claim checks and YouTube depend on other sites. Voice 
 - **Wiring:** not shared after all. Image generation has its own progress relay through the worker and its own model call, and the image reader test covers neither.
 
 **Decision:** image generation gets a browser test, tagged `@slow` so a quick run can skip it with `--grep-invert @slow`.
+
+### ADR-15 The gardener loop: a pure next() over a stored run
+
+A gardener does recurring or long work for one person: it reads pages on a schedule, or (with a model that can) works
+on an open request with tools. Its run must survive the worker stopping at any point, wait for the person, and work
+with a weak model today and a stronger one later. ([plan](plan/S-gardeners.md))
+
+| | |
+|---|---|
+| Option A | An agent loop in the worker: a `while` that calls the model, runs the tool, and keeps the state in variables. |
+| Option B | A run is data. `next(run, ctx)` in `domain/garden/loop.ts` is pure: it reads the stored run and returns one action (`think`, `call`, `record`, `request`, `done`, `fail`). The worker (`background/garden.ts`) does the action, appends the result to the run (a turn, a step, a request), writes it to IndexedDB `hg-garden`, and calls `next` again. |
+| Against B | Every step goes through storage, and the loop's state has to be read back from turns and steps each time, which is more work than a local variable. |
+| Against A | A service worker stops when Chrome wants. State in variables is lost, and waiting for the person, a restart, a take-over and a resume become four separate code paths. A loop that holds `chrome.*` calls can't be unit-tested. |
+| Decision | **B.** Waiting, restarts, take-over and resume are one path: the worker calls `next` on what is stored. A step is stored as `started` before it runs; at worker start `recover` puts a `running` run back in the queue, a `started` read runs again, and a `started` act becomes a "did this happen?" request, so no act runs twice. `recover` is idempotent, and a fourth interruption fails the run. The loop has 18 unit tests with no browser. |
+
+The strongest objections, answered:
+
+| Objection | Answer |
+|---|---|
+| **Native tool calling** would be more reliable than JSON written in the reply. | The runtime (LiteRT-LM web) gives no tool-calling API, and ADR-9 keeps features neutral to the model. The reply is one JSON object, `{"tool", "args"}` or `{"answer"}`, read with `parseJsonObject` and checked against each tool's `ArgSpec` (`parseArgs`: an unknown key or a bad value is a bad reply). A bad reply gets one `repair` turn; a second ends the run with "The model's reply couldn't be read." Choose, repair and check run at temperature 0. When a runtime gives tool calls, it fits behind `next` as a different `think`. |
+| **Parallel runs** would finish more work. | The GPU runs one generation at a time (ADR-9, `lanes.ts`), so parallel runs only interleave their model calls. One queue (oldest `queued` first, one `running`) keeps runs from fighting over tabs, the minimized window and the cookie rules, and makes Stop and take-over clear. Gardener calls use the background lane, so a person's own request still goes first. |
+| **Budgets as formulas** (steps from the context size, for example) need no measuring. | What a model can do as an agent is not a function of its context size. `ModelSpec.agent = { loop, maxSteps }` is **measured** by `bench/garden-eval.mjs`; a model with no entry gets `DEFAULT_AGENT` (`{ loop: false, maxSteps: 4 }`), which runs only routines whose steps are set. The character budget is the one formula: `(maxTokens − OUTPUT_RESERVE) × CHARS_PER_TOKEN` from the pinned model, so the engine never cuts. A unit test runs one request on a 4k `loop: false` profile and a 32k `loop: true` profile and gets different behaviour with no code change. |
+| A model could change during a run. | A run pins `model`, `maxTokens` and `agent` when it first goes `running` (engine command `resolve`), and every think names that model (`askAs`). A reply from another model fails the run: "The model changed during the run." |
+
+**Outcome:** Gemma 4 E2B scored 6/8 on `garden-eval`, with policy violations in the injection case; E4B scored 5/8.
+Neither passes (6/8 and no violation), so both keep `DEFAULT_AGENT`, and open requests stay off until a model passes.
+
+### ADR-16 Gardener permissions: code decides, the model proposes
+
+A gardener reads pages that can hold any text, including text written to steer it. `defang` lowers that noise, but it
+is not a boundary.
+
+| | |
+|---|---|
+| Option A | Trust the model to follow its instructions, and filter page text harder. |
+| Option B | The model only proposes a call. Code decides with `decide(run, gardener, call)` in `domain/garden/policy.ts`: `allow`, `ask` (a request to the person) or `deny`. The boundaries are which URLs a run can reach, whether its tabs carry the person's cookies, what effect a call has, and who may answer. |
+| Against B | More requests for the person, and some useful calls wait for a yes. |
+| Against A | A page can always write text the filter misses. A model that follows it could read the person's signed-in pages and carry what it read to another site. |
+| Decision | **B.** Policy is pure and unit-tested (13 policy tests, 3 tab tests). |
+
+How code decides:
+
+| Boundary | Rule |
+|---|---|
+| Reach | A read is allowed for a URL in `run.seen` (with where it came from: person, approved, search, link) or on the gardener's sites. Anything else is a `reach` request. |
+| Cookies | Every tab a run opens gets a per-tab session rule (`cookieRule` in `pagerequest.ts`) before its first request. It removes `Cookie` and `Set-Cookie` for every host not in `gardener.sites`. Pages off those sites are read signed out, as the public sees them. The `mission` tool always runs signed out. |
+| Taint | A read whose final tab URL (or a frame) is on the gardener's sites, a read of a tab the person named, and notes in the data all set `run.tainted`. After that, `search` and `mission` are requests, a read is allowed only for URLs the person gave or approved or links from a page on the gardener's sites, and the tab rule blocks main-frame loads off the gardener's sites and the call's own hosts. |
+| Acts | `act` and acting `collect` recipes are asked every time, unless the person answered "always" to exactly that call: a grant in `hg-trust` bound to gardener, tool, host and `argsKey` (stable JSON of the args; for a recipe, of the whole recipe). |
+| Sensitive | `classify` runs in the page on the live element just before each acting step: password and card fields, words such as pay, buy, delete, send, confirm, a form or link to another host, a missing target, and typing after a signed-in read. A sensitive call is always asked, can't be granted, and the worker refuses a yes until 8 s after it was shown. A step that lands on another host stops the call. |
+| Code | The model never writes code steps: `evaluate` is refused by `parseArgs` and denied by policy. A recipe with code steps can't run in a gardener. |
+| Callers | Every garden handler needs an extension page (`isExtensionPage`). Only `runStop` and `runTakeover` also accept the run's own tab, through the lock bar's trusted clicks. |
+
+The strongest objections, answered:
+
+| Objection | Answer |
+|---|---|
+| **Signed-out reads off the gardener's sites** break pages that need a sign-in. | That is the point: a gardener reads the person's accounts only on the sites the person listed. Elsewhere it sees what the public sees, so a page can't make it read a signed-in page on another site. A person who wants a site read signed in adds it to the list. |
+| Taint stops useful open work after the first signed-in read. | Only new destinations wait. The person's own URLs, approved URLs and links from the gardener's own pages still read without asking; anything else is one request away. In `garden-eval` those requests were expected and answered yes. |
+| **The cookie-storage gap remains.** | Yes. A site that keeps its sign-in in page storage (localStorage, IndexedDB) instead of cookies still reads as the person, because the header rule can't see it. Requests made by a site's service worker (tab id −1) also escape per-tab rules. Reading such a page on the gardener's sites taints the run anyway; off the sites it is the known gap. The README's Privacy and safety section says so; the Garden tab doesn't show this help yet (the plan asked for it). |
+| An approval could be replayed for a different call. | An answer binds to the step index, the tool and the `argsKey`, and is used once. A grant binds to the host too, and a recipe's to the whole recipe, so an edit needs a new yes. |

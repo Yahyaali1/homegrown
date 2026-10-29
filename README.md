@@ -41,7 +41,7 @@ Requires Chrome 124+ with WebGPU. Tested on an Apple M4 (integrated GPU) in Chro
 | **Right-click** | Your tasks for selections, pages and images; "Open in Homegrown reader" on PDF links and pages |
 | **PDFs** | Chrome's PDF viewer keeps the text away from extensions, so on a PDF tab the launcher offers **Read this PDF with Homegrown**, which reopens it in the reader in the same tab — where selection, tasks, translation and missions all work |
 | **Shortcuts** | Alt+Shift+A launcher · Alt+Shift+S summarize page · Alt+Shift+L live captions · Alt+K palette |
-| **Side panel** (the home for everything) | **Chat**: attach an image, pick a Prompt Lab template, tune sampling, run page tasks or open every page action. **Missions**: start one (web or your open tabs), saved missions, watched pages, scheduled page tasks. **Library**: history, highlights, Ask your library, flashcards. **Tasks**: your toolbar and right-click tasks, variables, sharing. **Settings**: models, theme, on-page features, translation language, sites turned off, shortcuts, savings |
+| **Side panel** (the home for everything) | **Chat**: attach an image, pick a Prompt Lab template, tune sampling, run page tasks or open every page action. **Missions**: start one (web or your open tabs), saved missions, watched pages, scheduled page tasks. **Garden**: gardeners, their routines, requests that need you, and runs. **Library**: history, highlights, Ask your library, flashcards. **Tasks**: your toolbar and right-click tasks, variables, sharing. **Settings**: models, theme, on-page features, translation language, sites turned off, shortcuts, savings |
 
 You only need the extension's own pages to pick a model or change settings; everything else happens on
 the page you're reading.
@@ -114,6 +114,18 @@ Status: ✅ checked end to end on the real model · ◐ checked in part (see not
 | Scrape as you scroll | ❀ → **Scrape as you scroll**: like the bilingual page, each block is collected as it comes into view. Tables and "Label: value" lists are read as they are; for a repeated block (cards, results, listings) the local model decides whether it holds records and which fields to pull, kept only when the item's text says them. Infinite feeds keep coming in. **Whole page** also keeps every section's text and Markdown as you scroll, and **Organize** has the model put each section into a table it designs (only values the section says) plus an outline. Show, Copy JSON, CSV. Reading only | ✅ fixture nursery: care table, fact list, a product grid of 4 + 5 from the feed (Gemma 4 E2B picked name, price, shipping time); the menu and the article left alone |
 | ScrapingBee parameters and steps | Collect and missions take ScrapingBee's `js_scenario` (click, fill, wait, wait for and click, scroll, infinite scroll with "load more", `evaluate` through Chrome's user scripts), `wait_browser`, `text_relevant` / `markdown_relevant`, page text, Markdown and HTML, the HTTP status, `block_ads`, `block_resources`, headers, screenshots and a phone viewport. Steps that act are confirmed first; proxies, credits and cookies don't apply to your own browser ([plan](docs/plan/P-scrapingbee-tools.md)) | ✅ fixture shop: search form, three "load more" rounds, blocked image, header echo, 404, screenshots; a mission reading 6 rows instead of 3 |
 | Address-bar keyword `eg` | Starts a mission from anywhere | ○ can't be typed in headless tests |
+
+### Gardeners (agents that tend your work)
+A gardener has a name, instructions, the sites it may read signed in, and minutes per run. It works in its own tab
+group (`❀ <name>`), one run at a time, and asks you before anything new. ([plan](docs/plan/S-gardeners.md))
+
+| Feature | How | Status |
+|---|---|---|
+| Routines that read and say what changed | Side panel → **Garden**: every N hours, daily or weekly at a time, read up to 5 pages on the gardener's sites (or run a mission). Each run says in two or three sentences what changed since the last one. Runs survive the worker stopping, leave no tabs behind, and show as a flower that grows, blooms or wilts | ✅ e2e on the real model: a fake shop read twice, the second run names the change, no tabs left |
+| Approvals, and the 8 s rule | A click or a typed value waits for your yes in the Garden tab, bound to that exact call; **Always** stores a grant for it on that host, which you can revoke. A sensitive one (pay, delete, a password field, a form to another site) is always asked, and the worker refuses a yes within 8 s of showing it | ✅ e2e: an act happens exactly once after a yes; a Pay button can't be approved before 8 s |
+| Take over | The bar on a page a gardener works in: **Take over** gives you the tab and the run waits; **Hand back** from the Garden tab re-runs a read, or asks whether an act happened. **Stop** ends the run | ✅ e2e from the bar: a page-script click on the bar does nothing, the tab outlives a worker restart. ○ the Garden tab's own Take over button |
+| Notebook and looks | Notes you write for one gardener or all, and notes a gardener takes in a run; each gardener gets its own flower | ◐ unit tests only |
+| Open requests ("Ask") | The gardener chooses tools itself (search, read, mission, draft, note, notify, act, collect, read a tab you name) | ○ off until a model passes `bench/garden-eval.mjs` (6/8, no policy violation). Today: E2B 6/8 with injection violations, E4B 5/8 |
 
 ### Web, tabs and automation
 | Feature | How | Status |
@@ -223,6 +235,19 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
 - Page text is passed to the model as data; sentences that try to give the model instructions are removed
   first, extraction runs at temperature 0, and every value the model reads off a page must appear on that
   page or it's dropped (checked against a planted "ignore previous instructions" test page). The form helper never fills password or payment fields.
+- **Gardeners: code decides, the model proposes.**
+  - A gardener's tabs read pages **signed out** everywhere except the sites you list for it: a per-tab rule removes
+    cookies for every other host.
+  - After it reads one of your signed-in pages (or its notes, or a tab you named), the run is **tainted**: it can't
+    search, start a mission or open a new site without your yes, and its tabs can't load pages off its sites.
+  - Approvals bind to the **exact call** (tool, host and arguments) and are used once; "Always" stores a grant for
+    that call only.
+  - A **sensitive** step (payment, delete, send, password, a form to another site, typing after a signed-in read) is
+    always asked, can't be granted, and can't be approved within **8 s** of being shown.
+  - The model **never writes code steps** (`evaluate`); a recipe with code steps can't run in a gardener.
+  - Only Homegrown's own pages can answer a request or change a gardener.
+  - **Known gap:** a site that keeps its sign-in in page storage instead of cookies still reads as you, even off the
+    gardener's sites. Requests a site's service worker makes are not covered by the per-tab rule either.
 
 ## How it's built
 
@@ -291,8 +316,10 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
 - `chrome.storage`:
   - `sync`: settings and tasks. When there are no `tasks` yet, the worker seeds the default tasks, adds any legacy `customPrompts` as text tasks, and removes `customPrompts`.
   - `local`: `priceBook` (price memory), `monitors`, `schedules`, `scheduledResults`, `missions` (saved missions), `recipes` (saved Collect from pages recipes, `{v: 1}`), `flashcards`, `savings`, `tabNotes`, `captionSize` and `voiceSamples`.
-  - `session`: `liveMissions`, `pending` (a menu request handed to the side panel) and `notifUrls` (notification targets).
-- IndexedDB `hg-trust` (confirmed steps for scheduled missions, out of content scripts' reach) and IndexedDB `eg-memory` with the stores `history`, `highlights`, `kb` (saved pages) and `snapshots`; OPFS (model files); Cache Storage (helper models).
+  - `session`: `liveMissions`, `pending` (a menu request handed to the side panel), `notifUrls` (notification targets) and `liveGroups` (tab groups, kept tabs and minimized windows that missions and gardener runs own, closed at worker start).
+- IndexedDB `hg-trust` v2 (`confirmed`: steps for scheduled missions; `grants`: a gardener's standing yes to one exact call), out of content scripts' reach.
+- IndexedDB `hg-garden` v1 (`gardeners`, `routines`, `runs`, `snapshots`): gardener records, the newest 30 runs per gardener, and the last two page texts per routine page.
+- IndexedDB `eg-memory` v3 with the stores `history`, `highlights`, `kb` (saved pages), `snapshots` and `notes` (the gardeners' notebook; past 200 a gardener's oldest own notes go, yours never do); OPFS (model files); Cache Storage (helper models).
 - Network:
   - Model downloads from Hugging Face.
   - Search by `fetch` in `background/web.ts`: `html.duckduckgo.com`, Bing and the Wikipedia API.
@@ -303,13 +330,15 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
   - The reader fetches the document URL it opens.
 - Tabs and windows:
   - Background tabs in a collapsed "Mission" group while a mission reads pages.
+  - Gardener runs open tabs in a group titled `❀ <gardener name>`. With no normal window open, a run opens one minimized window and closes it when its turn ends. A tab you take over leaves the group and comes to the front.
   - `tidyTabs` groups the user's own tabs into new, uncollapsed groups.
   - `chrome.tabs.captureVisibleTab` for screenshots, and `scripting.executeScript` to inject content scripts and the page reader.
-- Context menus (task menus, live captions, the PDF reader), `chrome.alarms` for monitors and schedules, and `chrome.notifications` for their results.
+- Context menus (task menus, live captions, the PDF reader), `chrome.alarms` for monitors and schedules (and `garden:<routineId>` for gardener routines), and `chrome.notifications` for their results (a gardener's `notify` opens the Garden tab, never a URL).
 - Microphone and tab audio for voice and live captions.
 - Page tools (Collect, missions, `pageRequest`), only in Homegrown's background tabs:
   - `js_scenario` steps the user wrote click, type into fields and scroll; `evaluate` runs through `chrome.userScripts` when Chrome's "Allow user scripts" is on.
   - `declarativeNetRequest` session rules scoped to one tab (blocked resources and ad hosts, extra headers), removed when the tab closes.
+  - Gardener tabs: a per-tab session rule that removes `Cookie` and `Set-Cookie` off the gardener's sites and, in a tainted run, blocks main-frame loads off them. A lock bar in the page while a gardener works there.
   - `chrome.debugger` (optional permission, asked for on first use) for screenshots and device or window size, detached when the tab closes; Chrome shows its "started debugging this browser" bar meanwhile.
 
 ### System Verification

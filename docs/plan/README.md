@@ -26,6 +26,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | N Collect from pages (ScrapingBee-style rules) | [N-scrape.md](N-scrape.md) | Done: 3 review rounds, unit + browser tests |
 | O Research this (highlight a term) | [O-research-this.md](O-research-this.md) | Done: unit + real-model browser test |
 | R Scrape as you scroll | [R-scrape-as-you-scroll.md](R-scrape-as-you-scroll.md) | Done: unit, browser and real-model tests |
+| S Gardeners (agents that tend your work) | [S-gardeners.md](S-gardeners.md) | V1–V4 done, V5 measured: 174 unit, e2e 4/4 on the real model; open requests off until a model passes `bench/garden-eval.mjs` (E2B 6/8 with violations, E4B 5/8) |
 | Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Done: launcher grouped, shared fixes applied, suite 10/10 |
 
 Update the State column and each plan's "Status" section as work lands.

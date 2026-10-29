@@ -21,6 +21,12 @@ changed because of the argument). The last section maps each user-visible featur
 | `links.ts` | The phishing check runs on the link before anything is fetched. | Heuristics give false positives. | The warnings say what was seen ("the text says paypal.com, it goes to …"), so the user judges; nothing is blocked. |
 | `tasks.ts` | ↑/↓ swaps with the nearest task of the same kind. | Storing a separate order per kind would be cleaner. | One list keeps sync storage simple and old data valid; the swap rule fixed the reported bug. Tested. |
 | `zip.ts` | A 30-line central-directory reader with the built-in DecompressionStream. | A zip library handles more formats (zip64, encryption). | ePub and DOCX never use those; a library would add 100 KB to the reader for cases that can't occur. |
+| `garden/records.ts` | Gardeners, routines and runs are versioned records; a parser returns `null` for a bad record or a newer `v`, and callers skip it and never delete it. A site is a bare host; shared-hosting suffixes (`github.io`, `co.uk` …) are refused. | Skipping records silently hides data the person can't see. | An older build must leave a newer build's data alone; deleting it would lose it for good. A refused site is named in the error, so the person sees why. Tested. |
+| `garden/schedule.ts` | `nextAfter` walks local calendar dates, not instants; `claim` moves `nextDue` on once, fails a run still waiting, and skips a slot while a run works. | Instants with a fixed offset are simpler. | A fixed offset runs twice on a fall-back day and skips a spring-forward day. Date walking is tested in London, Havana (midnight change) and Nuuk; a routine 3 weeks overdue is claimed once. |
+| `garden/policy.ts`, `garden/classify.ts` | Code decides every call (`allow`, `ask`, `deny`) from reach, taint, grants and the live element; the model only proposes (ADR-16). | More requests for the person, and some useful calls wait. | A page can write anything; only code that can't be talked to is a boundary. Answers and grants bind to the exact call. Tested, including a click that lands on another host. |
+| `garden/loop.ts` | A pure `next(run, ctx)` over the stored run; model replies are stored turns (ADR-15). | The loop's state is read back from turns each time instead of kept in variables. | A worker can stop at any time; one path covers waiting, restarts, take-over and resume. 18 unit tests, including both model profiles. |
+| `garden/tools.ts` | Tools are specs with typed args; `parseArgs` refuses an unknown key, a missing one or a bad value, and never accepts `evaluate`. | Native tool calling would check args in the runtime. | The runtime has none (ADR-9). A spec is one line per tool, and a bad call counts as a bad reply, which gets one repair. |
+| `garden/notes.ts` | Notes reach the model only in the data part of a think, under a label that says whose they are; a model's note is defanged, and reading notes taints the run. | Notes in the instructions would steer the model better. | A model's note came from a page, so it is untrusted text. The person's notes stay apart from the model's. Tested; the `eg-memory` v3 upgrade only adds the `notes` store. |
 
 ## Worker (`src/background`)
 
@@ -31,6 +37,9 @@ changed because of the argument). The last section maps each user-visible featur
 | `engine.ts` | One shared promise starts the offscreen document. | Racing callers could still create two documents. | The shared promise serializes them; Chrome also refuses a second offscreen document. |
 | `memory.ts` | IndexedDB with a version and upgrade function; embeddings filled in lazily. | Embedding on save would keep search consistent. | The embedding model may still be downloading on first use; lazy fill keeps saving instant and search falls back to keywords until vectors exist. |
 | `monitors.ts` | Line-set diffs (order ignored) for "what changed". | A real diff shows moves and edits. | The summary is written by the model from added and removed lines; order changes on dynamic pages would otherwise flood it. |
+| `garden.ts` | One queue, one running run; every action is persisted before the next; worker start runs once (`recover`, close listed tabs and windows, re-arm, claim). | Parallel runs would finish sooner. | One GPU generation at a time (ADR-15); one run keeps tabs, windows and cookie rules apart, and Stop and take-over clear. Tested e2e: a routine leaves no tabs, an act happens once. |
+| `gardentools.ts` | Each tool reuses the mission plumbing (`readInTab`, `searchInTab`, `missionRun`, `play`, `scrapeRecipe`); every tab gets the cookie rule before its first request. | New, tool-specific code would be easier to read. | The mission code is already tested on real pages; reuse keeps one tab model. Taint follows the tab's final URL, and an unknown URL counts as signed in (fail closed). |
+| `idb.ts` | A 40-line IndexedDB helper (`open`, `tx`, `get`, `put`, `del`, `all`) for the worker's own databases. | A library (idb) is well known. | Two users (`hg-garden`, `hg-trust`) need six calls. IndexedDB in the worker is out of content scripts' reach, unlike `chrome.storage`. |
 
 ## Engine (`src/offscreen`)
 
@@ -52,6 +61,7 @@ changed because of the argument). The last section maps each user-visible featur
 | `translate.ts` | Chrome's built-in translator first, the local model second. | Two engines give two translation styles. | The built-in one is faster and stays on the device; the model covers languages and browsers it doesn't. |
 | `links.ts` | Previews for any link whose resolved URL is http(s). | — | The first version matched the attribute (`href^="http"`) and missed relative links; the e2e test found it. |
 | `palette.ts` | One palette for tasks, actions and missions; labels rendered as text nodes. | `innerHTML` with escaping was shorter. | Text nodes can't be gotten wrong (ADR-7). |
+| `features/gardenlock.ts` | A bar "<name> is working here · Take over · Stop" in a closed shadow root, in the top layer, put back when a page removes or restyles it; only `isTrusted` clicks act. | A bar on the page can still be covered by a page that keeps trying. | It never blocks input, and the Garden tab has its own Take over that a page can't hide. Tested e2e: a page-script click on the bar does nothing. |
 
 ## Pages (`src/pages`)
 
@@ -60,6 +70,7 @@ changed because of the argument). The last section maps each user-visible featur
 | `shell.ts` | `$()` throws when an element is missing. | A missing element would just do nothing. | Pages own their markup; a silent no-op hides a broken page until a user finds it. |
 | `sidepanel.ts` | Settings changes in Chat: the model proposes, code checks against the schema, the user applies. | Applying directly is one click fewer. | The user asked that settings never change on their own. Tested in e2e. |
 | `mission.ts` | The page renders the worker's progress messages; the worker owns the mission state. | The page could run missions itself. | Missions outlive the page (several at once, nudges when done); the worker is the only context that lives long enough. |
+| `garden.ts` | The Garden tab shows what the worker broadcasts; rows are kept by id and updated in place; answers go back through `requestAnswer`. | The page could hold run state itself. | Runs outlive the page; the worker is the only context that can wait for a schedule. Updating in place keeps a grown flower still. The sensitive approve button shows the 8 s as text and a 2px bar; the worker enforces it. |
 
 ## What each feature is held to
 
@@ -100,3 +111,8 @@ changed because of the argument). The last section maps each user-visible featur
 | Library: flashcards, ask | "library: a due flashcard…", "library: Ask your library…" | e2e |
 | Reader: ePub | "reader: an ePub opens as its chapters…"; `zip.test.ts` | e2e, unit |
 | Image generation | "image generation @slow: a prompt becomes an image…" | e2e (tagged @slow; downloads 2.4 GB once, ADR-14 revised) |
+| Gardeners: routines that read and say what changed | "gardeners @slow: a routine reads two pages, and its second run says what changed…" (`tests/garden.spec.mjs`); `garden-loop.test.ts`, `garden-schedule.test.ts`, `garden-records.test.ts` | e2e (fake shop, real model), unit |
+| Gardeners: approvals, the 8 s rule | "gardeners @slow: an act waits for your approval, then happens exactly once", "…a sensitive approval (a Pay button) can't be given within 8 s…"; `garden-policy.test.ts`, `garden-loop.test.ts` | e2e, unit |
+| Gardeners: take over and hand back | "gardeners @slow: take over pauses a read, a page-script click on the lock does nothing, the tab outlives a worker restart, hand back finishes"; `garden-tabs.test.ts` | e2e, unit |
+| Gardeners: notebook and looks | `garden-notes.test.ts` | unit |
+| Gardeners: open requests | `garden-loop.test.ts` (fake model profiles); `bench/garden-eval.mjs` (no model passes yet) | unit, benchmark |
