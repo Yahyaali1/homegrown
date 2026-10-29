@@ -112,5 +112,7 @@ export function relevant(el: Element): Element {
 
 /** Markdown for markdown_relevant and return_page_markdown; text_relevant is the same without the marks. */
 export const markdownOf = (el: Element) => toMarkdown(relevant(el), true);
-export const textOf = (el: Element) =>
-  markdownOf(el).replace(/!\[[^\]]*\]/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^#+\s|^- |\*\*/gm, '').replace(/\n{2,}/g, '\n').trim();
+/** Markdown as plain text: images, link targets, heading and list marks and bold removed. */
+export const plain = (markdown: string) =>
+  markdown.replace(/!\[[^\]]*\]/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^#+\s|^- |\*\*/gm, '').replace(/\n{2,}/g, '\n').trim();
+export const textOf = (el: Element) => plain(markdownOf(el));

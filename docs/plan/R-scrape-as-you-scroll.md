@@ -47,3 +47,8 @@ Asked for after the first version: capture literally everything, then have the a
 - **Organize**: the rest captured, then one model call per section: a table the model designs (name, up to 6
   columns, 15 rows), each cell kept only when the section's text says it; prose gets no table. An outline
   (heading, level, words) without a model.
+
+| Review | Reviewer | Found | Result |
+| --- | --- | --- | --- |
+| Whole page 1 | design | no Blockers, 7 Major, 4 Nit | All fixed: sections rebuilt from the page as it is for Show, Copy JSON and Organize (a re-rendered heading can't wedge Organize; new headings join); headers and asides inside articles are content; the last section ends at the next heading and headings past the limit are counted; long sections organized in parts; 45 model calls a page with unchanged sections reused; text cells must appear as written; an error skips one part; session-safe Organize; object rows by column name; the CSV keeps the source table |
+

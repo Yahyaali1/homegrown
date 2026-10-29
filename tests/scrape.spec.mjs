@@ -307,9 +307,11 @@ test('scrape as you scroll: tables and fact lists are collected as they come int
   await expect.poll(async () => Number((await ui.locator('.sasbar span').innerText()).match(/Whole page: (\d+)\//)[1])).toBeGreaterThan(before);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await ui.locator('.sasbar').getByRole('button', { name: 'Copy JSON' }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('"heading": "Opening times"'); // the copy has landed
   const json = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   const hours = json.page.find((p) => p.heading === 'Opening times');
   expect(hours.text).toContain('Saturday from 9:00 to 17:00');
+  expect(json.page.find((p) => p.heading === 'Fern nursery').text).toContain('By the Oak Lane growers'); // a header inside an article is content
   expect(json.page.find((p) => p.heading === 'Plant care').markdown).toContain('| Boston fern | Weekly | Shade |');
   expect(JSON.stringify(json.page)).not.toContain('About us'); // the nav menu is not page content
   // Organize asks the model, and there is none here: the outline still comes.

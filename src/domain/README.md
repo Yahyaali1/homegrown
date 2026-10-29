@@ -45,8 +45,11 @@ runtime adapters and storage live outside `domain/`.
 - `csv.ts`: `csvCell`, `toCsv(keys, rows)`. Quotes every cell and prefixes `'` to a cell that starts like a
   spreadsheet formula (`= + - @`, tab, CR) unless it is a plain number.
 - `organize.ts`: Organize for a whole captured page. `ORGANIZE_INSTRUCTION` (fixed), `organizeData(section)`
-  (heading and 3500 characters, defanged), `parseTable(reply, text)` (up to 6 columns and 15 rows; each cell kept
-  only if `onText` finds it in the section, a row needs 2 kept cells; null for prose), `outline(sections)`.
+  (heading and 3500 characters, defanged), `parseTable(reply, text)` (up to 6 columns and 15 rows, rows as arrays or as
+  objects keyed by the column names; a text cell is kept only if the section contains it as written, a number by
+  `onText`; a row needs 2 kept cells, 1 in a one-column table; null for prose), `chunks(text)` (a long section in
+  up to 3 parts of 3500 characters, cut between paragraphs), `outline(sections)`; `ORGANIZE_LIMITS.calls` (45 model
+  calls a page).
 - `scroll.ts`: scrape as you scroll. `PICK_INSTRUCTION` (fixed) and `pickData(heading, items)` (3 items, 400
   characters each, defanged) for the model's choice; `parsePick(reply)` (anything unusable is a skip; up to 6
   slugged fields); `pickRules(fields)`; `labelPairs(text)` and `factsRow(pairs)` (3 pairs or more);

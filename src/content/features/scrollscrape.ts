@@ -7,8 +7,9 @@ import { ui } from '../core.ts';
 import { h } from '../../ui/dom.ts';
 import { factsRow, labelPairs, SCROLL_LIMITS, type Cell, type Collected } from '../../domain/scroll.ts';
 import { toCsv } from '../../domain/csv.ts';
-import { ORGANIZE_LIMITS, outline, type PageSection } from '../../domain/organize.ts';
-import { markdownOf, textOf } from '../scenario.ts';
+import { ORGANIZE_LIMITS, chunks, outline, type PageSection } from '../../domain/organize.ts';
+import { plain } from '../scenario.ts';
+import { toMarkdown } from '../markdown.ts';
 
 type Kind = Collected['kind'];
 interface Block { el: HTMLElement; kind: Kind; inView: boolean; queued: boolean; started: boolean; batches: number; tries: number; section?: Collected; fields?: string[]; skipped?: boolean }
@@ -30,15 +31,25 @@ let noModel = '';
 let note = '';
 
 // ---- whole page: every section's text and Markdown as it comes into view, then Organize into tables ----
-interface Part extends PageSection { at: Element; from: Element | null; to: Element | null; captured: boolean }
+interface Part extends PageSection { at: Element; from: Element | null; to: Element | null; captured: boolean; key: string }
 let whole = false;
 let parts: Part[] = [];
 let partObserver: IntersectionObserver | null = null;
-let organizing = false;
+let organizing = ''; // the session organizing, so a stopped one can't clear a new one's flag
+let organizeCalls = 0;
+let organized = new Map<string, Collected[]>(); // by section and text: a repeat Organize asks only about changes
+let morePages = 0; // headings past the section limit
 
 const text = (el: Element) => ((el as HTMLElement).innerText ?? el.textContent ?? '').trim();
-const FURNITURE = 'nav, header, footer, aside, [role=navigation], [role=banner], [role=contentinfo], menu';
-const outside = (el: Element) => !!el.closest('edge-gallery') || !!el.closest(FURNITURE);
+// Page furniture: navigation and the site's own header, footer and sidebar. A <header> or <aside> inside an article
+// or section (a title and byline, a callout) is content.
+const SITE = 'nav, menu, [role=navigation], [role=banner], [role=contentinfo]';
+function furniture(el: Element): boolean {
+  if (el.closest(SITE)) return true;
+  const box = el.closest('header, footer, aside');
+  return !!box && !box.parentElement?.closest('article, section, main');
+}
+const outside = (el: Element) => !!el.closest('edge-gallery') || furniture(el);
 const PROSE = /^(P|H[1-6]|SPAN|EM|STRONG|B|I|A|BR|HR|IMG|SCRIPT|STYLE|SVG|BUTTON|INPUT|LABEL)$/;
 
 // The heading a block sits under: its caption, an aria-label, or the nearest heading before it.
@@ -189,18 +200,27 @@ async function collect(b: Block): Promise<void> {
   b.section.rows.push(...rows);
 }
 
-/** The page split at its headings (h1–h4, outside navigation), with what comes before the first one as "Intro". */
+/**
+ * The page split at its headings (h1–h4, outside site furniture), with what comes before the first as "Intro". The
+ * last section kept ends at the next heading, kept or not.
+ */
 function partsOfPage(): Part[] {
-  const heads = [...document.body.querySelectorAll<HTMLElement>('h1, h2, h3, h4')].filter((hd) => !outside(hd) && text(hd)).slice(0, ORGANIZE_LIMITS.sections - 1);
+  const all = [...document.body.querySelectorAll<HTMLElement>('h1, h2, h3, h4')].filter((hd) => !outside(hd) && text(hd));
+  const heads = all.slice(0, ORGANIZE_LIMITS.sections - 1);
+  morePages = all.length - heads.length;
   const first = [...document.body.children].find((c) => !outside(c) && !c.matches('script, style')) ?? document.body;
-  return [null, ...heads].map((hd, i) => ({
-    heading: hd ? text(hd).slice(0, 150) : 'Intro', level: hd ? Number(hd.tagName[1]) : 0, text: '', markdown: '',
-    at: hd ?? first, from: hd, to: heads[i] ?? null, captured: false,
-  }));
+  const seenKeys = new Map<string, number>();
+  return [null, ...heads].map((hd) => {
+    const heading = hd ? text(hd).slice(0, 150) : 'Intro';
+    const n = (seenKeys.get(heading) ?? 0) + 1;
+    seenKeys.set(heading, n);
+    return { heading, level: hd ? Number(hd.tagName[1]) : 0, text: '', markdown: '', at: hd ?? first, from: hd, to: all[hd ? all.indexOf(hd) + 1 : 0] ?? null, captured: false, key: `${heading}#${n}` };
+  });
 }
 
-/** A section's content: from its heading to the next one, without navigation, headers, footers, scripts or our UI. */
+/** A section's content, heading to next heading, without site furniture, scripts or our UI: Markdown, then text. */
 function capture(p: Part): void {
+  if ((p.from && !p.from.isConnected) || (p.to && !p.to.isConnected)) return; // re-rendered: the next rebuild has it
   const r = document.createRange();
   if (p.from) r.setStartBefore(p.from);
   else r.setStart(document.body, 0);
@@ -208,13 +228,31 @@ function capture(p: Part): void {
   else r.setEnd(document.body, document.body.childNodes.length);
   const box = document.createElement('div');
   box.append(r.cloneContents());
-  for (const x of box.querySelectorAll(`${FURNITURE}, edge-gallery, script, style, noscript, template`)) x.remove();
-  p.markdown = markdownOf(box).slice(0, 20000);
-  p.text = textOf(box).slice(0, 20000);
+  for (const x of box.querySelectorAll(`${SITE}, edge-gallery, script, style, noscript, template, [hidden], [aria-hidden="true"]`)) x.remove();
+  for (const x of box.querySelectorAll('header, footer, aside')) if (!x.parentElement?.closest('article, section, main')) x.remove();
+  const markdown = toMarkdown(box, true);
+  p.markdown = markdown.slice(0, ORGANIZE_LIMITS.capture);
+  p.text = plain(markdown).slice(0, ORGANIZE_LIMITS.capture);
+  p.chars = markdown.length;
   p.captured = true;
 }
 
-const wholeStatus = () => (whole ? `Whole page: ${parts.filter((p) => p.captured).length}/${parts.length} sections` : '');
+/**
+ * The sections again, from the page as it is now (headings added or re-rendered since), each captured now. A
+ * section keeps its earlier capture when that was longer (its content was unloaded since, as feeds do).
+ */
+function refreshParts(): void {
+  const before = new Map(parts.map((p) => [p.key, p]));
+  parts = partsOfPage();
+  for (const p of parts) {
+    capture(p);
+    const old = before.get(p.key);
+    if (old?.captured && old.text.length > p.text.length) Object.assign(p, { text: old.text, markdown: old.markdown, chars: old.chars, captured: true });
+    partObserver?.observe(p.at);
+  }
+}
+
+const wholeStatus = () => (whole ? `Whole page: ${parts.filter((p) => p.captured).length}/${parts.length} sections${morePages ? ` (${morePages} more headings past the limit)` : ''}` : '');
 
 function setWhole(on: boolean): void {
   whole = on;
@@ -237,32 +275,58 @@ function setWhole(on: boolean): void {
 }
 
 /**
- * The agent pass: sections not yet seen are captured, then the local model puts each one into a table it designs,
- * every cell checked against the section's text (bg 'scrollOrganize'). Plus an outline, without a model.
+ * The agent pass: the sections rebuilt from the page as it is, then the local model puts each into a table it designs,
+ * every cell checked against the section's text (bg 'scrollOrganize'); long sections go in parts. Plus an outline,
+ * without a model. Unchanged sections reuse their tables; a page has ORGANIZE_LIMITS.calls model calls in all.
  */
 async function organize(): Promise<void> {
   if (organizing || !whole) return;
-  organizing = true;
-  const mine = session;
-  for (const p of parts) if (!p.captured) capture(p); // the rest of the page, as it is now
-  const kept = parts.filter((p) => p.text.split(/\s+/).filter(Boolean).length >= 5);
-  sections = sections.filter((s) => !s.organized);
-  sections.push({ kind: 'table', name: 'Outline', rows: outline(kept), organized: true });
-  let n = 0;
-  for (const p of kept) {
-    if (session !== mine) break;
-    bar.querySelector('span')!.textContent = `Organizing ${++n}/${kept.length}: ${p.heading}…`;
-    try {
-      const r = await ui.bg<{ table: { name: string; rows: Record<string, Cell>[] } | null; stopped?: boolean }>('scrollOrganize', { heading: p.heading, text: p.text, runId: session });
-      if (session !== mine || r.stopped) break;
-      if (r.table) sections.push({ kind: 'table', name: `${r.table.name} (${p.heading})`, rows: r.table.rows, organized: true });
-    } catch (e) {
-      note = (e as Error).message;
-      break;
+  const mine = (organizing = session);
+  try {
+    refreshParts();
+    const kept = parts.filter((p) => p.text.split(/\s+/).filter(Boolean).length >= 5);
+    sections = sections.filter((s) => !s.organized);
+    sections.push({ kind: 'table', name: 'Outline', rows: outline(kept), organized: true });
+    note = '';
+    let n = 0;
+    sections: for (const p of kept) {
+      if (session !== mine || !whole) return;
+      n++;
+      const key = `${p.key}\n${p.text}`;
+      let tables = organized.get(key);
+      if (!tables) {
+        tables = [];
+        const pieces = chunks(p.text);
+        for (const [k, piece] of pieces.entries()) {
+          if (organizeCalls >= ORGANIZE_LIMITS.calls) {
+            note = 'Organize stopped: the model has read its share for this page';
+            break sections;
+          }
+          bar.querySelector('span')!.textContent = `Organizing ${n}/${kept.length}: ${p.heading}…`;
+          let r: { table: { name: string; rows: Record<string, Cell>[] } | null; stopped?: boolean } | null = null;
+          for (let attempt = 0; attempt < 2 && !r; attempt++) {
+            try {
+              organizeCalls++;
+              r = await ui.bg('scrollOrganize', { heading: p.heading, text: piece, runId: session });
+            } catch (e) {
+              const msg = (e as Error).message;
+              if (session !== mine) return;
+              if (/No model/i.test(msg)) return void (note = msg);
+              if (attempt) note = `${p.heading}: ${msg}`; // after one retry: skip this part, go on
+            }
+          }
+          if (session !== mine || r?.stopped) return;
+          if (r?.table) tables.push({ kind: 'table', name: `${r.table.name} (${p.heading}${pieces.length > 1 ? `, part ${k + 1}` : ''})`, rows: r.table.rows, organized: true });
+        }
+        organized.set(key, tables);
+      }
+      sections.push(...tables);
     }
+    note ||= `organized ${kept.length} sections`;
+  } finally {
+    if (organizing === mine) organizing = '';
+    if (session === mine) status();
   }
-  organizing = false;
-  if (session === mine) (note = note || `organized ${kept.length} sections`), status();
 }
 
 const filled = () => sections.filter((s) => s.rows.length);
@@ -311,8 +375,9 @@ async function pump(): Promise<void> {
 
 // ---- results ----
 
-const allRows = () => filled().flatMap((s) => s.rows.map((r) => ({ section: s.name, ...r })));
+const allRows = () => filled().flatMap((s) => s.rows.map((r) => ({ ...r, 'table (source)': s.name }))); // last: a column named like it can't hide the source
 function show(): void {
+  if (whole && !organizing) refreshParts();
   const card = ui.openCard('Collected as you scrolled', ui.topRect());
   card.meta.textContent = `${count()} rows from ${filled().length} blocks${skipped ? `, ${skipped} skipped as page furniture` : ''} · read on this device`;
   card.body.replaceChildren(...filled().map((s) => {
@@ -327,7 +392,10 @@ function show(): void {
 }
 const captured = () => parts.filter((p) => p.captured && p.text);
 /** Copy JSON: the tables, and with Whole page on, every captured section's text and Markdown. */
-const asJson = () => ({ tables: filled(), ...(whole && { page: captured().map(({ heading, level, text: t, markdown }) => ({ heading, level, text: t, markdown })) }) });
+const asJson = () => {
+  if (whole && !organizing) refreshParts();
+  return { tables: filled(), ...(whole && { page: captured().map(({ heading, level, text: t, markdown, chars }) => ({ heading, level, text: t, markdown, ...(chars && chars > ORGANIZE_LIMITS.capture && { truncated: true, chars }) })) }) };
+};
 
 function stop(): void {
   session = '';
@@ -339,7 +407,10 @@ function stop(): void {
   observer = watcher = partObserver = null;
   queue = [];
   parts = [];
-  whole = organizing = false;
+  whole = false;
+  organizing = '';
+  organized = new Map();
+  organizeCalls = 0;
   for (const el of document.querySelectorAll<HTMLElement>('[data-eg-scraped]')) delete el.dataset.egScraped;
   document.getElementById('eg-scrape-style')?.remove();
   bar.hidden = true;

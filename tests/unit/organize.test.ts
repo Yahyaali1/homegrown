@@ -1,7 +1,7 @@
 // Organize a captured page: the model's tables keep only what each section's text says. Run: npm test
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ORGANIZE_INSTRUCTION, organizeData, outline, parseTable } from '../../src/domain/organize.ts';
+import { chunks, ORGANIZE_INSTRUCTION, ORGANIZE_LIMITS, organizeData, outline, parseTable } from '../../src/domain/organize.ts';
 
 const text = 'We open Saturday from 9:00 to 17:00 and Sunday from 10:00 to 16:00. Weekday visits are by appointment.';
 
@@ -25,6 +25,20 @@ describe('the model designs a table for a section', () => {
     assert.match(d, /^Heading: Hours/);
     assert.doesNotMatch(d, /Ignore all previous/);
     assert.doesNotMatch(ORGANIZE_INSTRUCTION, /Hours/);
+  });
+
+  test('object rows keyed as the model wrote the columns, and cells copied, not assembled from loose words', () => {
+    const t = parseTable('{"name": "Hours", "columns": ["Day", "Start Time"], "rows": [{"Day": "Saturday", "Start Time": "9:00"}, {"Day": "Sunday", "Start Time": "9:10"}]}', text)!;
+    assert.deepEqual(t.rows, [{ day: 'Saturday', start_time: '9:00' }]);
+    assert.equal(parseTable('{"columns": ["a", "b"], "rows": [["open Saturday", "Weekday by appointment"]]}', text), null, 'words that are each on the page, but not as written');
+  });
+
+  test('long sections go in parts cut between paragraphs', () => {
+    const para = 'x'.repeat(1500);
+    const parts = chunks([para, para, para, para, para, para, para, para].join('\n'));
+    assert.equal(parts.length, ORGANIZE_LIMITS.chunks);
+    assert.ok(parts.every((c) => c.length <= ORGANIZE_LIMITS.chars));
+    assert.deepEqual(chunks('short'), ['short']);
   });
 
   test('the outline needs no model', () => {

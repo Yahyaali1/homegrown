@@ -117,13 +117,18 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
     `section` column) and ✕. ✕ closes the session's `scrape:<id>` port (the worker cancels the model call; the port
     is opened again if the worker restarted meanwhile),
     removes the outlines, and a late answer from the stopped session is dropped.
-  - Whole page (a switch on the bar): the page is split at its h1–h4 headings outside navigation (what comes
-    before the first is "Intro"), at most 30 sections. Each section's content, heading to next heading without
-    navigation, headers, footers, scripts or our UI, is captured as text and Markdown (`content/markdown.ts`)
-    when its heading comes within 200 px of the view. Organize captures the rest as the page is now, then for
-    each section of 5 words or more asks `bg('scrollOrganize')` for a table, one at a time, and adds an outline
-    (heading, level, words) made without a model. Show lists the organized tables and the captured sections;
-    Copy JSON gives `{ tables, page: [{ heading, level, text, markdown }] }`.
+  - Whole page (a switch on the bar): the page is split at its h1–h4 headings outside site furniture (what comes
+    before the first is "Intro"), at most 30 sections; the last one ends at the next heading and the bar counts
+    headings past the limit. A section is captured (text and Markdown, `content/markdown.ts`, without navigation,
+    the site's header, footer and sidebar, scripts or our UI; a header or aside inside an article or section is
+    kept) when its heading comes within 200 px of the view. Show, Copy JSON and Organize rebuild the sections from
+    the page as it is now and capture each again; a section keeps an earlier, longer capture (content a feed
+    unloaded). Captures over 20000 characters are cut and marked `truncated` in the JSON.
+  - Organize: the outline (heading, level, words) without a model, then each section of 5 words or more through
+    `bg('scrollOrganize')`, long ones in up to 3 parts, one at a time. Unchanged sections reuse their tables; 45
+    model calls a page; an error gets one retry, then that part is skipped; "No model" or Stop ends it; turning
+    Whole page off ends it. Show lists the organized tables and the captured sections; Copy JSON gives
+    `{ tables, page: [{ heading, level, text, markdown }] }`; the CSV's source column is `table (source)`.
 - `search.ts`
   - Exports: `research(q, rect)`, the deep-research card (`bg('research')`).
   - Page actions: "Research…" and "Related reading" (`bg('related')`).
