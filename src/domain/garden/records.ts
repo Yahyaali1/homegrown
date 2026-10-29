@@ -14,6 +14,8 @@ export interface Gardener {
   createdAt: number;
   /** Its flower in the Garden tab (optional, so v stays 1). */
   look?: Look;
+  /** Its reads and acts add the page's console errors and failed requests (needs the `debugger` permission). */
+  devtools?: boolean;
 }
 
 /** A gardener's flower: never 10 petals (the Homegrown mark's), always leaning left, the leaf on the right. */
@@ -144,7 +146,12 @@ export interface GardenRun {
   trigger?: Trigger;
   /** A one-off routine's slot plus its deadline: not done by then, it fails "Deadline passed". */
   deadline?: number;
+  /** Downloads its tabs started (matched by referrer), each also a `file` card. */
+  files?: RunFile[];
 }
+
+/** A download kept with a run: Chrome's download id, its file name and URL. */
+export interface RunFile { id: number; name: string; url: string; at: number }
 
 export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact'; title: string; ref: string }
 
@@ -197,8 +204,11 @@ export interface Step {
 
 export interface Request {
   id: string;
-  /** `helpers`: a parent waits on its helper runs; only code answers it, when they all end. */
-  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen' | 'plan' | 'helpers';
+  /**
+   * `helpers`: a parent waits on its helper runs; only code answers it, when they all end. `help`: a page asked for a
+   * check for humans in tab `tabId`; yes reads it again, no fails the step.
+   */
+  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen' | 'plan' | 'helpers' | 'help';
   step?: number;
   /** The exact call an answer applies to: its tool and `argsKey(args)`. */
   tool?: string;
@@ -304,7 +314,7 @@ export function parseGardener(raw: unknown): Gardener | null {
   if (refused.length || !int(minutes, 1, 60) || !time(raw.createdAt)) return null;
   // An unknown look (a newer build's, or broken) is dropped, never the gardener: the UI draws one from its id.
   const look = raw.look === undefined ? null : parseLook(raw.look);
-  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }) };
+  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }), ...(raw.devtools === true && { devtools: true }) };
 }
 
 export function parseWhen(raw: unknown): When | null {

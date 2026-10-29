@@ -2,6 +2,7 @@
 // ScrapingBee's waits, the js_scenario steps one at a time, then the rules and the page returns, and a screenshot.
 // Recipes use it for each page; missions use the steps before reading. Only Homegrown's own tabs are touched.
 import { inTab, waitLoaded, type Run } from './missions.ts';
+import { attach } from './devtools.ts';
 import { itemRule, type PageResult, type Recipe } from '../domain/scrape/recipe.ts';
 import { describe, isAct, SCENARIO_LIMITS, type Scenario, type StepReport } from '../domain/scrape/scenario.ts';
 import { verdict, type Check } from '../domain/garden/classify.ts';
@@ -90,11 +91,11 @@ async function emulate(tabId: number, o: PageOptions): Promise<() => Promise<voi
   if (!needsDebugger(o)) return async () => {};
   if (!(await chrome.permissions.contains({ permissions: ['debugger'] }))) throw new Error('Screenshots, window size and device need the debugger permission: allow it from Collect from pages.');
   const target = { tabId };
-  await chrome.debugger.attach(target, '1.3');
+  const detach = await attach(tabId);
   const mobile = o.device === 'mobile';
   await chrome.debugger.sendCommand(target, 'Emulation.setDeviceMetricsOverride', { width: o.window_width, height: o.window_height, deviceScaleFactor: mobile ? 3 : 1, mobile });
   if (mobile) await chrome.debugger.sendCommand(target, 'Emulation.setUserAgentOverride', { userAgent: MOBILE_UA });
-  return () => chrome.debugger.detach(target);
+  return detach;
 }
 
 /** A PNG data URL of the tab (the debugger already attached), or null when `o` asks for none. Also the outputs page's PNG. */

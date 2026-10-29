@@ -49,10 +49,16 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   by hand). A run's Open view reads top to bottom: the request, each step (Retry step where `retryStep` allows),
   drafts, created cards with Open, "How it worked" (turns and outputs), and Report (`homegrown-report-<id>.json`,
   page text only when ticked). Opening it sends `runSeen`. An active run has a Steer box with Queue
-  (`runMessage` with `steer` true or false); an ended one has Ask a follow-up (`gardenRun({ followUp, work })`), and the two request trays. `showRequests()` re-renders the trays when
+  (`runMessage` with `steer` true or false); an ended one has Ask a follow-up (`gardenRun({ followUp, work })`), and the two request trays.
+  A running run has Watch: it asks for `debugger` on the click, then shows frames from port `garden-watch:<runId>`
+  in an `<img>` (kept nowhere); declined, it offers Show the tab (`runTab`, then `tabs.update`/`windows.update`). The
+  gardener form's DevTools switch asks for `debugger` when turned on (`Gardener.devtools`). "Keep downloads with
+  runs" is the `downloads` permission itself (on requests it, off removes it); a `file` card's Open calls
+  `downloads.show`. `showRequests()` re-renders the trays when
   the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen.
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
-  `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan and question cards; an
+  `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its
+  tab and window; Done, Skip) and question cards; an approve in the person's own tab (`alwaysOk` false) has no Always; an
   approve for `act`, `draft` or `notify` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
   (Always is hidden while they differ). With two or more requests that `approveAllOk` allows, "Approve all" sends
   them to `requestAnswerAll`. A question with `questions` uses `ui/questions.ts`.

@@ -79,7 +79,7 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (`questions?`,
+  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`, `files?`), `RunFile`, `Gardener` (`devtools?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (kind `help`: yes reads the page again, no fails the step with `HELP_REFUSED`; `questions?`,
     `editedFrom?`, `noEdit?`, `answer.args?`), `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
     `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
     `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`, `historyGroup` (Needs you, Unread: ended after `seenAt`,
@@ -99,17 +99,23 @@ runtime adapters and storage live outside `domain/`.
     slot is skipped, never failed. `nextBatch(runs, now)`: the queue's next pick, one run or up to `HELPERS` (3) queued
     helpers of the oldest parent; a run with `retryAt` in the future waits.
   - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,
-    `sensitiveSteps`, `onSites`, `addSeen`, `fromExtensionPage`, `approveAllOk`, `SENSITIVE_WAIT` (8000 ms), `Grant`.
+    `sensitiveSteps(run, steps, tool?)`, `onSites`, `addSeen`, `fromExtensionPage`, `approveAllOk`, `alwaysOk`,
+    `planCovers`, `SENSITIVE_WAIT` (8000 ms), `Grant`. `act_my_tab` (decision 6): `actOf` takes its host from the
+    named tab's URL; `decide` asks every call (never granted, denied for a tab not named); any fill in it is
+    sensitive whatever the taint; `alwaysOk` is false for it and `planCovers` (`act`, `collect`) never covers it.
     Reach, taint, acts and grants (ADR-16). `approveAllOk(q, run)` refuses any reach in a tainted run.
     `propose_routine` is denied in a tainted run, and allowed only when its work names no URL off the
     gardener's sites (read pages or URLs in a request) and none of the person's tabs.
   - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
-    and has the page left the call's hosts. Bundled into the in-page step runner (`content/scenario.ts`), so the
+    and has the page left the call's hosts. `CHALLENGE_HOSTS`, `isChallenge({ frames, title, text })`: a page that
+    stands between the run and its content: a title that says so, or a short page (< 600 characters) whose text says
+    so or that shows a visible reCAPTCHA, hCaptcha or Arkose frame (Turnstile left out). `policy.ts` `failTaints`: a
+    call that threw taints for `act_my_tab` always, and for `act` on the gardener's sites. Bundled into the in-page step runner (`content/scenario.ts`), so the
     check and the step run in one call on the same element.
   - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
     `refusal`, `parsePlan`, `answerPlan`, `answeredBy`, `parseEdit`, `stopRequest`, `retryStep`, `autoRetry`,
     `AUTO_RETRY_MS`, `helpersOf`, `mergeHelpers`, `resumeAll`, `answerRefused`, `earlierOf`, `followUpRun`, `queuedFollowUp`, `OPEN_REFUSED`, `PLAN_REFUSED`,
-    `BAD_REPLY`, `TOO_LONG`. An answer with edited `args` makes the edited call a new call: a `noEdit` follow-up
+    `BAD_REPLY`, `TOO_LONG`, `HELP_REFUSED`. An answer with edited `args` makes the edited call a new call: a `noEdit` follow-up
     (`editedFrom`) settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
     unless it is sensitive now. A read of more than 5 pages (up to 25) asks for `helpers`: helper runs of 5 pages each
     (`parentId`) read without a think and end; their steps, failed where unfinished, and their taint merge into the
@@ -127,9 +133,12 @@ runtime adapters and storage live outside `domain/`.
   - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
     step outputs, turns and the answer only with `withText`.
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
-    `read_my_tab`, `propose_routine`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
-    `parseArgs`, `toolsFor` (`propose_routine` only with `agent.loop` or in a plan), `mentionsOf`, `mentionedTab`,
-    `pageLinks` (at most 50). `parseArgs` refuses unknown keys and `evaluate` steps.
+    `read_my_tab`, `act_my_tab`, `propose_routine`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
+    `parseArgs`, `toolsFor` (`read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` only with
+    `agent.loop` or in a plan), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
+    a borrowed tab), `devtoolsDigest` (≤ 20 console errors, ≤ 30 requests with status ≥ 400, no query strings, no
+    bodies), `downloadRun` (a download's run by referrer; never one the person's tabs also have open, never a guess).
+    `parseArgs` refuses unknown keys and `evaluate` steps.
   - `notes.ts`: `Note`, `NOTE_CHARS` (500), `parseNote`, `forGardener`, `notesBlock`, `MEMORY_VERSION` (3),
     `upgradeMemory`. Notes as labelled data, whole notes only; the `eg-memory` upgrade runs one step per version.
 
@@ -183,6 +192,6 @@ contract. Where it differs, this list says so.
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
   `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
-  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan`, `garden-steer`, `garden-runlog` and `garden-helpers`; outputs, pptx, zip writing, evidence and cited passages in
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan`, `garden-steer`, `garden-runlog`, `garden-helpers`, `garden-triggers` and `garden-tabs2`; outputs, pptx, zip writing, evidence and cited passages in
   `outputs`)
 - Type check: `npm run check`

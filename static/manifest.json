@@ -105,6 +105,7 @@
     }
   ],
   "optional_permissions": [
-    "debugger"
+    "debugger",
+    "downloads"
   ]
 }

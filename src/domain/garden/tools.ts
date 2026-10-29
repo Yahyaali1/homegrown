@@ -63,6 +63,8 @@ export const TOOLS: ToolSpec[] = [
   { name: 'collect', describe: 'run one of the person\'s saved Collect recipes by its id; gives its rows', args: { recipe: { type: 'string', max: 200 } }, effect: 'read' },
   // Offered only when the person named tabs (toolsFor).
   { name: 'read_my_tab', describe: 'read one of the person\'s open tabs they named; tab: its URL exactly as listed', args: { tab: { type: 'string', max: 2000 } }, effect: 'read' },
+  // Offered only when the person named tabs (toolsFor); every call is asked, never granted.
+  { name: 'act_my_tab', describe: 'click or type in one of the person\'s open tabs they named, after they approve; tab: its URL exactly as listed; steps as for act', args: { tab: { type: 'string', max: 2000 }, steps: { type: 'scenario' } }, effect: 'act' },
   // Stored paused (by: 'model') until the person turns it on. Offered only with a loop or in a plan (toolsFor).
   { name: 'propose_routine', describe: 'propose a routine the person may turn on; when: {"kind": "daily", "at": "08:00"}, {"kind": "every", "hours": 6} or {"kind": "weekly", "days": [1], "at": "08:00"}; work: {"kind": "read", "urls": ["…"]}', args: { name: { type: 'string', max: 80 }, when: { type: 'record', parse: parseWhen }, work: { type: 'record', parse: parseWork } }, effect: 'read' },
 ];
@@ -73,9 +75,9 @@ export const EDITABLE = ['act', 'draft', 'notify'];
 /** The tabs the person named for this run. */
 export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);
 
-/** The tools offered to this run: `read_my_tab` only when the person named tabs, `propose_routine` only with a loop or in a plan. */
+/** The tools offered to this run: the person's tabs only when they named some, `propose_routine` only with a loop or in a plan. */
 export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS): ToolSpec[] => tools.filter((t) =>
-  (t.name !== 'read_my_tab' || mentionsOf(run).length > 0) && (t.name !== 'propose_routine' || !!run.agent?.loop || run.work.kind === 'plan'));
+  ((t.name !== 'read_my_tab' && t.name !== 'act_my_tab') || mentionsOf(run).length > 0) && (t.name !== 'propose_routine' || !!run.agent?.loop || run.work.kind === 'plan'));
 
 /**
  * The open tab a mention points at now, or why there is none. Named by hand: that same tab, still on the URL it had.
@@ -97,4 +99,34 @@ export function mentionedTab(mentions: Mention[], url: string, open: { id?: numb
 export function pageLinks(markdown: string): string[] {
   const urls = [...markdown.matchAll(/\]\((https?:\/\/[^\s)]+)/g)].map((m) => bare(m[1]!)).filter((u): u is string => !!u);
   return [...new Set(urls)].slice(0, LIMITS.links);
+}
+
+/** A run works in this tab now: it is in the run's group, or one the run borrowed (act_my_tab). */
+export const ownsTab = (e: { group?: number | undefined; borrowed: Set<number> } | undefined, tab: { id?: number | undefined; groupId?: number } | undefined): boolean =>
+  !!tab && !!e && ((e.group !== undefined && tab.groupId === e.group) || (tab.id !== undefined && e.borrowed.has(tab.id)));
+
+const noQuery = (u: string): string => u.replace(/[?#].*$/, '');
+
+/**
+ * DevTools output for a step, as page data: ≤ 20 console errors and ≤ 30 failed requests (status ≥ 400), with no
+ * query strings and no bodies. Empty when there is nothing to say.
+ */
+export function devtoolsDigest(errors: string[], requests: { method: string; url: string; status: number }[]): string {
+  const lines: string[] = [];
+  const errs = errors.slice(0, 20).map((e) => `- ${e.replace(/(https?:\/\/[^\s?#]+)[?#]\S*/g, '$1').replace(/\s+/g, ' ').trim().slice(0, 200)}`);
+  if (errs.length) lines.push('Console errors:', ...errs);
+  const failed = requests.filter((r) => r.status >= 400).slice(0, 30).map((r) => `- ${r.method} ${noQuery(r.url).slice(0, 200)} ${r.status}`);
+  if (failed.length) lines.push('Failed requests:', ...failed);
+  return lines.join('\n');
+}
+
+/**
+ * The run a download belongs to: the one whose tab had its referrer open. Never one the person's own tabs also have
+ * open (their download, or can't tell), and never by guess.
+ */
+export function downloadRun(referrer: string | undefined, runUrls: { runId: string; urls: Set<string> }[], personUrls: string[]): string | null {
+  const r = referrer ? bare(referrer) : null;
+  if (!r || personUrls.some((u) => bare(u) === r)) return null;
+  const runs = runUrls.filter((x) => [...x.urls].some((u) => bare(u) === r));
+  return runs.length === 1 ? runs[0]!.runId : null;
 }

@@ -36,7 +36,7 @@ let abilities: Can = { ask: false, plan: false }; // what the gardens model can 
 let formLook: Look = randomLook();
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const TAB_TOOLS = ['read_page', 'search', 'mission', 'act', 'collect']; // the tools that work in a locked tab
+const TAB_TOOLS = ['read_page', 'search', 'mission', 'act', 'collect', 'act_my_tab']; // the tools that work in a locked tab
 const STATUS: Record<Status, string> = { queued: 'Waiting its turn', running: 'Working…', waiting: 'Needs you', done: 'Done', failed: 'Failed', stopped: 'Stopped' };
 const at = (ms: number) => new Date(ms).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -355,6 +355,19 @@ function mentionPicker(): { el: HTMLDetailsElement; picked: () => Mention[]; cle
 }
 
 const field = <T extends HTMLElement = HTMLInputElement>(id: string) => $<T & { value: string }>(`#gardener-${id}`);
+const devtools = $<HTMLInputElement>('#gardener-devtools');
+// Asked on the click that turns it on: no permission, no switch.
+devtools.onchange = async () => {
+  if (devtools.checked && !(await chrome.permissions.request({ permissions: ['debugger'] }))) devtools.checked = false;
+};
+const downloads = $<HTMLInputElement>('#garden-downloads');
+void chrome.permissions.contains({ permissions: ['downloads'] }).then((on) => (downloads.checked = on));
+// The switch is the permission: on asks for it, off gives it back.
+downloads.onchange = async () => {
+  downloads.checked = downloads.checked
+    ? await chrome.permissions.request({ permissions: ['downloads'] })
+    : !(await chrome.permissions.remove({ permissions: ['downloads'] }));
+};
 const addBox = $<HTMLDetailsElement>('#gardener-add');
 function editGardener(g: Gardener | null): void {
   editing = g;
@@ -362,6 +375,7 @@ function editGardener(g: Gardener | null): void {
   field('instructions').value = g?.instructions ?? '';
   field('sites').value = g?.sites.join('\n') ?? '';
   field('minutes').value = String(g?.minutes ?? 10);
+  devtools.checked = !!g?.devtools;
   showLook(g ? lookFor(g.id) : randomLook(), '');
   $('#gardener-add > summary').textContent = g ? `Edit ${g.name}` : 'Add a gardener';
   $('#gardener-error').hidden = true;
@@ -370,7 +384,7 @@ function editGardener(g: Gardener | null): void {
 }
 $<HTMLFormElement>('#gardener-form').onsubmit = async (e) => {
   e.preventDefault();
-  const gardener = { ...editing, look: formLook, name: field('name').value.trim(), instructions: field('instructions').value.trim(), sites: lines(field('sites').value), minutes: Number(field('minutes').value) };
+  const gardener = { ...editing, look: formLook, name: field('name').value.trim(), instructions: field('instructions').value.trim(), sites: lines(field('sites').value), minutes: Number(field('minutes').value), devtools: devtools.checked };
   try {
     await bg('gardenerSave', { gardener });
     editGardener(null);
@@ -434,7 +448,7 @@ const nameOf = (run: GardenRun) => [gardeners.find((x) => x.id === run.gardenerI
   run.routineId ? routines.find((x) => x.id === run.routineId)?.name ?? 'a deleted routine' : 'by hand',
   ...(run.parentId ? [`helper ${run.id.slice(run.id.lastIndexOf('.h') + 2)}`] : [])].join(' · ');
 
-const ANSWERED_HERE: Request['kind'][] = ['reach', 'question', 'approve', 'did-it-happen', 'takeover', 'plan'];
+const ANSWERED_HERE: Request['kind'][] = ['reach', 'question', 'approve', 'did-it-happen', 'takeover', 'plan', 'help'];
 
 // The same open requests at the top of Garden and above the chat input.
 const deps = { nameOf, lookFor, who: (id: string) => gardeners.find((x) => x.id === id)?.name ?? 'the gardener', fresh, place, granted: (id: string) => void loadGrants(id) };
@@ -488,6 +502,7 @@ function fillRun(li: Row, run: GardenRun): void {
     }), 'ghost'), `Delete this run of ${name}`);
   // Here too, not only on the page: a page can try to hide its lock bar.
   const take = locked ? labelled(busyButton('Take over', tryIt(err, () => bg('runTakeover', { id: run.id })), 'secondary'), `Take over from ${name}`) : null;
+  const watching = run.status === 'running' ? watchBox(run.id, name) : (watches.get(run.id)?.close(), null);
   // Resume all: on a parent with a helper that failed or stopped, while it waits on them or once it ended.
   const resume = (helping(run) || !active) && [...runs.values()].some((k) => k.parentId === run.id && (k.status === 'failed' || k.status === 'stopped'))
     ? labelled(busyButton('Resume all', tryIt(err, () => bg('runResumeAll', { id: run.id })), 'secondary'), `Resume all helpers of ${name}`) : null;
@@ -496,8 +511,60 @@ function fillRun(li: Row, run: GardenRun): void {
   if (steerForms.get(run.id)?.dataset.active !== String(active)) steerForms.delete(run.id);
   li.replaceChildren(flowerEl,
     h('span', { className: 't' }, h('b', { textContent: name }), h('span', { className: 'p', textContent: `${status} · ${at(run.endedAt ?? run.startedAt ?? run.queuedAt)}` }),
-      result && h('span', { className: run.status === 'failed' ? 'result why' : 'result', textContent: result }), view, active ? steerBox(run.id) : followUpBox(run), err),
-    take || resume ? h('div', { className: 'actions' }, take, resume, act) : act);
+      result && h('span', { className: run.status === 'failed' ? 'result why' : 'result', textContent: result }), watching?.el, view, active ? steerBox(run.id) : followUpBox(run), err),
+    take || resume || watching ? h('div', { className: 'actions' }, watching?.button, take, resume, act) : act);
+}
+
+const watches = new Map<string, { el: HTMLElement; button: HTMLElement; close: () => void }>(); // run id → its live view
+
+/**
+ * Watch: the run's newest tab as frames from the worker (≤ 2 a second), into an image here only. Without the
+ * debugger permission (declined), it offers Show the tab instead.
+ */
+function watchBox(runId: string, name: string): { el: HTMLElement; button: HTMLElement } {
+  const had = watches.get(runId);
+  if (had) return had;
+  const img = h('img', { className: 'live', alt: `What ${name} sees` });
+  const note = h('span', { className: 'muted small' });
+  const el = h('div', { className: 'stack', hidden: true }, img, note);
+  let port: chrome.runtime.Port | null = null;
+  const close = () => {
+    port?.disconnect();
+    port = null;
+    el.hidden = true;
+    img.removeAttribute('src');
+    b.textContent = 'Watch';
+  };
+  const show = async () => {
+    const t = await bg<{ tabId: number; windowId: number } | null>('runTab', { id: runId });
+    if (!t) return void (note.textContent = 'It isn’t working in a tab right now.');
+    await chrome.tabs.update(t.tabId, { active: true });
+    await chrome.windows.update(t.windowId, { focused: true });
+  };
+  const b = labelled(button('Watch', async () => {
+    if (port) return close();
+    el.hidden = false;
+    if (!(await chrome.permissions.request({ permissions: ['debugger'] }))) {
+      note.textContent = 'Watching needs the debugger permission.';
+      return void el.replaceChildren(note, labelled(button('Show the tab', () => void show().catch((e) => fail(note, e)), 'ghost'), `Show the tab ${name} works in`));
+    }
+    b.textContent = 'Stop watching';
+    note.textContent = 'Starting…';
+    port = chrome.runtime.connect({ name: `garden-watch:${runId}` });
+    port.onMessage.addListener((m: { frame?: string | null; error?: string; ended?: true }) => {
+      if (m.ended) return void ((note.textContent = 'Its turn ended.'), close(), (el.hidden = false));
+      if (m.error) note.textContent = m.error;
+      else if (m.frame === null) note.textContent = 'It isn’t working in a tab right now.';
+      else if (m.frame) {
+        img.src = m.frame;
+        note.textContent = '';
+      }
+    });
+    port.onDisconnect.addListener(() => (port = null));
+  }, 'ghost'), `Watch ${name} work`);
+  const w = { el, button: b, close: () => (close(), watches.delete(runId)) };
+  watches.set(runId, w);
+  return w;
 }
 
 /** The run as a chat, top to bottom: the request, each step, what it made, then how it worked and a report. */
@@ -523,6 +590,8 @@ function openCreated(run: GardenRun, c: Created, li: HTMLElement): void {
   const el = c.kind === 'draft' ? li.querySelector<HTMLElement>(`.draft[data-step="${c.ref}"]`)
     : c.kind === 'note' ? notebooks.get(run.gardenerId) ?? null
     : c.kind === 'routine' ? nextLines.get(c.ref)?.closest('li') ?? null : null;
+  // A download kept with the run: shown in its folder (needs the downloads permission, which kept it).
+  if (c.kind === 'file') return void chrome.downloads?.show(Number(c.ref));
   if (el instanceof HTMLDetailsElement) el.open = true;
   el?.scrollIntoView({ block: 'nearest' });
 }

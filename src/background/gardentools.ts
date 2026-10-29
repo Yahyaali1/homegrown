@@ -3,6 +3,7 @@
 import { askAs } from './engine.ts';
 import { ENGINES, inTab, missionRun, readInTab, searchInTab, waitLoaded, type Run } from './missions.ts';
 import { cookieRule, play, type Guard } from './pagerequest.ts';
+import { logFor } from './devtools.ts';
 import { recipesList, scrapeRecipe } from './scrape.ts';
 import { tabPage } from './tabs.ts';
 import { addNote } from './memory.ts';
@@ -14,7 +15,7 @@ import { columns } from '../domain/mission/types.ts';
 import type { Ask } from '../domain/mission/ports.ts';
 import { argsKey, onSites, type RecipeFacts } from '../domain/garden/policy.ts';
 import { describe, type Instruction, type Scenario } from '../domain/scrape/scenario.ts';
-import type { Check } from '../domain/garden/classify.ts';
+import { isChallenge, type Check } from '../domain/garden/classify.ts';
 import type { Recipe } from '../domain/scrape/recipe.ts';
 import { mentionedTab, mentionsOf, pageLinks } from '../domain/garden/tools.ts';
 import { proposedRoutine } from '../domain/garden/schedule.ts';
@@ -31,6 +32,8 @@ export interface ToolCtx {
   ok?: Check['ok'];
   /** Whether a URL other than the call's own may be read (a recipe's next pages): policy's reach and taint. */
   reach: (url: string) => boolean;
+  /** The person's tab joins the run for this call (lock bar, Stop, Take over); the result gives it back. */
+  borrow: (tabId: number) => Promise<() => Promise<void>>;
 }
 export interface ToolResult {
   output: string;
@@ -60,8 +63,49 @@ export function gardenNotice(name: string, text: string): void {
 
 interface Snapshot { text: string; prev?: string; runId: string }
 
+/** The page asked for a check for humans: its tab is kept open for the person (`tabId`). */
+export class NeedsHelp extends Error {
+  tabId: number;
+  constructor(tabId: number) {
+    super('The site asks for a check for humans.');
+    this.tabId = tabId;
+  }
+}
+
+const NO_DEBUGGER = 'DevTools reads need the debugger permission: turn DevTools on again under the gardener to allow it.';
+
+/**
+ * With the gardener's DevTools switch on, every tab the call opens has the debugger attached from before its page
+ * loads; the digest of console errors and failed requests comes back with the result.
+ */
+async function watched<T>(c: ToolCtx, go: () => Promise<T>): Promise<{ r: T; log: string }> {
+  if (!c.gardener.devtools) return { r: await go(), log: '' };
+  if (!(await chrome.permissions.contains({ permissions: ['debugger'] }))) return { r: await go(), log: NO_DEBUGGER };
+  const outer = c.tab.prepare;
+  const logs: string[] = [];
+  c.tab.prepare = async (t) => {
+    const undo = outer ? await outer(t) : async () => {};
+    const log = await logFor(t).catch(() => null);
+    return async () => {
+      if (log) logs.push(await log.stop());
+      await undo();
+    };
+  };
+  try {
+    const r = await go();
+    return { r, log: logs.filter(Boolean).join('\n') };
+  } finally {
+    if (outer) c.tab.prepare = outer;
+    else delete c.tab.prepare;
+  }
+}
+
+/** Page output with the DevTools digest kept whole at its end. */
+const withLog = (output: string, log: string) => (log ? `${output.slice(0, LIMITS.output - log.length - 2)}\n\n${log}` : output.slice(0, LIMITS.output));
+
 async function readPage({ url }: { url: string }, c: ToolCtx): Promise<ToolResult> {
-  const page = await readInTab(url, c.tab, []);
+  const { r: page, log } = await watched(c, () => readInTab(url, c.tab, [], undefined, (p) => isChallenge({ frames: p.frameUrls ?? [], title: p.title, text: p.text })));
+  if (page?.held !== undefined) throw new NeedsHelp(page.held);
   if (!page) throw new Error('The page could not be read.');
   const final = page.tabUrl ?? url;
   // Signed in if the tab or any frame was on the sites; unknown counts as signed in (fail closed).
@@ -79,7 +123,7 @@ async function readPage({ url }: { url: string }, c: ToolCtx): Promise<ToolResul
     output = old === undefined ? `First look:\n${md}` : diffText(old, md);
     await idb.put(c.db, 'snapshots', { text: md, ...(old !== undefined && { prev: old }), runId: c.run.id } satisfies Snapshot, key);
   } else if (c.run.work.kind === 'read') output = `First look:\n${md}`;
-  return { output: output.slice(0, LIMITS.output), n: page.markdown.length, unit: 'chars', links, url: final, seen: { urls: links, from: 'link' }, taint };
+  return { output: withLog(output, log), n: page.markdown.length, unit: 'chars', links, url: final, seen: { urls: links, from: 'link' }, taint };
 }
 
 async function search({ query }: { query: string }, c: ToolCtx): Promise<ToolResult> {
@@ -157,18 +201,48 @@ const ACT_TEXT = 1500;
 /** Opens the page, plays the approved steps (each checked on its live element), and says where it ended up. */
 async function act({ url, steps }: { url: string; steps: Scenario }, c: ToolCtx): Promise<ToolResult> {
   const guard = guardFor([hostOf(url)], c);
-  const r = await inTab(url, c.tab, async (tabId) => {
+  const { r, log } = await watched(c, () => inTab(url, c.tab, async (tabId) => {
     await waitLoaded(tabId, 20000);
     const played = await play(tabId, { ...steps, strict: true }, c.tab, guard);
-    const [f] = await chrome.scripting.executeScript({ target: { tabId }, func: () => document.body?.innerText ?? '' }).catch(() => []);
-    return { played, final: (await chrome.tabs.get(tabId).catch(() => null))?.url ?? url, text: String(f?.result ?? '').replace(/\s+/g, ' ').trim() };
-  });
+    return { played, ...(await where(tabId, url)) };
+  }));
   const stop = stopped(guard, steps.instructions, r.played.report.filter((l) => l.ok).map((l) => l.step));
   if (stop) throw stop instanceof NeedsYou ? stop : new Error(`${stop.message} Now at ${r.final}.`);
-  const lines = r.played.report.map((l) => `${l.ok ? '✓' : '✗'} ${l.step}${l.error ? `: ${l.error}` : ''}`).join('\n');
-  if (r.played.failed) throw new Error(`${r.played.failed}. Now at ${r.final}.`);
+  if (r.played.failed) throw new Error(`${r.played.failed}. Now at ${r.final}.${log ? `\n${log}` : ''}`);
   const taint = [url, r.final].some((u) => onSites(hostOf(u), c.gardener.sites));
-  return { output: `Now at ${r.final}\n${lines}\n\n${r.text.slice(0, ACT_TEXT)}`.slice(0, LIMITS.output), n: r.text.length, unit: 'chars', url: r.final, taint };
+  return { output: withLog(`Now at ${r.final}\n${report(r.played.report)}\n\n${r.text.slice(0, ACT_TEXT)}`, log), n: r.text.length, unit: 'chars', url: r.final, taint };
+}
+
+const report = (lines: { ok: boolean; step: string; error?: string }[]) => lines.map((l) => `${l.ok ? '✓' : '✗'} ${l.step}${l.error ? `: ${l.error}` : ''}`).join('\n');
+
+/** Where the tab ended up, and its text in short. */
+async function where(tabId: number, url: string): Promise<{ final: string; text: string }> {
+  const [f] = await chrome.scripting.executeScript({ target: { tabId }, func: () => document.body?.innerText ?? '' }).catch(() => []);
+  return { final: (await chrome.tabs.get(tabId).catch(() => null))?.url ?? url, text: String(f?.result ?? '').replace(/\s+/g, ' ').trim() };
+}
+
+/**
+ * Plays approved steps in a tab the person named, in place (decision 6). The tab is the run's for the call: the lock
+ * bar shows there, and Stop and Take over from it work; it is never closed. The run is tainted after.
+ */
+async function actMyTab({ tab, steps }: { tab: string; steps: Scenario }, c: ToolCtx): Promise<ToolResult> {
+  const id = mentionedTab(mentionsOf(c.run), tab, await chrome.tabs.query({}));
+  if (typeof id === 'string') throw new Error(id);
+  const guard = guardFor([hostOf(tab)], c);
+  const give = await c.borrow(id);
+  let r: Awaited<ReturnType<typeof where>> & { played: Awaited<ReturnType<typeof play>> };
+  try {
+    // An earlier hand-back halted this page's step runner; this call was approved anew.
+    await chrome.scripting.executeScript({ target: { tabId: id, allFrames: true }, func: () => void (window.__hgHalt = false) }).catch(() => {});
+    const played = await play(id, { ...steps, strict: true }, c.tab, guard);
+    r = { played, ...(await where(id, tab)) };
+  } finally {
+    await give();
+  }
+  const stop = stopped(guard, steps.instructions, r.played.report.filter((l) => l.ok).map((l) => l.step));
+  if (stop) throw stop instanceof NeedsYou ? stop : new Error(`${stop.message} Now at ${r.final}.`);
+  if (r.played.failed) throw new Error(`${r.played.failed}. Now at ${r.final}.`);
+  return { output: `Now at ${r.final}\n${report(r.played.report)}\n\n${r.text.slice(0, ACT_TEXT)}`.slice(0, LIMITS.output), n: r.text.length, unit: 'chars', taint: true };
 }
 
 /** A saved Collect recipe in the run's tabs, with its pinned model; acting steps are guarded like `act`. */
@@ -212,4 +286,4 @@ async function proposeRoutine({ name, when, work }: { name: string; when: When; 
 }
 
 // Args are already checked against their specs (parseArgs, or the routine's own work).
-export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, propose_routine: proposeRoutine };
+export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, act_my_tab: actMyTab, propose_routine: proposeRoutine };

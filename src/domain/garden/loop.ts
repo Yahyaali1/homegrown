@@ -4,7 +4,7 @@
 import type { Sampling } from '../model.ts';
 import { contextChars, defang, parseJsonObject } from '../text.ts';
 import { jsonArray } from '../html.ts';
-import { actOf, addSeen, argsKey, callKey, decide, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
+import { actOf, addSeen, argsKey, callKey, decide, planCovers, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
 import { DEADLINE, expired } from './schedule.ts';
 import { LIMITS, newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
@@ -39,6 +39,7 @@ export const OPEN_REFUSED = 'This model runs routines with set steps. A model me
 export const PLAN_REFUSED = 'This model can’t write plans yet.';
 export const BAD_REPLY = "The model's reply couldn't be read.";
 export const TOO_LONG = 'The instructions are too long for this model.';
+export const HELP_REFUSED = 'The site asked for a check for humans, and you said no.';
 const WORD = 'Here is what changed on each page since the last check (lines with + were added, − removed; a page under "First look:" is new, so say briefly what it holds). In two or three sentences, say what changed that matters. If nothing did, say so.';
 const REPAIR = 'Your reply was not one valid JSON object for a listed tool or an answer. Reply with only the JSON.';
 const PLAN_REPAIR = 'Your reply was not one JSON array of calls to listed tools with valid args. Reply with only the array.';
@@ -207,6 +208,8 @@ function attempt(run: GardenRun, ctx: Ctx, i: number, tool: string, args: Record
   const key = callKey({ tool, args }, ctx);
   const act = actOf({ tool, args }, ctx);
   const answered = answerFor(run, i, tool, key);
+  // The person said no to helping with a check for humans on this step's page.
+  if (run.requests.some((q) => q.kind === 'help' && q.step === i && q.answer?.value === 'no')) return failed(ctx, i, tool, args, HELP_REFUSED);
   // A plan's yes skips nothing: policy decides first (below).
   if (answered && !answered.fromPlan) {
     if (said(answered) && answered.answer!.args) return edited(run, ctx, i, tool, answered, answered.answer!.args);
@@ -220,7 +223,7 @@ function attempt(run: GardenRun, ctx: Ctx, i: number, tool: string, args: Record
   if (verdict === 'deny') return failed(ctx, i, tool, args, 'Not allowed.');
   const approve = act && approveRequest(run, ctx, i, tool, args);
   // A plan's yes (the only answer left here) counts where policy asks and the call isn't sensitive now.
-  if (approve) return answered && !approve.sensitive ? { call: { i, tool, args } } : { request: approve };
+  if (approve) return answered && !approve.sensitive && planCovers(tool) ? { call: { i, tool, args } } : { request: approve };
   const name = ctx.gardener.name;
   const text = tool === 'read_page' ? `${name} wants to open ${String(args.url)}` : tool === 'search' ? `${name} wants to search for "${String(args.query)}"` : `${name} wants to use ${tool}: ${String(Object.values(args)[0] ?? '')}`;
   return { request: { kind: 'reach', step: i, tool, argsKey: key, text: text.slice(0, 500), sensitive: false, expiresAt: expiresAt(ctx) } };
@@ -260,7 +263,7 @@ export function approveRequest(run: GardenRun, ctx: Ctx, i: number, tool: string
   const key = callKey({ tool, args }, ctx);
   const before = run.requests.findLast((x) => x.kind === 'approve' && x.step === i && x.tool === tool && x.argsKey === key && x.sensitive && x.why);
   stop ??= before?.index !== undefined ? { index: before.index, why: before.why! } : undefined;
-  const why = stop?.why ?? sensitiveSteps(run, act.steps) ?? before?.why;
+  const why = stop?.why ?? sensitiveSteps(run, act.steps, tool) ?? before?.why;
   const at = stop && act.steps[stop.index];
   const text = `${ctx.gardener.name} wants to ${act.text}`.slice(0, 1400) + (why ? `\nSensitive${at ? ` (${describe(at)})` : ''}: ${why}.` : '');
   return { kind: 'approve', step: i, tool, argsKey: key, host: act.host, text, sensitive: !!why, ...(why && { why }), ...(stop && { index: stop.index }), expiresAt: expiresAt(ctx) };
@@ -450,7 +453,7 @@ export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 
   run.plan = calls;
   run.seen = addSeen(run.seen, calls.filter((c) => c.tool === 'read_page').map((c) => String(c.args.url)), 'approved');
   calls.forEach((c, j) => {
-    const a = (c.tool === 'act' || c.tool === 'collect') && approveRequest(run, ctx, j, c.tool, c.args);
+    const a = planCovers(c.tool) && approveRequest(run, ctx, j, c.tool, c.args);
     if (a && !a.sensitive) run.requests.push({ ...a, id: `${q.id}.${j}`, shownAt: now, answer: { value: 'yes', at: now }, fromPlan: true });
   });
   run.status = 'queued';

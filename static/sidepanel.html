@@ -98,12 +98,14 @@
         <textarea id="gardener-instructions" rows="3" maxlength="2000" placeholder="Instructions, e.g. Tell me what changed, in three lines" aria-label="Instructions"></textarea>
         <textarea id="gardener-sites" rows="2" placeholder="Sites it may read signed in, one per line, e.g. github.com" aria-label="Sites, one per line"></textarea>
         <label class="row">Minutes per run <input id="gardener-minutes" type="number" min="1" max="60" value="10" aria-label="Minutes per run"></label>
+        <label class="check"><input id="gardener-devtools" type="checkbox"> DevTools: add console errors and failed requests to its reads and actions (asks for the debugger permission; Chrome shows a “started debugging” bar)</label>
         <div class="row look"><span id="gardener-look"></span><button id="gardener-another" type="button" class="ghost">Another look</button></div>
         <span id="gardener-error" class="err" hidden></span>
         <div class="row"><button class="primary">Save gardener</button><button id="gardener-cancel" type="button" class="ghost">Cancel</button></div>
         </form>
       </details>
       <h3>Runs</h3>
+      <label class="check"><input id="garden-downloads" type="checkbox"> Keep downloads with runs (asks for the downloads permission)</label>
       <ul id="garden-runs" class="list"></ul>
     </section>
 

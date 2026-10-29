@@ -963,12 +963,12 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T2 | Done (1efce2f), reviewed (0 Blockers, 2 Majors fixed): 196 unit tests pass (9 new in `garden-steer`); `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4 (its sensitive test now waits on Library, as Chat shows the tray); `plan.spec` 1/1 |
 | T3 | Done (3e37fce), reviewed (0 Blockers, 1 Major fixed): 205 unit tests pass (9 new in `garden-runlog`); `tests/runlog.spec.mjs` 2/2 (real model); `approvals.spec` 2/2, `garden.spec` 4/4, `plan.spec` 1/1. Retry is allowed on any ended run with a failed step (a read run with one failed page ends `done`) |
 | T3b | Done (4517f73), reviewed (0 Blockers, 1 Major fixed): 217 unit tests pass; `tests/helpers.spec.mjs` 1/1, run twice on the real model (12 pages, at most 3 tabs, one `word` think); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2. Deviations: `LIMITS.readUrls` 25 (recipes keep `urls` 5); helpers keep the routine id; auto-retry waits as `queued` with `retryAt`; `WORD` prompt says what a first look holds |
-| T4 | Built, review fixes in (3 Major, 2 Minor): 230 unit tests pass (14 new in `garden-triggers`); `tests/triggers.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1. Deviations: the event check's snapshot key is `<routineId>\nevent <url>` (a read of the same URL keeps its own); the check's pure core is `eventCheck` in `schedule.ts`; no check while a run of the routine works; first check at save (baseline only); runs carry `deadline` (slot + minutes), a person's Retry drops it; a one-off's slot never waits on a Run now; expiry message is 'Needed you for too long.'. Review: event fetch `checkFetch` (30 s, error status fails, signed-in redirect fails); event checks don't block worker start; snapshot written only if a found change made a run; `Routine.missed` shows Missed |
-| T5 | Planned |
+| T4 | Done (44a7268), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 230 unit tests pass before the merge (14 new in `garden-triggers`); `tests/triggers.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1. Deviations: event snapshot key `<routineId>\nevent <url>`; pure `eventCheck` and `checkFetch` in `schedule.ts`; the first check at save is the baseline; no check while a run works; a one-off doesn't wait behind Run now; a one-off in the past is refused; expiry says 'Needed you for too long.'; `GardenRun.deadline`; `Routine.missed` |
+| T5 | Built, review fixes in (3 Major, 2 Minor: Take over reaches a borrowed tab, a failed act taints by `failTaints`, `isChallenge` only for walls (short page or title; no Turnstile, no invisible hCaptcha), a help answer closes its held tab, help releases the lock bar, Take over leaves the person's own group): 252 unit tests pass (9 new in `garden-tabs2`; the `act_my_tab` plan test now hits `planCovers`); `tests/tabs.spec.mjs` 4/4 (no model; (a)–(c) plus a download kept by referrer); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1, `triggers.spec` 2/2. Deviations: no `content/pageread.ts` change (challenge facts come from `readInTab`'s frame URLs, title and text); a `help` no fails the step (`HELP_REFUSED`); an invisible reCAPTCHA is not a challenge; Watch follows the newest group tab (polled each second). Spike 3: `referrer` is set for a click download in a run tab (headless Chromium). Spike 2 (screencast of a minimized window) not checked |
 | T6 | Planned |
 | T7 | Planned |
 | T8 | Planned |
-| T9 | Built (not reviewed): 9 unit tests, e2e 6/6 (2 `@slow`); `abilities.mjs` on E2B: `deck` 0/6 once titles are checked too (5/6 on bullets only; not set), `cite` 2/4, `evidence` 3/6; E4B not measured (no local copy, disk full). Editing is on the output page ("Edit as output" from Mission control); `background/outputs.ts` added |
+| T9 | Done (eea5354, merged 5f61607), reviewed (0 Blockers, 2 Majors fixed): e2e 6/6 (2 `@slow`); merged suite 242 unit tests pass, build ok. `abilities.mjs` on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6, so no T9 ability is set, and decks are built by code. E4B not measured (no local copy; about 8 GB of disk free). Every research report is saved as a `brief`. Editing is on the output page |
 | T10 | Planned |
 | T11 | Planned |
 | T12 | Planned |
@@ -978,6 +978,8 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T9 | code review | 0 / 2 | Fixed: table edits had no debounce; `fontStack` cleans non-ASCII and overlong font stacks. Minors fixed: `citeAnswer` is page-only and checks the ability before it sends text; XML strips U+FFFE and U+FFFF; "007" stays text |
+| T4 | code review | 0 / 3 | Fixed: the event fetch has a 30 s timeout and event checks don't block worker start (`started`); an error status (`!res.ok`) fails the check; signed-in checks use `redirect: 'manual'`, and a redirect fails the check. Minors fixed: the snapshot is saved only when nothing changed or a run was made; a missed one-off shows "Missed" |
 | T3b | code review | 0 / 1 | Fixed: a Stop race. `runStop` stops the parent first, and `turn` refuses a helper whose parent isn't waiting (pure `mayStart`). Minors fixed: `runDelete` refuses a helper of a waiting parent; `prune` (through `pruneIds`) ignores helpers; a routine slot no longer fails waiting helpers, only expiry does |
 | T3 | code review | 0 / 1 | Fixed: a follow-up reads the earlier run again on each turn, and taints itself if the earlier run is tainted now. Minors fixed: queued messages were lost on `failRun` and expiry; a report without page text keeps digests only for `read_page`, `read_my_tab`, `act` and `collect` |
 | T2 | code review | 0 / 2 | Fixed: `propose_routine` denied when the run is tainted, and its card lists all URLs; `approveAllOk(q, run)` is false for a `reach` in a tainted run (decision 5 reworded). Minors fixed: unused steer cap of 3 removed; question answers parsed as strict JSON; a running transaction merges `inbox`; `propose_routine` id `<runId>.<step>`, so a re-run is idempotent |
@@ -1093,3 +1095,22 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
   2. `borrowed` stays empty until T5.
   3. Alarm prefix `garden:wake` now shares `garden:` with routine alarms (`garden:<routineId>`). T4's event-check alarms
      must not collide with it.
+
+**2026-10-29: T4 landed (commit 44a7268).**
+- 230 unit tests pass (before the merge); `tests/triggers.spec.mjs` 2/2; `garden` 4/4 and every other regression passes.
+- Deviations, accepted: see the T4 Status row. The main ones are the snapshot key `<routineId>\nevent <url>` (a read of
+  the same URL keeps its own snapshot), `GardenRun.deadline` (a person's Retry drops it) and `Routine.missed`.
+- Review: 0 Blockers, 3 Majors and 2 Minors fixed (see Review history).
+- Open: a missed one-off leaves no run record, only `Routine.missed`. Report and history don't show it.
+
+**2026-10-29: T9 merged (commit eea5354, merge 5f61607).**
+- New: `outputs.html`, `hg-outputs` v1, `background/outputs.ts` (extension pages only), `domain/outputs.ts`,
+  `domain/pptx.ts`, `zipWrite`, `ui/chart.ts`. Every research report is saved as a `brief` artifact.
+- Bench on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6. No T9 ability is
+  set; decks are built by code. E4B not measured (no local copy, about 8 GB of disk free).
+- Review: 0 Blockers, 2 Majors fixed (see Review history). Merged suite: 242 unit tests pass, build ok.
+- Open items:
+  1. Headings in briefs render as paragraphs.
+  2. A `.pptx` hasn't been opened in PowerPoint or Keynote yet; only `unzip` checks it.
+  3. The worktree `../gallery-ext-t9` holds a 2 GB `.profile-t9`. Delete it once T9 needs no rework; disk is short.
+  4. E4B needs the `deck`, `cite` and `evidence` benches (and `plan`, after T2's prompt change) once disk allows.

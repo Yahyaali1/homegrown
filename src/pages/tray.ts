@@ -4,7 +4,7 @@ import { busyButton, button, errLine, fail, labelled, tryIt } from './shell.ts';
 import { h } from '../ui/dom.ts';
 import { flower, runStage } from '../ui/flower.ts';
 import { questions } from '../ui/questions.ts';
-import { approveAllOk, SENSITIVE_WAIT } from '../domain/garden/policy.ts';
+import { alwaysOk, approveAllOk, SENSITIVE_WAIT } from '../domain/garden/policy.ts';
 import { EDITABLE } from '../domain/garden/tools.ts';
 import type { GardenRun, Look, PlannedCall, Request } from '../domain/garden/records.ts';
 import { bg } from '../shared/protocol.ts';
@@ -95,6 +95,10 @@ function requestRow(run: GardenRun, q: Request, d: TrayDeps): Row {
     };
     lead.push(h('span', { className: 'p', textContent: `Sensitive, on ${q.host ?? 'this site'}: you are asked every time.` }));
     reply = h('div', { className: 'stack' }, ...(edit ? [edit.el] : []), bar, wait, el);
+  } else if (q.kind === 'approve' && !alwaysOk(q)) {
+    // In the person's own tab: asked every time, so no Always.
+    lead.push(h('span', { className: 'p', textContent: `In your own tab on ${q.host}: you are asked every time.` }));
+    reply = h('div', { className: 'stack' }, ...(edit ? [edit.el] : []), yesNo().el);
   } else if (q.kind === 'approve') {
     const hint = h('span', { className: 'muted small', id: `${textId}-always`, textContent: `Always: allow this exact action on ${q.host} without asking again. Revoke it under the gardener.` });
     const always = labelled(busyButton('Always', () => answer('always'), 'ghost'), `Always allow this exact action on ${q.host}`);
@@ -108,6 +112,13 @@ function requestRow(run: GardenRun, q: Request, d: TrayDeps): Row {
     lead.push(h('span', { className: 'p', textContent: 'Yes runs these steps in this order. The pages in it may open; acts that turn sensitive, and anything not in it, still ask.' }));
     const yes = described(busyButton('Yes', tryIt(err, async () => answer('yes', { calls: plan.calls() })), 'primary'));
     reply = h('div', { className: 'stack' }, plan.el, h('div', { className: 'row' }, yes, described(busyButton('No', () => answer('no'), 'secondary'))));
+  } else if (q.kind === 'help') {
+    // Done reads the page again; Skip fails that step.
+    const show = labelled(busyButton('Show me', tryIt(err, async () => {
+      const t = await chrome.tabs.update(q.tabId!, { active: true });
+      if (t) await chrome.windows.update(t.windowId, { focused: true });
+    }), 'secondary'), 'Show me the tab that asks');
+    reply = h('div', { className: 'row' }, show, described(busyButton('Done', () => answer('yes'), 'primary')), described(busyButton('Skip', () => answer('no'), 'ghost')));
   } else if (q.kind === 'takeover') {
     // Handing back: a read the person interrupted runs again; an act asks whether it happened.
     reply = h('div', { className: 'row' }, described(busyButton(`Hand back to ${d.who(run.gardenerId)}`, () => answer('yes'), 'primary')));

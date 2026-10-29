@@ -66,7 +66,8 @@ It also owns these parts:
 - `garden.ts` handlers (docs/plan/S-gardeners.md): `gardenerList`, `gardenerSave`, `gardenerDelete`, `routineList`,
   `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, `{ routineId }` for Run now, or `{ followUp, work }`: ask or plan work
   after an ended run), `runList`,
-  `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`
+  `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `runTab` (`{ id }`: the run's
+  newest web tab `{ tabId, windowId }`, for Show the tab), `requestShown`, `requestAnswer`
   (`{ runId, requestId, value, calls?, args? }`: a `plan` request's yes may carry the edited calls, parsed again; its
   no stops the run; an editable approve's yes may carry edited `args`), `requestAnswerAll` (`{ requests: { runId,
   requestId }[] }`), `runMessage` (`{ id, text, steer }`), `runSeen` (`{ id }`), `runRetry` (`{ id, step }`; refused on a helper), `runResumeAll` (`{ id }`: a parent's failed and stopped
@@ -98,7 +99,15 @@ It also owns these parts:
     pages pass reach first. A tainted run's act and read tabs can't load pages off the gardener's sites
     and the call's own host.
   - Every handler refuses a caller that isn't an extension page; `runStop` and `runTakeover` also take a tab in the
-    live run's own group (the lock bar).
+    live run's own group or a tab it borrowed (the lock bar; `ownsTab`).
+  - Hands in your tabs (plan T5). `act_my_tab` borrows the person's tab for the call (`borrowed`, the lock bar shows,
+    Stop and Take over work from it; Take over aborts the call), then halts it and gives it back; `always` is refused
+    for it (`alwaysOk`). A `read_page` whose page asks for a check for humans keeps its tab (`kept`, out of the group)
+    and waits on a `help` request (`tabId`, 24 h); yes reads it again, no fails the step. Port `garden-watch:<runId>`
+    (extension pages only): the live view, the run's newest group tab screencast (`devtools.ts`), re-picked each
+    second, ended with the port or the turn. With the optional `downloads` permission, `downloads.onCreated` keeps a
+    download with the run whose own tabs had its `referrer` open (`downloadRun`; `live` entries keep `urls`):
+    `GardenRun.files` and a `file` created card.
   - Lock: when a run's tab loads a page, `{type:'garden-lock', run, name}` goes to it until the bar answers `locked`.
     Take over (also from the Garden tab, which names no tab: the run's newest web tab): the tab is halted first
     (`window.__hgHalt` in every frame's isolated world; `__hgStep` checks it before each click or fill), joins
@@ -137,6 +146,10 @@ It also owns these parts:
     `collect` runs a saved recipe (`scrapeRecipe`) in the run's tabs with its pinned model; a closed tab (`TabClosed`) is rethrown, not a row, so an acting collect asks did-it-happen.
   - `read_page` in a routine's direct read diffs the page markdown against its snapshot (`{ text, prev, runId }`);
     taint follows the tab's final URL and every frame's URL (unknown → tainted). `mission` runs signed out (`cookieRule(tab, [])`) and never taints.
+  - `act_my_tab` plays approved steps (strict, guarded like `act`) in a tab the person named, still on that URL
+    (`mentionedTab`), never closes it, and taints the run. `read_page` and `act` with `Gardener.devtools` attach the
+    debugger in the tab's `prepare` and append `devtoolsDigest` (or say the permission is missing). `read_page`
+    throws `NeedsHelp(tabId)` when `isChallenge` holds (`readInTab`'s `hold`).
   - `read_my_tab` reads a tab the person named (`mentionedTab`: by hand the same tab on the same URL, in a routine
     any tab on exactly that URL) with `tabText`, and taints the run.
   - `gardenNotice`: notification `garden:<id>`, "<name>: <text>"; a click opens `sidepanel.html#garden`.
@@ -147,7 +160,8 @@ It also owns these parts:
   - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
   - It exports `inTab`, `waitLoaded`, `Run`, `ENGINES`, `searchInTab`, `readInTab`, `joinGroup`, `endRun`,
     `markWindow`, `closeIfEmpty`, `closeLiveGroups` (only what the old worker listed, read at module load) and
-    `missionRun`. `inTab(url, run, use, timeoutMs?, prepare = run.prepare)`: with
+    `missionRun`. `readInTab(url, run, terms, scenario?, hold?)`: a page `hold` says yes to keeps its tab open
+    (`run.kept`) and comes back with `held: tabId`. `inTab(url, run, use, timeoutMs?, prepare = run.prepare)`: with
     `prepare`, the tab opens blank, `prepare(tabId)` sets it up and returns its cleanup, then the page loads.
     `run.windowId` picks the window, `run.deadline` caps the wait, `run.title` names the group (`❀ Mission`).
   - `missionRun(goal, run, ask)`: plan and run a mission awaited inside the caller's `Run`, with its `ask`; no live
@@ -254,6 +268,11 @@ It also owns these parts:
   - `missions.ts`: the mission log keeps the last 150 lines. `priceBook` keeps the newest 300 products and
     30 price points for each. `shopCheck` runs once a day for each product and needs a price at least 3%
     lower.
+
+- `devtools.ts`: `chrome.debugger` (optional permission) with one attach per tab, shared: `attach(tabId)` (the last
+  user detaches), `logFor(tabId)` (`Runtime`, `Log` and `Network` events until `stop()`, which returns
+  `devtoolsDigest`; bodies are never read), `screencast(tabId, frame)` (JPEG, 480 px wide, ≤ 2 frames a second by a
+  late ack). `pagerequest.ts` emulation uses `attach` too.
 
 - `pagerequest.ts`: `pageRequest(url, recipe, run, guard?)`, `play(tabId, scenario, run, guard?)` and
   `cookieRule(tabId, keepHosts, navHosts?)` (the tab sends no `Cookie` and keeps no `Set-Cookie`, except a main frame

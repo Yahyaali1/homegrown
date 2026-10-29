@@ -29,6 +29,13 @@ export const argsKey = (args: Record<string, unknown>): string => JSON.stringify
 export interface Act { host: string; hosts: string[]; steps: Instruction[]; key: string; text: string }
 
 export function actOf(call: Call, known: Known = {}): Act | null {
+  // In the person's own tab (a mention): where it acts is the URL the person named.
+  if (call.tool === 'act_my_tab') {
+    const url = bare(String(call.args.tab ?? '')), s = parseScenario(call.args.steps);
+    if (!url || !s) return null;
+    const host = hostOf(url);
+    return { host, hosts: [host], steps: s.instructions, key: argsKey(call.args), text: `act in your own tab ${url}:\n${s.instructions.map(describe).join('\n')}` };
+  }
   if (call.tool === 'act') {
     const url = bare(String(call.args.url ?? '')), s = parseScenario(call.args.steps);
     if (!url || !s) return null;
@@ -51,9 +58,13 @@ export const recipeHosts = (r: RecipeFacts): string[] => [...new Set(r.urls.map(
 /** The key an answer to this call binds to: a recipe's always covers the whole recipe, so an edit needs a new yes. */
 export const callKey = (call: Call, known: Known = {}): string => recipeOf(call, known)?.key ?? actOf(call, known)?.key ?? argsKey(call.args);
 
-/** Why these steps are sensitive before any page is seen, or null: code, or typing after a signed-in read. */
-export function sensitiveSteps(run: GardenRun, steps: Instruction[]): string | null {
+/**
+ * Why these steps are sensitive before any page is seen, or null: code, typing after a signed-in read, or typing in
+ * the person's own tab (signed in everywhere; taint comes only after the call).
+ */
+export function sensitiveSteps(run: GardenRun, steps: Instruction[], tool?: string): string | null {
   if (steps.some((i) => 'evaluate' in i)) return 'it runs code';
+  if (tool === 'act_my_tab' && steps.some((i) => 'fill' in i)) return 'it types into your own signed-in tab';
   if (run.tainted && steps.some((i) => 'fill' in i)) return 'it types into a page after reading your signed-in pages';
   return null;
 }
@@ -107,7 +118,13 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
       if (reach.includes('ask')) return 'ask';
       return !a || granted(run, gardener, call.tool, a, known) ? 'allow' : 'ask';
     }
-    // Only a tab the person named; it is read, never acted in, and the read taints the run.
+    // Acting in a tab the person named: asked every time, never granted, never pre-approved by a plan.
+    case 'act_my_tab': {
+      const a = actOf(call, known);
+      if (!a || a.steps.some((i) => 'evaluate' in i)) return 'deny';
+      return decide(run, gardener, { tool: 'read_my_tab', args: { tab: call.args.tab } }) === 'allow' ? 'ask' : 'deny';
+    }
+    // Only a tab the person named; the read taints the run.
     case 'read_my_tab':
       return (run.work.kind === 'ask' || run.work.kind === 'plan') && (run.work.tabs ?? []).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
     case 'notify':
@@ -133,6 +150,23 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
  */
 export const approveAllOk = (q: Request, run: GardenRun): boolean =>
   !q.answer && !q.sensitive && ((q.kind === 'reach' && !run.tainted) || (q.kind === 'approve' && (q.tool === 'act' || q.tool === 'collect')));
+
+/**
+ * A call that threw may still have shown signed-in page data (its error says where it ended, a DevTools log): the
+ * person's own tab always, an `act` when it or its final page is on the gardener's sites.
+ */
+export function failTaints(tool: string, args: Record<string, unknown>, error: string, sites: string[]): boolean {
+  if (tool === 'act_my_tab') return true;
+  if (tool !== 'act') return false;
+  const final = /Now at (\S+?)\.?(\s|$)/.exec(error)?.[1];
+  return [String(args.url ?? ''), final ?? ''].some((u) => onSites(hostOf(u), sites));
+}
+
+/** "Always" may answer this request: a non-sensitive approve, never in the person's own tab (decision 6). */
+export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && q.tool !== 'act_my_tab';
+
+/** The tools a plan's yes may pre-approve (decision 2): acts in the gardener's own tabs, never the person's or an app's. */
+export const planCovers = (tool: string): boolean => tool === 'act' || tool === 'collect';
 
 /** `seen` plus new URLs (deduplicated, fragments removed), capped at 300. */
 export function addSeen(seen: Seen[], urls: string[], from: Seen['from'], step?: number): Seen[] {

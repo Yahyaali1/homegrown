@@ -4,7 +4,8 @@
 import { askAs, engine, modelFor } from './engine.ts';
 import { closeIfEmpty, closeLiveGroups, endRun, joinGroup, markKept, markWindow, TabClosed, type Run } from './missions.ts';
 import { cookieRule, isExtensionPage } from './pagerequest.ts';
-import { factsOf, GARDEN_TOOLS, gardenNotice, MODEL_CHANGED, NeedsYou, type ToolCtx } from './gardentools.ts';
+import { factsOf, GARDEN_TOOLS, gardenNotice, MODEL_CHANGED, NeedsHelp, NeedsYou, type ToolCtx } from './gardentools.ts';
+import { screencast } from './devtools.ts';
 import { htmlText } from './monitors.ts';
 import { recipesList } from './scrape.ts';
 import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.ts';
@@ -12,9 +13,9 @@ import * as idb from './idb.ts';
 import * as trust from './trust.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
 import { answeredBy, answerFor, answerPlan, answerRefused, approveRequest, AUTO_RETRY_MS, autoRetry, digest, earlierOf, followUpRun, helpersOf, mergeHelpers, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, queuedFollowUp, recover, refusal, resumeAll, retryStep, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
-import { actOf, addSeen, approveAllOk, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
+import { actOf, addSeen, alwaysOk, approveAllOk, callKey, failTaints, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
 import { checkFetch, claim, DEADLINE, eventCheck, expired, nextAfter, nextBatch, overdue } from '../domain/garden/schedule.ts';
-import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
+import { downloadRun, ownsTab, TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
 import { helping, mayStart, newRun, pruneIds, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
@@ -119,8 +120,11 @@ async function fire(routineId: string): Promise<void> {
 
 // ---- the queue: one run at a time, oldest first; a read's helpers up to 3 at once ----
 
-/** Runs working now, by id: Stop, take over and the lock bar act on the entry of the run they name. */
-const live = new Map<string, { name: string; tab: Run; run: GardenRun; borrowed: Set<number> }>();
+/**
+ * Runs working now, by id: Stop, take over and the lock bar act on the entry of the run they name. `urls`: pages its
+ * own tabs had open, which a download's referrer is matched against.
+ */
+const live = new Map<string, { name: string; tab: Run; run: GardenRun; borrowed: Set<number>; urls: Set<string> }>();
 let draining: Promise<void> | null = null;
 let dirty = false;
 
@@ -216,7 +220,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
   const stop = new AbortController();
   // Set before any await: runStop finds the run and aborts it, and a stopped turn saves nothing more.
   const tab: Run = { id: run.id, stop, ...(win !== undefined && { windowId: win }) };
-  const me = { name: '', tab, run, borrowed: new Set<number>() };
+  const me = { name: '', tab, run, borrowed: new Set<number>(), urls: new Set<string>() };
   live.set(run.id, me);
   let made: number | undefined; // a window this turn opened, closed when it ends
   const save = () => (stop.signal.aborted ? Promise.resolve() : saveRun(run));
@@ -393,7 +397,7 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     // edited yes covers no reason of the original's: the edit is a new call.
     const ok = q?.sensitive && said(q) && q.why && !q.answer?.args ? { why: q.why, ...(q.index !== undefined && { index: q.index }) } : undefined;
     const reach = (url: string) => decide(run, gardener, { tool: 'read_page', args: { url } }) === 'allow';
-    const go = async () => impl(args as never, { run, gardener, tab, i, db: await db, key, reach, ...(ok && { ok }) } satisfies ToolCtx);
+    const go = async () => impl(args as never, { run, gardener, tab, i, db: await db, key, reach, borrow: (t) => borrow(run.id, t), ...(ok && { ok }) } satisfies ToolCtx);
     let r: Awaited<ReturnType<typeof go>>;
     try {
       r = await go();
@@ -412,8 +416,19 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     if (r.taint) run.tainted = true;
   } catch (e) {
     if (tab.stop.signal.aborted) return; // the turn ends at the top of its loop
+    if (failTaints(tool, args, e instanceof Error ? e.message : String(e), gardener.sites)) run.tainted = true;
     // The person closed the tab mid-act: it may have happened, so the step stays started and next() asks.
     if (e instanceof TabClosed && effect === 'act') return;
+    if (e instanceof NeedsHelp) {
+      // A check for humans: the tab stays open for the person, out of the group; their answer reads it again.
+      run.steps = run.steps.filter((s) => s.i !== i);
+      await markKept(run.id, e.tabId);
+      await chrome.tabs.ungroup(e.tabId).catch(() => {});
+      await release(e.tabId);
+      run.requests.push({ id: crypto.randomUUID().slice(0, 8), kind: 'help', step: i, tool, tabId: e.tabId, sensitive: false, expiresAt: Date.now() + DAY,
+        text: `Help with this site: ${hostOf(String(args.url ?? ''))} asks for a check for humans. Show me opens its tab; answer Done when you’re through.` });
+      return 'wait';
+    }
     if (e instanceof NeedsYou) {
       // Stopped on a sensitive step before any act ran: ask about that step, in place.
       run.steps = run.steps.filter((s) => s.i !== i);
@@ -443,8 +458,37 @@ const ready = () => started;
 /** The run works in this tab right now: it is in the run's group, or one the run borrowed. */
 const owned = (id: string, tab: chrome.tabs.Tab | undefined): boolean => {
   const e = live.get(id);
-  return !!tab && !!e && ((e.tab.group !== undefined && tab.groupId === e.tab.group) || (tab.id !== undefined && e.borrowed.has(tab.id)));
+  return ownsTab(e && { group: e.tab.group, borrowed: e.borrowed }, tab);
 };
+
+/** act_my_tab: the person's tab is the run's for one call (lock bar, Stop, Take over); the result halts it and gives it back. */
+async function borrow(runId: string, tabId: number): Promise<() => Promise<void>> {
+  const e = live.get(runId);
+  if (!e) throw new DOMException('Stopped', 'AbortError');
+  e.borrowed.add(tabId);
+  const t = await chrome.tabs.get(tabId).catch(() => undefined);
+  if (t) void lock(tabId, t);
+  return async () => {
+    e.borrowed.delete(tabId);
+    await release(tabId);
+  };
+}
+
+/** The tab a run works in now: a borrowed one (act_my_tab) first, else its newest group tab. */
+async function workTab(id: string): Promise<chrome.tabs.Tab | undefined> {
+  for (const t of live.get(id)?.borrowed ?? []) {
+    const tab = await chrome.tabs.get(t).catch(() => undefined);
+    if (tab) return tab;
+  }
+  return newestTab(id);
+}
+
+/** The run's newest web tab in its group, if it is working in one. */
+async function newestTab(id: string): Promise<chrome.tabs.Tab | undefined> {
+  const g = live.get(id)?.tab.group;
+  if (g === undefined) return undefined;
+  return (await chrome.tabs.query({ groupId: g }).catch(() => [])).filter((x) => /^https?:/.test(x.url ?? '')).sort((a, b) => b.id! - a.id!)[0];
+}
 
 async function mustGardener(id: string): Promise<Gardener> {
   const g = parseGardener(await idb.get(await db, 'gardeners', id));
@@ -654,9 +698,7 @@ export const handlers = {
     const ext = sender === undefined || isExtensionPage(sender);
     let target = ext ? tabId : sender?.tab?.id;
     const e = live.get(id);
-    if (ext && target === undefined && e?.tab.group !== undefined) {
-      target = (await chrome.tabs.query({ groupId: e.tab.group })).filter((x) => /^https?:/.test(x.url ?? '')).sort((a, b) => b.id! - a.id!)[0]?.id;
-    }
+    if (ext && target === undefined) target = (await workTab(id))?.id;
     const t = typeof target === 'number' ? await chrome.tabs.get(target).catch(() => undefined) : undefined;
     if (!t || !e || !owned(id, t)) throw new Error('That tab isn’t one this gardener is working in.');
     const { tab, name } = e;
@@ -667,7 +709,8 @@ export const handlers = {
     (tab.kept ??= new Set()).add(tid);
     await markKept(id, tid);
     tab.stop.abort();
-    for (let k = 0; k < 3 && (await chrome.tabs.get(tid).catch(() => null))?.groupId !== -1; k++) await chrome.tabs.ungroup(tid).catch(() => {});
+    // Out of the run's group; a borrowed tab stays in the person's own.
+    for (let k = 0; k < 3 && e.tab.group !== undefined && (await chrome.tabs.get(tid).catch(() => null))?.groupId === e.tab.group; k++) await chrome.tabs.ungroup(tid).catch(() => {});
     if (tab.windowId !== undefined && t.windowId === tab.windowId) await chrome.windows.create({ tabId: tid, focused: true });
     else {
       await chrome.tabs.update(tid, { active: true });
@@ -699,6 +742,7 @@ export const handlers = {
     await ready();
     if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new Error('The answer is empty or too long.');
     let grant: Grant | null = null;
+    let help: number | undefined;
     // A plan's yes needs policy's view (gardener, grants, recipes), read before the transaction.
     const before = await getRun(runId);
     const g = before?.requests.find((x) => x.id === requestId)?.kind === 'plan' ? await mustGardener(before.gardenerId) : null;
@@ -710,7 +754,7 @@ export const handlers = {
       const refused = answerRefused(q);
       if (refused) throw new Error(refused);
       if (!open(r, q, now)) throw new Error('That request has expired.');
-      const values = q.kind === 'approve' && !q.sensitive ? ['yes', 'no', 'always'] : ['yes', 'no'];
+      const values = alwaysOk(q) ? ['yes', 'no', 'always'] : ['yes', 'no'];
       if (q.kind !== 'question' && !values.includes(value)) throw new Error(values.length > 2 ? 'Answer yes, no or always.' : 'Answer yes or no.');
       // The worker's clock: a sensitive write can't be approved within 8 s of being shown.
       if (q.kind === 'approve' && q.sensitive && value !== 'no' && (q.shownAt === undefined || now - q.shownAt < SENSITIVE_WAIT)) {
@@ -725,9 +769,12 @@ export const handlers = {
       const edit = parseEdit(q, value, args);
       if (typeof edit === 'string') throw new Error(edit);
       if (value === 'always' && q.tool && q.host !== undefined && q.argsKey) grant = { gardenerId: r.gardenerId, tool: q.tool, host: q.host, argsKey: q.argsKey, at: now };
+      if (q.kind === 'help') help = q.tabId;
       settle(r, q, value, now, edit);
     });
     if (grant) await trust.grant(grant);
+    // A help request's tab was held for the person; any answer lets it go (a yes reads the page in a new tab).
+    if (help !== undefined) await chrome.tabs.remove(help).catch(() => {});
     drain();
     return true;
   },
@@ -798,6 +845,13 @@ export const handlers = {
     const { vec: _, ...n } = await addNote({ ...(note.gardenerId && { gardenerId: note.gardenerId }), text: String(note.text ?? ''), by: 'person' });
     return n;
   },
+  /** The tab a run works in now (its newest web tab), for "Show the tab". */
+  runTab: async ({ id }: { id: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const t = await workTab(String(id));
+    return t ? { tabId: t.id, windowId: t.windowId } : null;
+  },
   noteDelete: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await deleteNote(String(id)), true),
   grantList: async ({ gardenerId }: { gardenerId?: string } = {}, sender?: Sender) => (page(sender), (await trust.grants()).filter((g) => !gardenerId || g.gardenerId === gardenerId)),
   grantRevoke: async ({ gardenerId, tool, host, argsKey }: Omit<Grant, 'at'>, sender?: Sender) => (page(sender), await trust.revoke({ gardenerId, tool, host, argsKey }), true),
@@ -833,6 +887,71 @@ async function release(tabId: number): Promise<void> {
   await chrome.tabs.sendMessage(tabId, { type: 'garden-unlock' }).catch(() => {});
 }
 
+/**
+ * The live view ("Watch"): the run's newest tab as JPEG frames on the page's port, following it to newer tabs, until
+ * the page closes the port or the run's turn ends. Frames go only to that extension page; nothing keeps them.
+ */
+function watch(port: chrome.runtime.Port, runId: string): void {
+  if (!isExtensionPage(port.sender)) return port.disconnect();
+  let on: { tabId: number; stop: Promise<(() => Promise<void>) | null> } | null = null;
+  let gone = false;
+  const drop = () => {
+    const o = on;
+    on = null;
+    void o?.stop.then((s) => s?.());
+  };
+  const end = () => {
+    gone = true;
+    clearInterval(timer);
+    drop();
+  };
+  const post = (m: object) => void (gone || port.postMessage(m));
+  const tick = async () => {
+    if (gone) return;
+    if (!live.has(runId)) {
+      post({ ended: true });
+      end();
+      return port.disconnect();
+    }
+    const t = await newestTab(runId);
+    if (gone || t?.id === on?.tabId) return;
+    drop();
+    if (t?.id === undefined) return post({ frame: null });
+    on = { tabId: t.id, stop: screencast(t.id, (frame) => post({ frame })).catch((e: unknown) => (post({ error: e instanceof Error ? e.message : String(e) }), null)) };
+  };
+  const timer = setInterval(() => void tick(), 1000);
+  port.onDisconnect.addListener(end);
+  void tick();
+}
+
+/** A download a run's tab started (its referrer is a page one had open, and no tab of the person's): kept with the run. */
+async function keepDownload(d: chrome.downloads.DownloadItem): Promise<void> {
+  const groups = new Set([...live.values()].flatMap((e) => (e.tab.group === undefined ? [] : [e.tab.group])));
+  const person = (await chrome.tabs.query({})).filter((t) => !groups.has(t.groupId)).map((t) => t.url ?? '');
+  const runId = downloadRun(d.referrer, [...live].map(([id, e]) => ({ runId: id, urls: e.urls })), person);
+  if (!runId) return;
+  const url = d.finalUrl || d.url;
+  let name = d.filename.split(/[\\/]/).pop() ?? '';
+  try {
+    name ||= decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+  } catch {}
+  name = (name || 'download').slice(0, 200);
+  const add = (r: GardenRun) => {
+    if (r.files?.some((f) => f.id === d.id)) return;
+    r.files = [...(r.files ?? []), { id: d.id, name, url: url.slice(0, 2000), at: Date.now() }];
+    r.created = [...(r.created ?? []), { kind: 'file', title: name, ref: String(d.id) }];
+  };
+  // A working run is saved from memory after each action: the file goes there too.
+  const e = live.get(runId);
+  if (e) add(e.run);
+  await updateRun(runId, add);
+}
+const onDownload = (d: chrome.downloads.DownloadItem) => void keepDownload(d).catch((e) => console.warn('garden download failed', e));
+/** `downloads` is optional: listened to once the person allows it ("Keep downloads with runs"). */
+const listenDownloads = () => {
+  if (chrome.downloads && !chrome.downloads.onCreated.hasListener(onDownload)) chrome.downloads.onCreated.addListener(onDownload);
+};
+
 /** Test hook (on self): the routine's claim, as if its alarm fired. */
 export async function gardenFire(routineId: string): Promise<void> {
   await started;
@@ -865,7 +984,14 @@ export function init(): void {
     if (a.name === WAKE) drain();
     else if (a.name.startsWith(ALARM)) void gardenFire(a.name.slice(ALARM.length)).catch((e) => console.warn('garden alarm failed', e));
   });
-  chrome.tabs.onUpdated.addListener((tabId, info, t) => void (info.status === 'loading' && lock(tabId, t)));
+  chrome.tabs.onUpdated.addListener((tabId, info, t) => {
+    if (info.status === 'loading') void lock(tabId, t);
+    // The pages a run's own tabs open, for matching downloads (a borrowed tab is the person's).
+    if (info.url) for (const e of live.values()) if (e.tab.group !== undefined && t.groupId === e.tab.group) e.urls.add(info.url);
+  });
+  chrome.runtime.onConnect.addListener((port) => void (port.name.startsWith('garden-watch:') && watch(port, port.name.slice('garden-watch:'.length))));
+  listenDownloads();
+  chrome.permissions.onAdded.addListener(listenDownloads);
   chrome.notifications.onClicked.addListener((id) => {
     if (!id.startsWith('garden:')) return;
     void chrome.tabs.create({ url: chrome.runtime.getURL('sidepanel.html#garden') });

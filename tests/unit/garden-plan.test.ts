@@ -156,11 +156,15 @@ test('a fromPlan answer whose call policy now denies fails the step', () => {
 });
 
 test('no fromPlan answer is made for act_my_tab or app_call', () => {
-  const tools = [...TOOLS, { name: 'act_my_tab', describe: '', args: { url: { type: 'string' as const, max: 2000 }, steps: { type: 'scenario' as const } }, effect: 'act' as const },
-    { name: 'app_call', describe: '', args: { url: { type: 'string' as const, max: 2000 }, steps: { type: 'scenario' as const } }, effect: 'act' as const }];
+  // act_my_tab is an act policy knows (actOf), click-only and not sensitive: only answerPlan's act/collect filter keeps it out.
+  const tab = { url: 'https://mail.com/inbox', title: 'Inbox', tabId: 3 };
+  const mine = { tab: tab.url, steps: pay.steps };
+  const tools = [...TOOLS, { name: 'app_call', describe: '', args: { url: { type: 'string' as const, max: 2000 }, steps: { type: 'scenario' as const } }, effect: 'act' as const }];
   const c = { ...ctx, tools };
-  const r = approved([{ tool: 'act_my_tab', args: pay }, { tool: 'app_call', args: pay }, { tool: 'act', args: pay }], {}, c);
-  assert.deepEqual(r.requests.filter((q) => q.fromPlan).map((q) => q.tool), ['act']);
+  const r = run({}, { kind: 'plan', request: 'compare tea prices', tabs: [tab] });
+  assert.equal(approveRequest(r, c, 0, 'act_my_tab', mine)?.sensitive, false);
+  const p = approved([{ tool: 'act_my_tab', args: mine }, { tool: 'app_call', args: pay }, { tool: 'act', args: pay }], { work: r.work }, c);
+  assert.deepEqual(p.requests.filter((q) => q.fromPlan).map((q) => q.tool), ['act']);
 });
 
 test('a plan work\'s named tab is readable with read_my_tab, and its URLs are the person\'s', () => {

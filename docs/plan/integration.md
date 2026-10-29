@@ -32,6 +32,10 @@ Done after the group agents report. Owner: the main session.
   `outputs.ts` module (one import, one entry in `modules`); `static/sidepanel.html` Library tab gets one "Outputs ›"
   link line;
   `background/pagerequest.ts` exports `screenshot`.
+- T5 (plan T): `static/manifest.json` adds `downloads` to `optional_permissions`. `background/pagerequest.ts`
+  emulation attaches through `devtools.ts` `attach` (one shared debugger attach per tab). `background/missions.ts`
+  `readInTab` gains `hold` (a page it holds keeps its tab, `held`). `static/sidepanel.html` gains the gardener form's
+  DevTools switch and Garden's "Keep downloads with runs" switch; `static/sidepanel.css` styles `img.live`. DONE.
 
 ## Known issues
 
