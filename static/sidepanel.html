@@ -37,6 +37,7 @@
         <p><b>Ask anything.</b><br><span class="muted">It runs on this device: nothing you type leaves it.</span></p>
       </div>
       <div class="dock">
+        <ul id="chat-requests" class="list tray" aria-live="polite" aria-label="Requests from gardeners"></ul>
         <div id="attached" class="attachment" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" type="button" aria-label="Remove selected text">×</button></div>
         <div id="attached-image" class="attachment" hidden><img id="image-preview" alt="Attached image"><span class="muted">Image attached</span> <button id="image-clear" type="button" aria-label="Remove image">×</button></div>
         <form id="chat-form" class="composer">
@@ -87,7 +88,7 @@
     </section>
 
     <section id="garden" role="tabpanel" hidden>
-      <ul id="garden-requests" class="list" aria-live="polite"></ul>
+      <ul id="garden-requests" class="list tray" aria-live="polite"></ul>
       <h3>Gardeners</h3>
       <ul id="gardener-list" class="list"></ul>
       <details id="gardener-add" class="card">

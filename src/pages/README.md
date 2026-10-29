@@ -27,7 +27,9 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 ## Interface
 
 - `shell.ts`: `$<T>(selector)`, a `querySelector` that throws when nothing matches. Importing the module
-  also runs `markPage()`: at once if the document has already loaded, else on `DOMContentLoaded`.
+  also runs `markPage()`: at once if the document has already loaded, else on `DOMContentLoaded`. Also
+  `button`, `busyButton`, `emptyPot`, `row`, `errLine`, `fail`, `labelled`, `tryIt` and `place` (keeps nodes in
+  order without re-inserting the ones in place, so their motion doesn't restart).
 - `savings.ts`: `Savings`, `savingsLine(s, tokens?)`. The sentence for the savings meter.
 - `sidepanel.ts` (`sidepanel.html`): the side panel, and the home for everything. It imports `settings.ts`
   and `library.ts` for their tabs. It contains:
@@ -41,6 +43,15 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - Schedules, monitors and missions (`schedule`, `runScheduleNow`, `unschedule`, `checkNow`, `unwatch`,
     `agentOpen`, `missionsLive`, `missionOpen`, `missionsList`, `missionDelete`).
   - Model pickers for each task, and the model manager.
+- `garden.ts` (the side panel's Garden tab): gardeners, routines (a paused routine with `by` other than `person`
+  says "Proposed by <name>. Turn on?" and its button is Turn on), runs (an active run has a Steer box:
+  `runMessage({ id, text, steer: true })`), and the two request trays. `showRequests()` re-renders the trays when
+  the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen.
+- `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
+  `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan and question cards; an
+  approve for `act`, `draft` or `notify` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
+  (Always is hidden while they differ). With two or more requests that `approveAllOk` allows, "Approve all" sends
+  them to `requestAnswerAll`. A question with `questions` uses `ui/questions.ts`.
 - `mission.ts` (`agent.html`): Mission control.
   - It plans with `bg('agentPlan')`, edits the brief and the steps (the Open step has a "Before reading each
     page" `js_scenario` box; steps that act are confirmed before Run), and runs with `bg('missionStart')`.

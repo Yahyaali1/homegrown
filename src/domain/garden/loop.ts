@@ -8,17 +8,23 @@ import { actOf, addSeen, argsKey, callKey, decide, sensitiveSteps, SENSITIVE_WAI
 import { expired } from './schedule.ts';
 import type { Gardener, GardenRun, PlannedCall, Request, Routine, Step, Turn } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
-import { parseArgs, type ToolSpec } from './tools.ts';
+import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
 import { notesBlock, type Note } from './notes.ts';
 
 /** `notes`: the gardener's notes the worker retrieved, best first; as many as fit go into the data, never the prompt. */
 export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[] }
 
 export type Action =
-  /** `taint`: the data holds notes (private): the worker taints the run before the model sees them. */
-  | { think: { purpose: Turn['purpose']; prompt: string; data: string; sampling?: Sampling; taint?: true } }
-  /** Run a tool and store the step at index `i` (a re-run replaces a `started` step). */
-  | { call: { i: number; tool: string; args: Record<string, unknown> } }
+  /**
+   * `taint`: the data holds notes (private): the worker taints the run before the model sees them. `steer`: the inbox
+   * messages in the prompt, which the worker marks used with the turn.
+   */
+  | { think: { purpose: Turn['purpose']; prompt: string; data: string; sampling?: Sampling; taint?: true; steer?: string[] } }
+  /**
+   * Run a tool and store the step at index `i` (a re-run replaces a `started` step). `answered`: the request whose yes
+   * covers this call (an edited one), which the worker checks by id.
+   */
+  | { call: { i: number; tool: string; args: Record<string, unknown>; answered?: string } }
   /** Store this step as it is: a refused or denied call, or an answered "did it happen?". */
   | { record: Step }
   | { request: Omit<Request, 'id'> }
@@ -47,9 +53,26 @@ export const said = (q: Request): boolean => q.answer?.value === 'yes' || q.answ
  */
 export function answerFor(run: GardenRun, i: number, tool: string, key: string): Request | undefined {
   const q = run.requests.findLast((x) => (x.kind === 'reach' || x.kind === 'approve') && x.step === i && x.tool === tool && x.argsKey === key);
-  if (!q?.answer) return undefined;
-  if (q.kind === 'approve' && q.sensitive && said(q) && (q.shownAt === undefined || q.answer.at - q.shownAt < SENSITIVE_WAIT)) return undefined;
-  return q;
+  return q?.answer && !early(q) ? q : undefined;
+}
+
+const early = (q: Request) => q.kind === 'approve' && q.sensitive && said(q) && (q.shownAt === undefined || q.answer!.at - q.shownAt < SENSITIVE_WAIT);
+
+/** The request a call names (`answered`), if its yes counts: said yes, and for a sensitive one, 8 s or more after shown. */
+export const answeredBy = (run: GardenRun, id: string): Request | undefined => run.requests.find((q) => q.id === id && said(q) && !early(q));
+
+/**
+ * The person's yes to an approve card with edited args, checked: only an editable approve, only a yes (a grant is
+ * built from the original call), and the args parsed again. `{}` when nothing changed; a string says why not.
+ */
+export function parseEdit(q: Request, value: string, raw: unknown): { args?: Record<string, unknown> } | string {
+  if (raw === undefined) return {};
+  if (q.kind !== 'approve' || q.noEdit || !EDITABLE.includes(q.tool ?? '')) return 'This request can’t be edited.';
+  if (value !== 'yes') return 'An edited action can be approved only with yes: Always would allow the original.';
+  const spec = TOOLS.find((t) => t.name === q.tool);
+  const args = spec && parseArgs(spec, raw);
+  if (!args) return 'These arguments aren’t valid for this action.';
+  return argsKey(args) === q.argsKey ? {} : { args };
 }
 
 /** One line per step for the person and the model. */
@@ -102,29 +125,56 @@ function resume(run: GardenRun, ctx: Ctx, step: Step): Action {
   return { record: { ...step, state: yes ? 'done' : 'failed', ...(yes ? {} : { error: 'It did not happen.' }), at: ctx.now } };
 }
 
+const failed = (ctx: Ctx, i: number, tool: string, args: Record<string, unknown>, error: string): Action => {
+  const effect = actOf({ tool, args }, ctx) ? 'act' : ctx.tools.find((t) => t.name === tool)?.effect ?? 'read';
+  return { record: { i, tool, args, effect, state: 'failed', error, digest: digest(tool, args, { error }), at: ctx.now } };
+};
+
 /** Policy for call `i`, unless the person already answered for exactly this call (then once, their way). */
 function attempt(run: GardenRun, ctx: Ctx, i: number, tool: string, args: Record<string, unknown>): Action {
   const key = callKey({ tool, args }, ctx);
   const act = actOf({ tool, args }, ctx);
-  const effect = act ? 'act' : ctx.tools.find((t) => t.name === tool)?.effect ?? 'read';
-  const failed = (error: string): Action => ({ record: { i, tool, args, effect, state: 'failed', error, digest: digest(tool, args, { error }), at: ctx.now } });
   const answered = answerFor(run, i, tool, key);
   // A plan's yes skips nothing: policy decides first (below).
   if (answered && !answered.fromPlan) {
+    if (said(answered) && answered.answer!.args) return edited(run, ctx, i, tool, answered, answered.answer!.args);
     if (said(answered)) return { call: { i, tool, args } };
     // A no after the page stopped the act: say where, and that nothing had run (it is only re-asked then).
     const at = answered.index !== undefined ? act?.steps[answered.index] : undefined;
-    return failed(at ? `Refused by you. It stopped before ${describe(at)} (${answered.why}); no step had run.` : 'Refused by you');
+    return failed(ctx, i, tool, args, at ? `Refused by you. It stopped before ${describe(at)} (${answered.why}); no step had run.` : 'Refused by you');
   }
   const verdict = decide(run, ctx.gardener, { tool, args }, ctx);
   if (verdict === 'allow') return { call: { i, tool, args } };
-  if (verdict === 'deny') return failed('Not allowed.');
+  if (verdict === 'deny') return failed(ctx, i, tool, args, 'Not allowed.');
   const approve = act && approveRequest(run, ctx, i, tool, args);
   // A plan's yes (the only answer left here) counts where policy asks and the call isn't sensitive now.
   if (approve) return answered && !approve.sensitive ? { call: { i, tool, args } } : { request: approve };
   const name = ctx.gardener.name;
   const text = tool === 'read_page' ? `${name} wants to open ${String(args.url)}` : tool === 'search' ? `${name} wants to search for "${String(args.query)}"` : `${name} wants to use ${tool}: ${String(Object.values(args)[0] ?? '')}`;
   return { request: { kind: 'reach', step: i, tool, argsKey: key, text: text.slice(0, 500), sensitive: false, expiresAt: expiresAt(ctx) } };
+}
+
+/**
+ * The person said yes to call `i` with edited args (`first`): the edited call is a new call. If it was asked again
+ * (it turned sensitive), that answer settles it; else policy runs on it, and its yes counts unless it is sensitive now.
+ */
+function edited(run: GardenRun, ctx: Ctx, i: number, tool: string, first: Request, args: Record<string, unknown>): Action {
+  const again = answerFor(run, i, tool, callKey({ tool, args }, ctx));
+  if (again?.editedFrom === first.id) return said(again) ? { call: { i, tool, args, answered: again.id } } : failed(ctx, i, tool, args, 'Refused by you');
+  const verdict = decide(run, ctx.gardener, { tool, args }, ctx);
+  const approve = verdict === 'ask' ? approveRequest(run, ctx, i, tool, args) : null;
+  if (verdict === 'deny' || (verdict === 'ask' && !approve)) return failed(ctx, i, tool, args, 'Not allowed.');
+  return approve?.sensitive ? { request: { ...approve, editedFrom: first.id, noEdit: true } } : { call: { i, tool, args, answered: first.id } };
+}
+
+/**
+ * The page stopped call `i` on a sensitive step: the approval for that step. A call run on an edited yes (`q`) is
+ * asked as that edit's follow-up, which can't be edited again.
+ */
+export function stopRequest(run: GardenRun, ctx: Ctx, i: number, tool: string, args: Record<string, unknown>, stop: { index: number; why: string }, q?: Request): Omit<Request, 'id'> | null {
+  const request = approveRequest(run, ctx, i, tool, args, stop);
+  const from = q?.answer?.args ? q.id : q?.editedFrom;
+  return request && from ? { ...request, editedFrom: from, noEdit: true } : request;
 }
 
 /**
@@ -146,11 +196,17 @@ export function approveRequest(run: GardenRun, ctx: Ctx, i: number, tool: string
 
 const budget = (run: GardenRun) => contextChars(run.maxTokens!);
 
-/** A think whose fixed part fits; the data is cut to the rest, so the engine never cuts. */
+/**
+ * A think whose fixed part fits; the data is cut to the rest, so the engine never cuts. The person's unused Steer
+ * messages are their own words, so they end the instruction part.
+ */
 function think(run: GardenRun, purpose: Turn['purpose'], prompt: string, data: string, taint = false): Action {
+  const steer = (run.inbox ?? []).filter((m) => m.steer && !m.usedAt);
+  if (steer.length) prompt += `\n\n${steer.map((m) => `The person adds: ${m.text}`).join('\n')}`;
   const room = budget(run) - prompt.length;
   if (room < 0) return { fail: TOO_LONG };
-  return { think: { purpose, prompt, data: data.slice(0, room), ...(purpose === 'word' ? {} : { sampling: GREEDY }), ...(taint && { taint: true as const }) } };
+  return { think: { purpose, prompt, data: data.slice(0, room), ...(purpose === 'word' ? {} : { sampling: GREEDY }), ...(taint && { taint: true as const }),
+    ...(steer.length && { steer: steer.map((m) => m.id) }) } };
 }
 
 // ponytail: notes get at most a third of the data room, so page results always keep the rest; tune if notes starve.

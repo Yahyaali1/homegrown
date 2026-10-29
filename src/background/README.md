@@ -65,9 +65,22 @@ It also owns these parts:
 - `garden.ts` handlers (docs/plan/S-gardeners.md): `gardenerList`, `gardenerSave`, `gardenerDelete`, `routineList`,
   `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, or `{ routineId }` for Run now), `runList`,
   `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`
-  (`{ runId, requestId, value, calls? }`: a `plan` request's yes may carry the edited calls, parsed again; its no stops
-  the run), `grantList` (`{ gardenerId? }`),
+  (`{ runId, requestId, value, calls?, args? }`: a `plan` request's yes may carry the edited calls, parsed again; its
+  no stops the run; an editable approve's yes may carry edited `args`), `requestAnswerAll` (`{ requests: { runId,
+  requestId }[] }`), `runMessage` (`{ id, text, steer: true }`), `grantList` (`{ gardenerId? }`),
   `grantRevoke` (`{ gardenerId, tool, host, argsKey }`).
+  - Edited approvals (`parseEdit`): only an `approve` for `act`, `draft` or `notify` without `noEdit`, only with
+    `yes` (`always` would grant the original call), args parsed again with `parseArgs` and stored as `answer.args`.
+    The loop checks the edited call as a new call; the `call` action names its answer (`answered`), which `call`
+    finds by id (`answeredBy`). An edited yes carries no sensitive reason of the original's; a stop in the page on an
+    edited call asks a `noEdit` follow-up (`stopRequest`).
+  - `requestAnswerAll` answers yes only where `approveAllOk` allows (non-sensitive `reach` in an untainted run,
+    non-sensitive `act` or `collect` approve), each checked again here; the rest are left.
+  - `runMessage`: a Steer message (≤ 1000 characters) joins `run.inbox` (also the live run's in memory, which the
+    turn saves). The next think puts it in the instruction part; the worker sets `usedAt` when the turn is stored.
+  - A `question` request with `questions` takes one JSON object of text answers keyed by its questions.
+  - `runMessage` refuses a 4th unused Steer message. `propose_routine`'s id is `<runId>.<step>`, so a re-run after a
+    restart stores nothing new.
   - `requestAnswer` (V2): `approve` takes `yes`, `no` or `always` (`always` stores a grant; not offered for a sensitive
     one), `reach` and `did-it-happen` take `yes` or `no`. It refuses after `expiresAt`, and refuses a sensitive
     approve answered less than 8 s after `shownAt` (worker clock; `requestShown` must come first).
@@ -97,7 +110,8 @@ It also owns these parts:
   - Worker start, once: `cancelOwner` (only if the offscreen document exists), `recover`, `closeLiveGroups`, then
     every routine's claim and alarm. A turn that throws fails its run in words.
   - Sends `{type:'garden-run', run}` (outputs cut to 300) to extension pages on every save.
-- `gardentools.ts`: `GARDEN_TOOLS` (`search`, `read_page`, `mission`, `draft`, `notify`, `act`, `collect`, `read_my_tab`),
+- `gardentools.ts`: `GARDEN_TOOLS` (`search`, `read_page`, `mission`, `draft`, `notify`, `act`, `collect`, `read_my_tab`,
+  `propose_routine`: stores `proposedRoutine`, paused and `by: 'model'`, in `routines`),
   `gardenAsk`, `gardenNotice`, `factsOf` (a recipe as policy sees it), `NeedsYou`.
   - `act` plays the approved steps in a run tab and returns the final URL, the step report and short page text.
     `collect` runs a saved recipe (`scrapeRecipe`) in the run's tabs with its pinned model; a closed tab (`TabClosed`) is rethrown, not a row, so an acting collect asks did-it-happen.

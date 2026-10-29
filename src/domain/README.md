@@ -66,31 +66,39 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener`, `Routine`, `GardenRun`, `Turn`, `Step`, `Request`, `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
+  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`), `Message`, `Turn`, `Step`, `Request` (`questions?`,
+    `editedFrom?`, `noEdit?`, `answer.args?`), `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
     `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
     `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`. Every record has `v: 1`; a parser returns `null` for
     a bad record or a newer `v`. A site is a bare host and matches its subdomains; a single label or a shared-hosting
     suffix is refused. A look never has 10 petals (the Homegrown mark's).
-  - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `localInstant`, `claim(routine, runs, now)`, `expired`.
+  - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `localInstant`, `claim(routine, runs, now)`, `expired`,
+    `proposedRoutine` (paused, `by: 'model'`, so `claim` never runs it until the person turns it on).
     Daily and weekly times walk local dates: a time that doesn't exist moves forward by the gap, an ambiguous one is
     its first instant. `claim` moves `nextDue` on, fails a waiting run, and queues a new run or (while one works)
     keeps the slot on `skipped` (last 5).
   - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,
-    `sensitiveSteps`, `onSites`, `addSeen`, `fromExtensionPage`, `SENSITIVE_WAIT` (8000 ms), `Grant`. Reach, taint,
-    acts and grants (ADR-16).
+    `sensitiveSteps`, `onSites`, `addSeen`, `fromExtensionPage`, `approveAllOk`, `SENSITIVE_WAIT` (8000 ms), `Grant`.
+    Reach, taint, acts and grants (ADR-16). `approveAllOk(q, run)` refuses any reach in a tainted run.
+    `propose_routine` is denied in a tainted run, and allowed only when its work names no URL off the
+    gardener's sites (read pages or URLs in a request) and none of the person's tabs.
   - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
     and has the page left the call's hosts. Bundled into the in-page step runner (`content/scenario.ts`), so the
     check and the step run in one call on the same element.
   - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
-    `refusal`, `parsePlan`, `answerPlan`, `OPEN_REFUSED`, `PLAN_REFUSED`, `BAD_REPLY`, `TOO_LONG`. Direct work
+    `refusal`, `parsePlan`, `answerPlan`, `answeredBy`, `parseEdit`, `stopRequest`, `OPEN_REFUSED`, `PLAN_REFUSED`,
+    `BAD_REPLY`, `TOO_LONG`. An answer with edited `args` makes the edited call a new call: a `noEdit` follow-up
+    (`editedFrom`) settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
+    unless it is sensitive now. Unused Steer messages end every think's instruction part ("The person adds: …"). Direct work
     (`read`, `mission`) issues fixed calls, then one `word` think; open work (`ask`, only with `agent.loop`) runs
     choose → repair → call … → answer → check; plan work (`plan`, only with the `plan` ability or `agent.loop`) runs
     plan → repair → the person's yes → each planned call → one `sum` think (ADR-18). A plan's `fromPlan` yes counts
     only where `decide` asks and the call isn't sensitive now. Notes go in the data, never the prompt. `answerPlan`
     changes the run it is given (as the worker's `updateRun` does).
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
-    `read_my_tab`), `ToolSpec`, `Arg`, `parseArgs`, `toolsFor`, `mentionsOf`, `mentionedTab`, `pageLinks` (at most
-    50). `parseArgs` refuses unknown keys and `evaluate` steps.
+    `read_my_tab`, `propose_routine`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
+    `parseArgs`, `toolsFor` (`propose_routine` only with `agent.loop` or in a plan), `mentionsOf`, `mentionedTab`,
+    `pageLinks` (at most 50). `parseArgs` refuses unknown keys and `evaluate` steps.
   - `notes.ts`: `Note`, `NOTE_CHARS` (500), `parseNote`, `forGardener`, `notesBlock`, `MEMORY_VERSION` (3),
     `upgradeMemory`. Notes as labelled data, whole notes only; the `eg-memory` upgrade runs one step per version.
 
@@ -143,5 +151,5 @@ contract. Where it differs, this list says so.
 
 - Run: `npm test` (the unit tests in `tests/unit/` cover `audio`, `compare`, `html`, `links`, `markdown`,
   `reading`, `settings`, `tasks`, `zip`, `research`, `scroll`, `organize`, and `csv` in `scrape.test.ts`; `garden/`
-  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes` and `garden-plan`, 71 tests)
+  in `garden-records`, `garden-schedule`, `garden-policy`, `garden-loop`, `garden-tabs`, `garden-notes`, `garden-plan` and `garden-steer`)
 - Type check: `npm run check`

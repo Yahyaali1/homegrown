@@ -70,6 +70,8 @@ export interface Routine {
   /** Slots skipped while the last run still worked (last 5); handed to the next run, then cleared. */
   skipped?: number[];
   createdAt: number;
+  /** Who wrote it; none is the person. A routine the model proposed is stored paused until the person turns it on. */
+  by?: 'person' | 'model' | 'preset';
 }
 
 export type Status = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
@@ -113,7 +115,11 @@ export interface GardenRun {
   interrupted?: number;
   /** The routine's skipped slots, shown as the run's first line. */
   skipped?: number[];
+  /** The person's messages to the run. A Steer message goes into the next think's instruction part, once (`usedAt`). */
+  inbox?: Message[];
 }
+
+export interface Message { id: string; text: string /* ≤ 1000 */; at: number; steer: boolean; usedAt?: number }
 
 export interface Turn {
   purpose: 'choose' | 'repair' | 'check' | 'word' | 'plan' | 'sum';
@@ -153,12 +159,20 @@ export interface Request {
   tabId?: number;
   shownAt?: number;
   expiresAt?: number;
-  /** approve: yes, no or always (a grant; never for a sensitive one); did-it-happen and reach: yes or no. */
-  answer?: { value: 'yes' | 'no' | 'always' | string; at: number };
+  /**
+   * approve: yes, no or always (a grant; never for a sensitive one); did-it-happen and reach: yes or no. `args`: a yes
+   * to the call as the person edited it, which code checks as a new call.
+   */
+  answer?: { value: 'yes' | 'no' | 'always' | string; at: number; args?: Record<string, unknown> };
   /** plan: the calls the model proposed. */
   calls?: PlannedCall[];
   /** An approve made by a plan's yes: it counts only where policy asks and the call is not sensitive at call time. */
   fromPlan?: true;
+  /** question: asked one at a time; the answer is one JSON object of answers, keyed by question. */
+  questions?: { q: string; options?: string[] }[];
+  /** An edited call asked again (it turned sensitive): the request whose edited yes it follows. It can't be edited again. */
+  editedFrom?: string;
+  noEdit?: true;
 }
 
 export const LIMITS = { sites: 20, urls: 5, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
@@ -270,6 +284,7 @@ export function parseRoutine(raw: unknown): Routine | null {
   const r: Routine = { v: 1, id: raw.id, gardenerId: raw.gardenerId, name: raw.name.trim(), when, tz: raw.tz, work, paused: raw.paused, nextDue: raw.nextDue, createdAt: raw.createdAt };
   if (typeof raw.lastRunId === 'string') r.lastRunId = raw.lastRunId;
   if (Array.isArray(raw.skipped)) r.skipped = raw.skipped.filter(time).slice(-LIMITS.skipped);
+  if (raw.by === 'person' || raw.by === 'model' || raw.by === 'preset') r.by = raw.by;
   return r;
 }
 

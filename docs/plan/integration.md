@@ -18,6 +18,10 @@ Done after the group agents report. Owner: the main session.
 - A: switches for `ghostText`, `useVoice`, `replyButtons`; memory/savings skip `quiet: true` requests — DONE by G.
 - C, D: `translateTo` field and `autoAltText` switch — DONE by G (settings.html).
 - G: `translateTo` name/code mismatch — DONE (translate.js). Remote model option removed by user decision: local model only.
+- T1 (plan T): `domain/model.ts` gains `Ability`, `ModelSpec.abilities` and `can(model, ability)`; `domain/text.ts`
+  gains `contextChars(maxTokens)`. DONE in c4cbc5e.
+- T2 (plan T): `static/sidepanel.html` gains `#chat-requests` (the request tray above the chat input) and the class
+  `tray` on both trays; `static/sidepanel.css` styles `.tray`. DONE.
 
 ## Known issues
 

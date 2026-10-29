@@ -69,7 +69,8 @@ notes · runs that survive restarts · signed-out reads off the gardener's sites
    | `hg-trust` | 3 | T11 | `connectors` |
 
    Meetings (T10) store into T7's `docs` and `entities`; they add no store.
-5. **Approvals never widen.** "Approve all" covers only non-sensitive `reach` and `approve` requests in gardener
+5. **Approvals never widen.** "Approve all" covers only non-sensitive `reach` requests of an untainted run (under
+   taint a reach guards against a leak) and non-sensitive `approve` requests in gardener
    tabs. It never covers a sensitive request, an act in the person's own tab, an app call, or a question.
 6. **Acting in the person's own tabs** is a new tool `act_my_tab`. Every call is asked. It can't be granted
    ("Always" is not offered), because the person's tab is signed in everywhere. Any `fill` in it is sensitive
@@ -954,12 +955,12 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 next.
+T1 done (commit c4cbc5e). T2 built, not yet committed or reviewed.
 
 | Slice | State |
 |---|---|
 | T1 | Done (c4cbc5e), reviewed (0 Blockers, 1 Major fixed): 187 unit tests pass; `tests/plan.spec.mjs` passes on the real model; `garden.spec` 4/4. `abilities.mjs plan`: E2B 3/8 (1 violation), E4B 5/8 (1 violation), so no model has `plan`, and Plan first stays off in the UI |
-| T2 | Planned |
+| T2 | Built, awaiting review: 196 unit tests pass (9 new in `garden-steer`); `tests/approvals.spec.mjs` 2/2 (no model); `garden.spec` 4/4 (before the review fixes; its sensitive test now waits on Library, as Chat shows the tray); `plan.spec` passes |
 | T3 | Planned |
 | T3b | Planned |
 | T4 | Planned |

@@ -254,6 +254,7 @@ How code decides:
 | Acts | `act` and acting `collect` recipes are asked every time, unless the person answered "always" to exactly that call: a grant in `hg-trust` bound to gardener, tool, host and `argsKey` (stable JSON of the args; for a recipe, of the whole recipe). |
 | Sensitive | `classify` runs in the page on the live element just before each acting step: password and card fields, words such as pay, buy, delete, send, confirm, a form or link to another host, a missing target, and typing after a signed-in read. A sensitive call is always asked, can't be granted, and the worker refuses a yes until 8 s after it was shown. A step that lands on another host stops the call. |
 | Code | The model never writes code steps: `evaluate` is refused by `parseArgs` and denied by policy. A recipe with code steps can't run in a gardener. |
+| Edits and Approve all | An approve card's edited args are parsed again and checked as a new call (taint and the 8 s rule apply to it); only a yes carries them, since "always" would grant the original. Approve all answers only non-sensitive `reach` and gardener-tab `act` / `collect` approves (`approveAllOk`), checked again in the worker. A routine the model proposes is stored paused until the person turns it on. |
 | Callers | Every garden handler needs an extension page (`isExtensionPage`). Only `runStop` and `runTakeover` also accept the run's own tab, through the lock bar's trusted clicks. |
 
 The strongest objections, answered:

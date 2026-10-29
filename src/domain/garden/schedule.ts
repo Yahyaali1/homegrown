@@ -1,6 +1,6 @@
 // When routines run. Daily and weekly times walk local calendar dates, not instants, so a fall-back day can't run
 // twice and a spring-forward day still runs once.
-import { LIMITS, newRun, type GardenRun, type Routine, type When } from './records.ts';
+import { LIMITS, newRun, type GardenRun, type Routine, type When, type Work } from './records.ts';
 
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 
@@ -67,3 +67,7 @@ export function claim(routine: Routine, runs: GardenRun[], now: number): { routi
   next.lastRunId = run.id;
   return { routine: next, newRun: run, fail };
 }
+
+/** A routine the model proposed: paused, `by: 'model'`, until the person turns it on from an extension page. */
+export const proposedRoutine = (o: { id: string; gardenerId: string; name: string; when: When; work: Work; tz: string; now: number }): Routine =>
+  ({ v: 1, id: o.id, gardenerId: o.gardenerId, name: o.name.trim(), when: o.when, tz: o.tz, work: o.work, paused: true, by: 'model', nextDue: nextAfter(o.when, o.tz, null, o.now), createdAt: o.now });

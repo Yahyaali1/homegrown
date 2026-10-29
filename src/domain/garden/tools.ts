@@ -1,7 +1,7 @@
 // The tools a gardener's model may call: names, arguments and limits. Implementations live in background/gardentools.ts.
 import type { Effect } from './policy.ts';
 import { parseScenario, type Scenario } from '../scrape/scenario.ts';
-import { LIMITS, bare, type GardenRun, type Mention } from './records.ts';
+import { LIMITS, bare, parseWhen, parseWork, type GardenRun, type Mention } from './records.ts';
 
 export type Arg =
   | { type: 'string'; max: number }
@@ -9,7 +9,9 @@ export type Arg =
   | { type: 'enum'; values: string[] }
   | { type: 'list'; max: number; item: { type: 'string'; max: number } }
   /** js_scenario steps (an object with `instructions`, its JSON, or the list itself); never `evaluate`. */
-  | { type: 'scenario' };
+  | { type: 'scenario' }
+  /** A record its parser takes (null: refused); the parsed record is kept. */
+  | { type: 'record'; parse: (v: unknown) => unknown };
 
 export interface ToolSpec {
   name: string;
@@ -30,6 +32,7 @@ const okArg = (a: Arg, v: unknown): boolean => {
     case 'enum': return typeof v === 'string' && a.values.includes(v);
     case 'list': return Array.isArray(v) && v.length <= a.max && v.every((x) => okArg(a.item, x));
     case 'scenario': return !!scenarioOf(v);
+    case 'record': return a.parse(v) !== null;
   }
 };
 
@@ -41,7 +44,10 @@ export function parseArgs(spec: ToolSpec, raw: unknown): Record<string, unknown>
   for (const [k, a] of Object.entries(spec.args)) {
     if (!Object.hasOwn(args, k) || args[k] === undefined ? !a.optional : !okArg(a, args[k])) return null;
   }
-  return Object.fromEntries(Object.entries(args).map(([k, v]) => [k, spec.args[k]!.type === 'scenario' ? scenarioOf(v) : v]));
+  return Object.fromEntries(Object.entries(args).map(([k, v]) => {
+    const a = spec.args[k]!;
+    return [k, a.type === 'scenario' ? scenarioOf(v) : a.type === 'record' ? a.parse(v) : v];
+  }));
 }
 
 export const TOOLS: ToolSpec[] = [
@@ -57,13 +63,19 @@ export const TOOLS: ToolSpec[] = [
   { name: 'collect', describe: 'run one of the person\'s saved Collect recipes by its id; gives its rows', args: { recipe: { type: 'string', max: 200 } }, effect: 'read' },
   // Offered only when the person named tabs (toolsFor).
   { name: 'read_my_tab', describe: 'read one of the person\'s open tabs they named; tab: its URL exactly as listed', args: { tab: { type: 'string', max: 2000 } }, effect: 'read' },
+  // Stored paused (by: 'model') until the person turns it on. Offered only with a loop or in a plan (toolsFor).
+  { name: 'propose_routine', describe: 'propose a routine the person may turn on; when: {"kind": "daily", "at": "08:00"}, {"kind": "every", "hours": 6} or {"kind": "weekly", "days": [1], "at": "08:00"}; work: {"kind": "read", "urls": ["…"]}', args: { name: { type: 'string', max: 80 }, when: { type: 'record', parse: parseWhen }, work: { type: 'record', parse: parseWork } }, effect: 'read' },
 ];
+
+/** Tools whose approve card shows the args as fields the person may edit before Yes. */
+export const EDITABLE = ['act', 'draft', 'notify'];
 
 /** The tabs the person named for this run. */
 export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);
 
-/** The tools offered to this run: `read_my_tab` only when the person named tabs. */
-export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS): ToolSpec[] => tools.filter((t) => t.name !== 'read_my_tab' || mentionsOf(run).length > 0);
+/** The tools offered to this run: `read_my_tab` only when the person named tabs, `propose_routine` only with a loop or in a plan. */
+export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS): ToolSpec[] => tools.filter((t) =>
+  (t.name !== 'read_my_tab' || mentionsOf(run).length > 0) && (t.name !== 'propose_routine' || !!run.agent?.loop || run.work.kind === 'plan'));
 
 /**
  * The open tab a mention points at now, or why there is none. Named by hand: that same tab, still on the URL it had.

@@ -1,27 +1,28 @@
 // The Garden tab: gardeners, their routines, requests that need you, and runs. The worker (background/garden.ts) does
 // the work and broadcasts { type: 'garden-run', run } on every change; this only shows it and sends your answers.
 // Rows are kept by id and updated in place, so a flower that has grown stays still (docs/design-philosophy.md).
-import { $, busyButton, button, emptyPot } from './shell.ts';
+import { $, busyButton, button, emptyPot, errLine, fail, labelled, place, tryIt } from './shell.ts';
+import { tray, type Open } from './tray.ts';
 import { h } from '../ui/dom.ts';
 import { flower, runStage } from '../ui/flower.ts';
 import { can, modelById } from '../domain/model.ts';
 import { parseSettings } from '../domain/settings.ts';
 import { nextAfter } from '../domain/garden/schedule.ts';
-import { lookOf, randomLook, type Gardener, type GardenRun, type Look, type Mention, type PlannedCall, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
+import { lookOf, randomLook, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
 import type { Note } from '../domain/garden/notes.ts';
 import { hostOf } from '../domain/text.ts';
-import { SENSITIVE_WAIT, type Grant } from '../domain/garden/policy.ts';
+import type { Grant } from '../domain/garden/policy.ts';
 import { describe, parseScenario } from '../domain/scrape/scenario.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
 
 type Listed = Routine & { next: number };
-type Row = HTMLLIElement & { stage?: string; look?: string; sync?: (q: Request) => void };
+type Row = HTMLLIElement & { stage?: string; look?: string };
 let gardeners: Gardener[] = [];
 let routines: Listed[] = [];
 let loaded = false; // rows added after the first load get the entrance
 const runs = new Map<string, GardenRun>();
 const runRows = new Map<string, Row>();
-const requestRows = new Map<string, Row>(); // kept across renders, so a typed answer survives
+const steerForms = new Map<string, HTMLFormElement>(); // run id → its Steer box (a typed message survives)
 const routineForms = new Map<string, HTMLDetailsElement>(); // gardener id → its open, half-filled form survives
 const nextLines = new Map<string, HTMLElement>(); // routine id → its "Next:" line
 const grantLists = new Map<string, HTMLElement>(); // gardener id → its "Allowed actions" box
@@ -41,11 +42,6 @@ const whenText = (w: When) => (w.kind === 'every' ? `every ${w.hours === 1 ? 'ho
 const workText = (w: Work) => (w.kind === 'read' ? `reads ${w.urls.length === 1 ? w.urls[0] : `${w.urls.length} pages`}` : w.kind === 'mission' ? `mission: ${w.goal}` : `${w.kind === 'plan' ? 'plans' : 'asks'}: ${w.request}`);
 const nextText = (r: Listed) => (r.paused ? 'Paused' : `Next: ${at(r.next)}`);
 const select = (label: string, opts: [string, string][]) => h('select', { attrs: { 'aria-label': label } }, ...opts.map(([v, t]) => new Option(t, v)));
-const fail = (el: HTMLElement, e: unknown) => ((el.textContent = e instanceof Error ? e.message : String(e)), (el.hidden = false));
-const errLine = () => h('span', { className: 'err', hidden: true });
-const labelled = <T extends HTMLElement>(el: T, label: string) => (el.setAttribute('aria-label', label), el);
-/** A button's action: its error shows in `err`, inside its own row. */
-const tryIt = (err: HTMLElement, fn: () => Promise<unknown>) => () => ((err.hidden = true), fn().catch((e) => fail(err, e)));
 
 const loadError = errLine(); // a failed load
 $('#garden').prepend(loadError);
@@ -57,12 +53,6 @@ $('#garden').prepend(loadError);
 const lookFor = (gardenerId: string): Look => lookOf(gardeners.find((x) => x.id === gardenerId) ?? { id: gardenerId });
 const lookKey = (l: Look) => `${l.petals}/${l.lean}`;
 
-/** Keeps the nodes in order without re-inserting the ones already in place (re-inserting restarts their motion). */
-function place(parent: HTMLElement, nodes: Node[]): void {
-  const keep = new Set(nodes);
-  for (const c of [...parent.childNodes]) if (!keep.has(c)) c.remove();
-  nodes.forEach((n, i) => parent.childNodes[i] !== n && parent.insertBefore(n, parent.childNodes[i] ?? null));
-}
 /** A new row: the entrance once, unless it is part of the first load. */
 const fresh = (li: HTMLLIElement): Row => (loaded && li.classList.add('enter'), li);
 /** Sets the row's flower only when its stage changed, so a grown flower doesn't grow again. */
@@ -212,12 +202,16 @@ async function loadGrants(gardenerId: string): Promise<void> {
 
 function routineItem(r: Listed): HTMLLIElement {
   const err = errLine();
-  const next = h('span', { className: 'result', textContent: nextText(r) });
+  // A routine the gardener (or a preset) proposed stays off until the person turns it on here.
+  const proposed = r.paused && r.by !== undefined && r.by !== 'person';
+  const next = h('span', { className: 'result', textContent: proposed ? `Proposed by ${gardeners.find((x) => x.id === r.gardenerId)?.name ?? 'a gardener'}. Turn on?` : nextText(r) });
   nextLines.set(r.id, next);
   return h('li', {},
-    h('span', { className: 't' }, h('b', { textContent: r.name }), h('span', { className: 'p', textContent: `${whenText(r.when)} · ${workText(r.work)}` }), next),
+    h('span', { className: 't' }, h('b', { textContent: r.name }), h('span', { className: 'p', textContent: `${whenText(r.when)} · ${workText(r.work)}` }),
+      // Proposed: every page it would read, before the person turns it on (the goal and request are in full above).
+      proposed && r.work.kind === 'read' && h('span', { className: 'result', textContent: r.work.urls.join('\n') }), next),
     h('div', { className: 'actions' },
-      labelled(busyButton(r.paused ? 'Resume' : 'Pause', tryIt(err, async () => (await bg('routineSave', { routine: { ...r, paused: !r.paused } }), await renderGarden())), 'ghost'), `${r.paused ? 'Resume' : 'Pause'} ${r.name}`),
+      labelled(busyButton(proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause', tryIt(err, async () => (await bg('routineSave', { routine: { ...r, paused: !r.paused } }), await renderGarden())), 'ghost'), `${proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause'} ${r.name}`),
       labelled(busyButton('Run now', tryIt(err, () => bg('gardenRun', { routineId: r.id })), 'secondary'), `Run ${r.name} now`),
       labelled(busyButton('Delete', tryIt(err, async () => (await bg('routineDelete', { id: r.id }), await renderGarden())), 'ghost'), `Delete ${r.name}`)),
     err);
@@ -228,7 +222,7 @@ async function refreshNext(): Promise<void> {
   routines = await bg<Listed[]>('routineList').catch(() => routines);
   for (const r of routines) {
     const el = nextLines.get(r.id);
-    if (el) el.textContent = nextText(r);
+    if (el && !r.paused) el.textContent = nextText(r);
   }
 }
 
@@ -376,10 +370,14 @@ const nameOf = (run: GardenRun) => [gardeners.find((x) => x.id === run.gardenerI
 
 const ANSWERED_HERE: Request['kind'][] = ['reach', 'question', 'approve', 'did-it-happen', 'takeover', 'plan'];
 
-/** Requests: reach, approve and did-it-happen (yes / no, plus "always" for an approve that isn't sensitive), and question (a text answer). */
+// The same open requests at the top of Garden and above the chat input.
+const deps = { nameOf, lookFor, who: (id: string) => gardeners.find((x) => x.id === id)?.name ?? 'the gardener', fresh, place, granted: (id: string) => void loadGrants(id) };
+const trays = [tray($('#garden-requests'), deps), tray($('#chat-requests'), deps)];
+
+/** Requests that need you, in both trays; reported shown once a tray showing them is on screen. */
 function renderRequests(list: GardenRun[]): void {
-  const open = list.filter((r) => r.status === 'waiting').flatMap((run) => run.requests.filter((q) => !q.answer && ANSWERED_HERE.includes(q.kind)).map((q) => ({ run, q })));
-  if (!$('#garden').hidden) {
+  const open: Open[] = list.filter((r) => r.status === 'waiting').flatMap((run) => run.requests.filter((q) => !q.answer && ANSWERED_HERE.includes(q.kind)).map((q) => ({ run, q })));
+  if (!$('#garden').hidden || !$('#chat').hidden) {
     for (const { run, q } of open) {
       const key = `${run.id}/${q.id}`;
       if (q.shownAt !== undefined || shown.has(key)) continue;
@@ -387,107 +385,11 @@ function renderRequests(list: GardenRun[]): void {
       bg('requestShown', { runId: run.id, requestId: q.id }).catch(() => shown.delete(key));
     }
   }
-  const keep = new Map(open.map(({ run, q }) => {
-    const key = `${run.id}/${q.id}`;
-    const li = requestRows.get(key) ?? requestRow(run, q);
-    li.sync?.(q); // shownAt arrives with the next broadcast
-    return [key, li] as const;
-  }));
-  requestRows.clear();
-  for (const [k, li] of keep) requestRows.set(k, li);
-  place($('#garden-requests'), [...keep.values()]);
+  for (const t of trays) t(open);
 }
 
-function requestRow(run: GardenRun, q: Request): Row {
-  const err = errLine();
-  const textId = `req-${run.id}-${q.id}`;
-  const answer = (value: string, more: { calls?: PlannedCall[] } = {}) => bg('requestAnswer', { runId: run.id, requestId: q.id, value, ...more })
-    .then(() => (value === 'always' ? loadGrants(run.gardenerId) : undefined)).catch((e) => fail(err, e));
-  const described = <T extends HTMLElement>(el: T) => (el.setAttribute('aria-describedby', textId), el);
-  const yesNo = (...more: HTMLElement[]) => {
-    const yes = described(busyButton('Yes', () => answer('yes'), 'primary'));
-    return { yes, el: h('div', { className: 'row' }, yes, described(busyButton('No', () => answer('no'), 'secondary')), ...more) };
-  };
-  const lead: HTMLElement[] = [];
-  let reply: HTMLElement;
-  let sync: Row['sync'];
-  if (q.kind === 'question') {
-    const box = described(h('input', { placeholder: 'Your answer', maxLength: 2000, attrs: { 'aria-label': 'Your answer' } }));
-    reply = h('form', { className: 'row' }, box, h('button', { className: 'primary', textContent: 'Send' }));
-    reply.onsubmit = (e) => (e.preventDefault(), box.value.trim() && void answer(box.value.trim()));
-  } else if (q.kind === 'approve' && q.sensitive) {
-    // The worker refuses yes until 8 s after it was shown (its shownAt): the wait is words and a 2px bar, no ring.
-    const { yes, el } = yesNo();
-    yes.disabled = true;
-    const wait = h('span', { className: 'muted small', textContent: 'Read it first.' });
-    const bar = h('div', { className: 'wait-bar', hidden: true }); // shown, and so animated, once shownAt is known
-    let timer = 0;
-    sync = (r) => {
-      if (r.shownAt === undefined || timer) return;
-      const tick = () => {
-        const left = r.shownAt! + SENSITIVE_WAIT + 250 - Date.now();
-        if (left <= 0 || !bar.isConnected) {
-          clearInterval(timer);
-          yes.disabled = false;
-          wait.textContent = 'Check the steps above, then answer.';
-          bar.remove();
-          return;
-        }
-        wait.textContent = `Read it first: Yes opens in ${Math.ceil(left / 1000)} s.`;
-      };
-      bar.style.animationDuration = `${Math.max(0, r.shownAt + SENSITIVE_WAIT - Date.now())}ms`;
-      bar.hidden = false;
-      timer = window.setInterval(tick, 500);
-      tick();
-    };
-    lead.push(h('span', { className: 'p', textContent: `Sensitive, on ${q.host ?? 'this site'}: you are asked every time.` }));
-    reply = h('div', { className: 'stack' }, bar, wait, el);
-  } else if (q.kind === 'approve') {
-    const hint = h('span', { className: 'muted small', id: `${textId}-always`, textContent: `Always: allow this exact action on ${q.host} without asking again. Revoke it under the gardener.` });
-    const always = labelled(busyButton('Always', () => answer('always'), 'ghost'), `Always allow this exact action on ${q.host}`);
-    always.setAttribute('aria-describedby', hint.id);
-    lead.push(h('span', { className: 'p', textContent: `On ${q.host}` }));
-    reply = h('div', { className: 'stack' }, yesNo(always).el, hint);
-  } else if (q.kind === 'plan') {
-    const plan = planList(q.calls ?? []);
-    lead.push(h('span', { className: 'p', textContent: 'Yes runs these steps in this order. The pages in it may open; acts that turn sensitive, and anything not in it, still ask.' }));
-    const yes = described(busyButton('Yes', tryIt(err, async () => answer('yes', { calls: plan.calls() })), 'primary'));
-    reply = h('div', { className: 'stack' }, plan.el, h('div', { className: 'row' }, yes, described(busyButton('No', () => answer('no'), 'secondary'))));
-  } else if (q.kind === 'takeover') {
-    // Handing back: a read the person interrupted runs again; an act asks whether it happened.
-    const who = gardeners.find((x) => x.id === run.gardenerId)?.name ?? 'the gardener';
-    reply = h('div', { className: 'row' }, described(busyButton(`Hand back to ${who}`, () => answer('yes'), 'primary')));
-  } else {
-    if (q.kind === 'did-it-happen') lead.push(h('span', { className: 'p', textContent: 'Homegrown stopped while this was running, so it can’t tell whether it happened. Check the page, then answer.' }));
-    reply = yesNo().el;
-  }
-  const li: Row = fresh(h('li', { className: 'request' }, flower(26, runStage(run), lookFor(run.gardenerId)),
-    h('span', { className: 't' }, h('b', { textContent: nameOf(run) }), ...lead, h('span', { className: 'result', id: textId, textContent: q.text }), reply, err)));
-  if (sync) li.sync = sync;
-  return li;
-}
-
-/** A plan to edit before Yes: delete and reorder steps, change a step's arguments (JSON; the worker checks them again). */
-function planList(calls: PlannedCall[]): { el: HTMLOListElement; calls: () => PlannedCall[] } {
-  const el = h('ol', { className: 'stack' }, ...calls.map((c) => {
-    const what = `${c.tool} ${String(Object.values(c.args)[0] ?? '').slice(0, 80)}`;
-    const args = h('textarea', { rows: 2, value: JSON.stringify(c.args), attrs: { 'aria-label': `Arguments: ${what}` } });
-    const li: HTMLLIElement = h('li', { dataset: { tool: c.tool } }, h('b', { textContent: c.tool }), args,
-      h('div', { className: 'row' },
-        labelled(button('↑', () => li.previousElementSibling?.before(li), 'ghost'), `Move up: ${what}`),
-        labelled(button('↓', () => li.nextElementSibling?.after(li), 'ghost'), `Move down: ${what}`),
-        labelled(button('✕', () => li.remove(), 'ghost'), `Delete: ${what}`)));
-    return li;
-  }));
-  const read = (li: HTMLLIElement, j: number): PlannedCall => {
-    try {
-      return { tool: li.dataset.tool!, args: JSON.parse(li.querySelector('textarea')!.value) as Record<string, unknown> };
-    } catch {
-      throw new Error(`Step ${j + 1}’s arguments aren’t valid JSON.`);
-    }
-  };
-  return { el, calls: () => [...el.querySelectorAll<HTMLLIElement>(':scope > li')].map(read) };
-}
+/** The tray just came on screen (the Chat tab): its requests count as shown from now. */
+export const showRequests = () => renderRequests([...runs.values()]);
 
 /** Refills a run's row; its flower changes only with its stage. */
 function fillRun(li: Row, run: GardenRun): void {
@@ -517,10 +419,31 @@ function fillRun(li: Row, run: GardenRun): void {
   // Here too, not only on the page: a page can try to hide its lock bar.
   const take = locked ? labelled(busyButton('Take over', tryIt(err, () => bg('runTakeover', { id: run.id })), 'secondary'), `Take over from ${name}`) : null;
   const flowerEl = li.firstElementChild!;
+  if (!active) steerForms.delete(run.id);
   li.replaceChildren(flowerEl,
     h('span', { className: 't' }, h('b', { textContent: name }), h('span', { className: 'p', textContent: `${status} · ${at(run.endedAt ?? run.startedAt ?? run.queuedAt)}` }),
-      result && h('span', { className: 'result', textContent: result }), ...(Array.isArray(detail) ? detail : [detail]), err),
+      result && h('span', { className: 'result', textContent: result }), ...(Array.isArray(detail) ? detail : [detail]), active && steerBox(run.id), err),
     take ? h('div', { className: 'actions' }, take, act) : act);
+}
+
+/** Steer: the person's words for the run's next think (its next step's choice, or its answer). */
+function steerBox(runId: string): HTMLFormElement {
+  let form = steerForms.get(runId);
+  if (form) return form;
+  const text = h('input', { placeholder: 'Steer: add something for its next step', maxLength: 1000, attrs: { 'aria-label': 'Steer this run' } });
+  const err = errLine();
+  form = h('form', { className: 'row steer' }, text, h('button', { className: 'ghost', textContent: 'Steer' }), err);
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    if (!text.value.trim()) return;
+    void tryIt(err, async () => {
+      await bg('runMessage', { id: runId, text: text.value, steer: true });
+      text.value = '';
+      text.placeholder = 'Sent. It reads it at its next think.';
+    })();
+  };
+  steerForms.set(runId, form);
+  return form;
 }
 
 const skippedLines = (run: GardenRun) => (run.skipped ?? []).map((t) => h('div', { className: 'muted small', textContent: `Skipped ${at(t)}: the last run was still working` }));
@@ -554,6 +477,8 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (isNew && run.routineId) void refreshNext();
   // A note it took shows in its notebook once the step is done.
   if (run.steps.at(-1)?.tool === 'note' && run.steps.at(-1)?.state === 'done') void loadNotes(run.gardenerId);
+  // A routine it proposed shows under it, off.
+  if (run.steps.at(-1)?.tool === 'propose_routine' && run.steps.at(-1)?.state === 'done') void renderGarden();
 });
 
 void renderGarden();

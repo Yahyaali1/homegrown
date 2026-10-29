@@ -4,7 +4,7 @@
 import { $, busyButton, button, emptyPot, row } from './shell.ts';
 import './settings.ts';
 import './library.ts';
-import { renderGarden } from './garden.ts';
+import { renderGarden, showRequests } from './garden.ts';
 import { h } from '../ui/dom.ts';
 import { flower, MISSION_STAGE, type FlowerState } from '../ui/flower.ts';
 import { MODELS, modelById, supports, TASKS, type TaskId } from '../domain/model.ts';
@@ -95,6 +95,7 @@ function showTab(name: string): void {
   for (const s of document.querySelectorAll<HTMLElement>('main > [role=tabpanel]')) s.hidden = s.id !== name;
   try { localStorage.tab = name; } catch {}
   if (name === 'garden') void renderGarden();
+  if (name === 'chat') showRequests();
 }
 for (const b of document.querySelectorAll<HTMLElement>('.tabs [role=tab]')) b.onclick = () => showTab(b.dataset.tab ?? 'chat');
 try { if (localStorage.tab && document.getElementById(localStorage.tab)) showTab(localStorage.tab); } catch {}

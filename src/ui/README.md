@@ -5,6 +5,7 @@
 DOM helpers for the in-page UI and the extension pages:
 
 - `dom.ts`: a typed element builder.
+- `questions.ts`: a question block, asked one at a time.
 - `flower.ts`: the Homegrown SVG mark and its animation states.
 - `theme.ts`: applies the light, dark or system theme.
 - `theme-early.ts`: applies the theme before the first paint.
@@ -19,6 +20,8 @@ DOM helpers for the in-page UI and the extension pages:
     - `dataset`: assigned to `el.dataset`.
     - `attrs`: each entry is set with `setAttribute`.
   - `Child`: a node, string or number. `null`, `undefined` and `false` are skipped.
+- `questions.ts`: `questions(list, done)`. Each `{ q, options? }` shows with its options as ghost buttons and a short
+  answer field; `done` gets one object of answers keyed by question. Used by the request tray (and chat, plan T6).
 - `flower.ts`
   - `FlowerState`: `''`, `sprout`, `thinking`, `bloom`, `wilt` or `stage-0` to `stage-3`.
   - `flowerHtml(size, state)`: the mark as an SVG string. The defaults are size 20 and state `''`.

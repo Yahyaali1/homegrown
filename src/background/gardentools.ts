@@ -17,7 +17,8 @@ import { describe, type Instruction, type Scenario } from '../domain/scrape/scen
 import type { Check } from '../domain/garden/classify.ts';
 import type { Recipe } from '../domain/scrape/recipe.ts';
 import { mentionedTab, mentionsOf, pageLinks } from '../domain/garden/tools.ts';
-import { LIMITS, type Gardener, type GardenRun, type Seen } from '../domain/garden/records.ts';
+import { proposedRoutine } from '../domain/garden/schedule.ts';
+import { LIMITS, type Gardener, type GardenRun, type Seen, type When, type Work } from '../domain/garden/records.ts';
 
 export const MODEL_CHANGED = 'The model changed during the run.';
 const SNAPSHOT_CHARS = 20000; // as monitors.ts keeps
@@ -195,5 +196,16 @@ async function readMyTab({ tab }: { tab: string }, c: ToolCtx): Promise<ToolResu
   return { output: text, n: text.length, unit: 'chars', taint: true };
 }
 
+/** A routine the model proposes: stored paused, by the model, so it runs only after the person turns it on. */
+async function proposeRoutine({ name, when, work }: { name: string; when: When; work: Work }, c: ToolCtx): Promise<ToolResult> {
+  // Its id comes from the run and step, so a call run again after a restart doesn't store it twice or undo a turn-on.
+  const id = `${c.run.id}.${c.i}`;
+  const old = await idb.get<{ name: string }>(c.db, 'routines', id);
+  if (old) return { output: `Proposed “${old.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results' };
+  const r = proposedRoutine({ id, gardenerId: c.gardener.id, name, when, work, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, now: Date.now() });
+  await idb.put(c.db, 'routines', r);
+  return { output: `Proposed “${r.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results' };
+}
+
 // Args are already checked against their specs (parseArgs, or the routine's own work).
-export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab };
+export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, propose_routine: proposeRoutine };

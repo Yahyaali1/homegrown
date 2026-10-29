@@ -155,19 +155,23 @@ footer b { color: var(--muted); font-weight: 600; }
 #garden details > summary { cursor: pointer; color: var(--muted); font-size: var(--t-sm); }
 #garden details[open] > summary { margin-bottom: 8px; }
 #garden > h3:first-of-type, .card > h3 { margin-top: 0; }
-#garden-runs li > .flower, #garden-requests li > .flower { flex: none; }
-#garden-runs li.enter, #garden-requests li.enter { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
-#garden-runs .result, #garden-requests .result { white-space: pre-wrap; overflow-wrap: anywhere; }
+#garden-runs li > .flower, .tray li > .flower { flex: none; }
+#garden-runs li.enter, .tray li.enter { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+#garden-runs .result, .tray .result { white-space: pre-wrap; overflow-wrap: anywhere; }
 #garden-runs .t > div { overflow-wrap: anywhere; margin-top: 4px; }
 #garden-runs .draft { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px; border-radius: var(--r-sm); background: var(--chip); }
 #garden-runs .draft .text { white-space: pre-wrap; font-size: var(--t-sm); }
 #garden-runs .draft button { height: 24px; padding: 0 8px; }
-#garden-requests:empty { display: none; }
+.tray:empty { display: none; }
+.dock .tray { max-height: 40vh; overflow-y: auto; margin: 0; }
+.tray .tray-bar { align-items: center; }
+.tray .tray-bar > button { flex: none; }
+.tray .edit input, .tray .edit textarea, #garden-runs .steer input { font: inherit; }
 .gardener .head > .flower { margin-top: 1px; }
 #gardener-form .look { align-items: center; }
 .gardener .notebook .list li { flex-direction: row; align-items: flex-start; }
 .notebook .list li > button { height: 26px; padding: 0 8px; flex: none; }
 .notebook form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .notebook .result { white-space: pre-wrap; overflow-wrap: anywhere; }
-#garden-requests .wait-bar { height: 2px; border-radius: 2px; background: var(--fg); opacity: .5; transform-origin: left; animation: hg-wait linear forwards; }
+#chat-requests .wait-bar, #garden-requests .wait-bar { height: 2px; border-radius: 2px; background: var(--fg); opacity: .5; transform-origin: left; animation: hg-wait linear forwards; }
 @keyframes hg-wait { from { transform: scaleX(1); } to { transform: scaleX(0); } }

@@ -10,12 +10,12 @@ import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
-import { answerFor, answerPlan, approveRequest, digest, next, OPEN_REFUSED, PLAN_REFUSED, recover, refusal, said, type Ctx } from '../domain/garden/loop.ts';
-import { actOf, addSeen, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known } from '../domain/garden/policy.ts';
+import { answeredBy, answerFor, answerPlan, approveRequest, digest, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, recover, refusal, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
+import { actOf, addSeen, approveAllOk, callKey, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
 import { claim, expired, nextAfter } from '../domain/garden/schedule.ts';
 import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
-import { newRun, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Status, type Step, type Work } from '../domain/garden/records.ts';
+import { newRun, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
@@ -85,7 +85,7 @@ async function fire(routineId: string): Promise<void> {
 
 // ---- the queue: one run at a time, oldest first ----
 
-let live: { id: string; name: string; tab: Run } | null = null;
+let live: { id: string; name: string; tab: Run; run: GardenRun } | null = null;
 let draining: Promise<void> | null = null;
 let dirty = false;
 
@@ -140,7 +140,7 @@ async function turn(run: GardenRun): Promise<void> {
   const stop = new AbortController();
   // Set before any await: runStop finds the run and aborts it, and a stopped turn saves nothing more.
   const tab: Run = { id: run.id, stop };
-  live = { id: run.id, name: '', tab };
+  live = { id: run.id, name: '', tab, run };
   const save = () => (stop.signal.aborted ? Promise.resolve() : saveRun(run));
   const finish = (status: Status, why?: string) => (stop.signal.aborted ? undefined : saveRun(end(run, status, why)));
   const d = await db;
@@ -157,6 +157,8 @@ async function turn(run: GardenRun): Promise<void> {
   const going = await idb.tx(d, 'runs', 'readwrite', async (t) => {
     const now = parseRun(await idb.req(t.objectStore('runs').get(run.id)));
     if (now?.status !== 'queued' || stop.signal.aborted) return false;
+    // A Steer message sent after the queue read the run, before it went live.
+    for (const m of now.inbox ?? []) if (!run.inbox?.some((x) => x.id === m.id)) (run.inbox ??= []).push(m);
     t.objectStore('runs').put(run);
     return true;
   });
@@ -204,7 +206,10 @@ async function turn(run: GardenRun): Promise<void> {
         // Out of time (the signal's timeout): next() ends the run with what it has.
         run.usedMs = signal.aborted ? Math.max(budget, run.usedMs) : run.usedMs + Date.now() - t0;
         if (error || (r && r.model !== run.model)) return await finish('failed', error || MODEL_CHANGED);
-        if (r) run.turns.push({ purpose: a.think.purpose, reply: r.text, at: Date.now() });
+        if (r) {
+          run.turns.push({ purpose: a.think.purpose, reply: r.text, at: Date.now() });
+          for (const m of run.inbox ?? []) if (a.think.steer?.includes(m.id)) m.usedAt = Date.now();
+        }
       } else if ('call' in a) {
         if ((await call(run, ctx, tab, a.call, save)) === 'wait') {
           run.status = 'waiting';
@@ -239,18 +244,19 @@ function setStep(run: GardenRun, step: Step): void {
 }
 
 /**
- * One tool call: policy first (unless the person answered exactly this call), stored as started, then run. 'wait':
- * the page showed an acting step to be sensitive, and the person was asked.
+ * One tool call: policy first (unless the person answered exactly this call, or the action names its answer), stored
+ * as started, then run. 'wait': the page showed an acting step to be sensitive, and the person was asked.
  */
-async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: string; args: Record<string, unknown> }, save: () => Promise<void>): Promise<'wait' | void> {
+async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: string; args: Record<string, unknown>; answered?: string }, save: () => Promise<void>): Promise<'wait' | void> {
   const { i, tool, args } = c;
   const { gardener } = ctx;
   const act = actOf({ tool, args }, ctx);
   const effect = act ? 'act' : TOOLS.find((t) => t.name === tool)?.effect ?? 'act';
   const key = callKey({ tool, args }, ctx);
-  const q = answerFor(run, i, tool, key);
+  // An edited call's answer is found by id, not by key, so it can't be missed and the call dropped.
+  const q = c.answered ? answeredBy(run, c.answered) : answerFor(run, i, tool, key);
   const impl = GARDEN_TOOLS[tool];
-  let verdict = q && !q.fromPlan ? (said(q) ? 'allow' : 'deny') : decide(run, gardener, { tool, args }, ctx);
+  let verdict: Verdict = c.answered ? (q ? 'allow' : 'deny') : q && !q.fromPlan ? (said(q) ? 'allow' : 'deny') : decide(run, gardener, { tool, args }, ctx);
   // A plan's yes counts only where policy asks and the call isn't sensitive now (as in next()).
   if (verdict === 'ask' && q?.fromPlan && approveRequest(run, ctx, i, tool, args)?.sensitive === false) verdict = 'allow';
   // A resumed call that now needs the person: drop its started step, and next() asks them as for a new call.
@@ -272,8 +278,9 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
   if (run.tainted && hosts) tab.prepare = (t) => cookieRule(t, gardener.sites, [...gardener.sites, ...hosts.filter(Boolean)]);
   const t0 = Date.now();
   try {
-    // A sensitive yes covers its reason (and its one stopped step) only; any other sensitive step asks again.
-    const ok = q?.sensitive && said(q) && q.why ? { why: q.why, ...(q.index !== undefined && { index: q.index }) } : undefined;
+    // A sensitive yes covers its reason (and its one stopped step) only; any other sensitive step asks again. An
+    // edited yes covers no reason of the original's: the edit is a new call.
+    const ok = q?.sensitive && said(q) && q.why && !q.answer?.args ? { why: q.why, ...(q.index !== undefined && { index: q.index }) } : undefined;
     const reach = (url: string) => decide(run, gardener, { tool: 'read_page', args: { url } }) === 'allow';
     const r = await impl(args as never, { run, gardener, tab, i, db: await db, key, reach, ...(ok && { ok }) } satisfies ToolCtx);
     setStep(run, { i, tool, args, effect, state: 'done', output: r.output, digest: digest(tool, args, { n: r.n, unit: r.unit }), at: Date.now(),
@@ -287,7 +294,7 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     if (e instanceof NeedsYou) {
       // Stopped on a sensitive step before any act ran: ask about that step, in place.
       run.steps = run.steps.filter((s) => s.i !== i);
-      const request = approveRequest(run, ctx, i, tool, args, e.stop);
+      const request = stopRequest(run, ctx, i, tool, args, e.stop, q);
       if (request) {
         run.requests.push({ id: crypto.randomUUID().slice(0, 8), ...request });
         return 'wait';
@@ -335,6 +342,27 @@ async function deleteRoutine(id: string): Promise<void> {
   await idb.del(d, 'snapshots', IDBKeyRange.bound(`${id}\n`, `${id}\n￿`));
   await chrome.alarms.clear(ALARM + id);
 }
+
+/** The person's answer, stored; a yes to opening a page makes that exact URL reachable from now on. */
+function settle(r: GardenRun, q: Request, value: string, now: number, edit: { args?: Record<string, unknown> } = {}): void {
+  q.answer = { value, at: now, ...edit };
+  const url = q.tool === 'read_page' && q.argsKey && value === 'yes' ? (JSON.parse(q.argsKey) as { url?: unknown }).url : undefined;
+  if (typeof url === 'string') r.seen = addSeen(r.seen, [url], 'approved');
+  r.status = 'queued';
+}
+
+/** One JSON object of text answers, keyed only by the questions asked. */
+function answersOk(questions: { q: string }[], value: string): boolean {
+  try {
+    const a = JSON.parse(value) as unknown;
+    return !!a && typeof a === 'object' && !Array.isArray(a) && Object.entries(a).every(([k, v]) => typeof v === 'string' && questions.some((x) => x.q === k));
+  } catch {
+    return false;
+  }
+}
+
+const open = (r: GardenRun, q: Request | undefined, now: number): q is Request =>
+  r.status === 'waiting' && !!q && !q.answer && !expired(r, now) && (q.expiresAt === undefined || q.expiresAt > now);
 
 async function updateRun(id: string, change: (r: GardenRun) => void): Promise<GardenRun> {
   const run = await idb.tx(await db, 'runs', 'readwrite', async (t) => {
@@ -501,8 +529,11 @@ export const handlers = {
     });
     return true;
   },
-  /** A plan's yes may carry the calls as the person edited them: `{ runId, requestId, value, calls? }`. */
-  requestAnswer: async ({ runId, requestId, value, calls }: { runId: string; requestId: string; value: string; calls?: unknown }, sender?: Sender) => {
+  /**
+   * `{ runId, requestId, value, calls?, args? }`: a plan's yes may carry the calls as the person edited them; an
+   * approve's yes may carry the call's args as edited (only yes: a grant would be the original call).
+   */
+  requestAnswer: async ({ runId, requestId, value, calls, args }: { runId: string; requestId: string; value: string; calls?: unknown; args?: unknown }, sender?: Sender) => {
     page(sender);
     await ready();
     if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new Error('The answer is empty or too long.');
@@ -515,7 +546,7 @@ export const handlers = {
       const q = r.requests.find((x) => x.id === requestId);
       const now = Date.now();
       if (r.status !== 'waiting' || !q || q.answer) throw new Error('That request isn’t waiting for an answer.');
-      if (expired(r, now) || (q.expiresAt !== undefined && q.expiresAt <= now)) throw new Error('That request has expired.');
+      if (!open(r, q, now)) throw new Error('That request has expired.');
       const values = q.kind === 'approve' && !q.sensitive ? ['yes', 'no', 'always'] : ['yes', 'no'];
       if (q.kind !== 'question' && !values.includes(value)) throw new Error(values.length > 2 ? 'Answer yes, no or always.' : 'Answer yes or no.');
       // The worker's clock: a sensitive write can't be approved within 8 s of being shown.
@@ -527,16 +558,50 @@ export const handlers = {
         if (why) throw new Error(why);
         return;
       }
-      q.answer = { value, at: now };
+      if (q.questions?.length && !answersOk(q.questions, value)) throw new Error('Answer the questions as one JSON object of text answers, keyed by question.');
+      const edit = parseEdit(q, value, args);
+      if (typeof edit === 'string') throw new Error(edit);
       if (value === 'always' && q.tool && q.host !== undefined && q.argsKey) grant = { gardenerId: r.gardenerId, tool: q.tool, host: q.host, argsKey: q.argsKey, at: now };
-      // A yes to opening a page: that exact URL is reachable from now on.
-      const url = q.tool === 'read_page' && q.argsKey && value === 'yes' ? (JSON.parse(q.argsKey) as { url?: unknown }).url : undefined;
-      if (typeof url === 'string') r.seen = addSeen(r.seen, [url], 'approved');
-      r.status = 'queued';
+      settle(r, q, value, now, edit);
     });
     if (grant) await trust.grant(grant);
     drain();
     return true;
+  },
+  /** Approve all: yes to each named request that `approveAllOk` allows, checked here again; the rest are left. */
+  requestAnswerAll: async ({ requests }: { requests: { runId: string; requestId: string }[] }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    let n = 0;
+    for (const { runId, requestId } of Array.isArray(requests) ? requests : []) {
+      await updateRun(String(runId), (r) => {
+        const q = r.requests.find((x) => x.id === requestId);
+        const now = Date.now();
+        if (open(r, q, now) && approveAllOk(q, r)) (settle(r, q, 'yes', now), n++);
+      }).catch(() => {});
+    }
+    if (n) drain();
+    return n;
+  },
+  /** Steer: `{ id, text, steer: true }`, the person's words for the run's next think. */
+  runMessage: async ({ id, text, steer }: { id: string; text: string; steer: boolean }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    if (steer !== true) throw new Error('Only Steer messages can be sent for now.');
+    if (typeof text !== 'string' || !text.trim() || text.length > 1000) throw new Error('A message is 1 to 1000 characters.');
+    const m = { id: crypto.randomUUID().slice(0, 8), text: text.trim(), at: Date.now(), steer: true };
+    // At most 3 unused, so the next think's instruction part still fits.
+    const unused = (r: GardenRun) => (r.inbox ?? []).filter((x) => x.steer && !x.usedAt).length;
+    if (live?.id === id && unused(live.run) >= 3) throw new Error('It hasn’t read your last 3 messages yet.');
+    // A working run is saved from memory after each action: the message goes there too, or the next save drops it.
+    if (live?.id === id) (live.run.inbox ??= []).push(m);
+    await updateRun(String(id), (r) => {
+      if (r.status !== 'queued' && r.status !== 'running' && r.status !== 'waiting') throw new Error('That run has ended.');
+      if (r.inbox?.some((x) => x.id === m.id)) return;
+      if (unused(r) >= 3) throw new Error('It hasn’t read your last 3 messages yet.');
+      (r.inbox ??= []).push(m);
+    });
+    return m.id;
   },
   // The notebook: private, so extension pages only. A note belongs to a gardener that exists, or to every gardener.
   noteList: async ({ gardenerId }: { gardenerId?: string } = {}, sender?: Sender) => (page(sender), listNotes(gardenerId)),

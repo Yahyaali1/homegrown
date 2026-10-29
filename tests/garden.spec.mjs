@@ -147,8 +147,8 @@ test('gardeners @slow: a sensitive approval (a Pay button) can\'t be given withi
   let run = await settled(runId, ['waiting', 'done', 'failed', 'stopped']);
   expect(run.status).toBe('waiting');
   // Before the page is seen the click isn't known to be sensitive; yes lets the page be opened and checked. The panel
-  // looks at another tab meanwhile, so the next request isn't shown until the Garden tab opens.
-  await panel.click('[data-tab=chat]');
+  // looks at a tab with no request tray meanwhile (Chat has one), so the next request isn't shown until Garden opens.
+  await panel.click('[data-tab=library]');
   await bg('requestAnswer', { runId, requestId: run.requests[0].id, value: 'yes' });
   await expect.poll(async () => (run = await runOf(runId)).requests.length, { timeout: 2 * 60_000 }).toBe(2);
   expect(run.status).toBe('waiting');

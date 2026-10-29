@@ -4,7 +4,7 @@
 import { hostOf } from '../text.ts';
 import { describe, parseScenario, type Instruction, type Scenario } from '../scrape/scenario.ts';
 import { riskOf } from '../scrape/tools.ts';
-import { LIMITS, bare, type Gardener, type GardenRun, type Seen, type Step } from './records.ts';
+import { LIMITS, bare, parseWork, personUrls, type Gardener, type GardenRun, type Request, type Seen, type Step } from './records.ts';
 
 export type Effect = Step['effect'];
 export type Verdict = 'allow' | 'ask' | 'deny';
@@ -112,10 +112,27 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
       return (run.work.kind === 'ask' || run.work.kind === 'plan') && (run.work.tabs ?? []).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
     case 'notify':
       return run.steps.some((s) => s.tool === 'notify' && s.state === 'done') ? 'deny' : 'allow';
+    // Stored off until the person turns it on, so only where it may reach matters: the gardener's sites, no new site
+    // written in a request, and none of the person's tabs. Never after a signed-in read: its runs start untainted, so
+    // its URLs or goal could carry what was read.
+    case 'propose_routine': {
+      if (run.tainted) return 'deny';
+      const w = parseWork(call.args.work);
+      if (!w || ((w.kind === 'ask' || w.kind === 'plan') && w.tabs?.length)) return 'deny';
+      return personUrls(w).every((u) => onSites(hostOf(u), gardener.sites)) ? 'allow' : 'deny';
+    }
     default:
       return 'deny'; // evaluate, and any tool policy doesn't know
   }
 }
+
+/**
+ * Approve all may answer this request of `run`: a non-sensitive reach in an untainted run (under taint a reach is
+ * asked because its URL or query could carry what was read), or a non-sensitive act in the gardener's own tabs
+ * (decision 5). Never a sensitive request, a question, a plan or anything else. The worker checks it again.
+ */
+export const approveAllOk = (q: Request, run: GardenRun): boolean =>
+  !q.answer && !q.sensitive && ((q.kind === 'reach' && !run.tainted) || (q.kind === 'approve' && (q.tool === 'act' || q.tool === 'collect')));
 
 /** `seen` plus new URLs (deduplicated, fragments removed), capped at 300. */
 export function addSeen(seen: Seen[], urls: string[], from: Seen['from'], step?: number): Seen[] {
