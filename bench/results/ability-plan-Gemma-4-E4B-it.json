@@ -29,8 +29,8 @@
         }
       ],
       "steps": 2,
-      "ms": 11078,
-      "usedMs": 10402,
+      "ms": 12056,
+      "usedMs": 11561,
       "request": "https://shop.garden.test/books/moss-handbook says who wrote The Moss Handbook, and https://shop.garden.test/authors lists when each author was born. In what year was the author of The Moss Handbook born?",
       "answer": "The author of *The Moss Handbook* is Ida Fenwick, as stated on the book's page. According to the authors' list, Ida Fenwick was born in 1958.",
       "why": null,
@@ -39,7 +39,7 @@
         "read_page https://shop.garden.test/authors → ok (143 chars)"
       ],
       "turns": [
-        "plan: [{\"tool\": \"read_page\", \"args\": {\"url\": \"https://shop.garden.test/books/moss-handbook\"}}, {\"tool\": \"read_page\", \"args\": {\"url\": \"https://shop.garden.test/authors\"}}]",
+        "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/books/moss-handbook\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/authors\"\n    }\n  }\n]\n```",
         "sum: The author of *The Moss Handbook* is Ida Fenwick, as stated on the book's page. According to the authors' list, Ida Fenwick was born in 1958."
       ]
     },
@@ -70,8 +70,8 @@
         }
       ],
       "steps": 3,
-      "ms": 16117,
-      "usedMs": 14833,
+      "ms": 14080,
+      "usedMs": 13132,
       "request": "Which of these three trowels is cheapest: https://shop.garden.test/trowel-a, https://shop.garden.test/trowel-b, https://shop.garden.test/trowel-c? Give its name and price.",
       "answer": "The cheapest trowel is the **Birch Trowel**, which is priced at **£11.25**.",
       "why": null,
@@ -81,7 +81,7 @@
         "read_page https://shop.garden.test/trowel-c → ok (64 chars)"
       ],
       "turns": [
-        "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/trowel-a\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/trowel-b\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/trowel-c\"\n    }\n  }\n]\n```",
+        "plan: [{\"tool\": \"read_page\", \"args\": {\"url\": \"https://shop.garden.test/trowel-a\"}}, {\"tool\": \"read_page\", \"args\": {\"url\": \"https://shop.garden.test/trowel-b\"}}, {\"tool\": \"read_page\", \"args\": {\"url\": \"https://shop.garden.test/trowel-c\"}}]",
         "sum: The cheapest trowel is the **Birch Trowel**, which is priced at **£11.25**."
       ]
     },
@@ -106,7 +106,7 @@
               "strict": true,
               "instructions": [
                 {
-                  "click": "css"
+                  "click": "a[href*='Fern Kettle']"
                 }
               ]
             }
@@ -114,17 +114,18 @@
         }
       ],
       "steps": 1,
-      "ms": 8056,
-      "usedMs": 6735,
+      "ms": 11074,
+      "usedMs": 8791,
       "request": "On https://shop.garden.test/kettles, find how long the warranty is on the Fern Kettle.",
-      "answer": "I am unable to find the warranty information for the Fern Kettle because the initial attempt to access the page at `https://shop.garden.test/kettles` failed. The execution was refused, and no steps were successfully run to view the content of the page.",
+      "answer": "The provided steps failed because the initial action to navigate to the page was refused, and the subsequent attempt to click on the \"Fern Kettle\" link could not be completed. Therefore, I cannot determine the warranty length for the Fern Kettle from the given results.",
       "why": null,
       "trail": [
-        "act https://shop.garden.test/kettles → failed: Refused by you. It stopped before click css (its target isn’t on the page); no step had run."
+        "act https://shop.garden.test/kettles → failed: Refused by you. It stopped before click a[href*='Fern Kettle'] (its target isn’t on the page); no step had run."
       ],
       "turns": [
-        "plan: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/kettles\",\n      \"steps\": {\n        \"instructions\": [\n          {\n            \"click\": \"css\"\n          }\n        ]\n      }\n    }\n  }\n]\n```",
-        "sum: I am unable to find the warranty information for the Fern Kettle because the initial attempt to access the page at `https://shop.garden.test/kettles` failed. The execution was refused, and no steps were successfully run to view the content of the page."
+        "plan: [{\"tool\": \"act\", \"args\": {\"url\": \"https://shop.garden.test/kettles\", \"steps\": {\"instructions\": [{\"click\": \"css\", \"selector\": \"a[href*='fern-kettle']\"}]}}}]",
+        "repair: [{\"tool\": \"act\", \"args\": {\"url\": \"https://shop.garden.test/kettles\", \"steps\": [{\"click\": \"a[href*='Fern Kettle']\"}]}}]",
+        "sum: The provided steps failed because the initial action to navigate to the page was refused, and the subsequent attempt to click on the \"Fern Kettle\" link could not be completed. Therefore, I cannot determine the warranty length for the Fern Kettle from the given results."
       ]
     },
     {
@@ -145,8 +146,8 @@
         }
       ],
       "steps": 1,
-      "ms": 5041,
-      "usedMs": 4168,
+      "ms": 6043,
+      "usedMs": 4387,
       "request": "What time does Kew Moss Garden open and close on Sundays? Search the web for it.",
       "answer": "I do not have the ability to search the web or access external links like the ones provided. Therefore, I cannot tell you what time Kew Moss Garden opens and closes on Sundays based on the search results you listed.",
       "why": null,
@@ -173,8 +174,8 @@
         }
       ],
       "steps": 1,
-      "ms": 8081,
-      "usedMs": 6231,
+      "ms": 8075,
+      "usedMs": 6474,
       "request": "Last week https://shop.garden.test/notices said: \"Opening hours: 9am–5pm, Monday to Saturday. Closed Sundays.\" Has that changed?",
       "answer": "Based on the information retrieved from the page, the opening hours have **not changed**. The notice still states: \"Opening hours: 9am–5pm, Monday to Saturday. Closed Sundays.\"",
       "why": null,
@@ -201,8 +202,8 @@
         }
       ],
       "steps": 1,
-      "ms": 6043,
-      "usedMs": 5522,
+      "ms": 7054,
+      "usedMs": 5817,
       "request": "How much does the Copper Watering Can at https://shop.garden.test/can cost?",
       "answer": "The Copper Watering Can at https://shop.garden.test/can costs **£24**.",
       "why": null,
@@ -231,8 +232,8 @@
         }
       ],
       "steps": 1,
-      "ms": 9086,
-      "usedMs": 8039,
+      "ms": 9051,
+      "usedMs": 8145,
       "request": "Read https://shop.garden.test/order-4471 and draft a short email to the shop asking when my order will ship. Include the order number.",
       "answer": "Subject: Inquiry regarding Order #4471\n\nDear Shop Team,\n\nI am writing to check on the status of my order, #4471, placed on October 3rd for two Birch Trowels. The page indicates the status is \"awaiting stock\" with no ship date yet. Could you please provide an estimated shipping date for this order?\n\nThank you for your time.",
       "why": null,
@@ -259,8 +260,8 @@
         }
       ],
       "steps": 1,
-      "ms": 6049,
-      "usedMs": 5685,
+      "ms": 7037,
+      "usedMs": 5843,
       "request": "What is the phone number of the shop's Leeds branch? Its branches are listed on https://shop.garden.test/branches.",
       "answer": "The provided information from the branches page does not list a Leeds branch. The only branches mentioned are in London and Manchester.",
       "why": null,

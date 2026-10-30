@@ -40,6 +40,7 @@ test('plaza: opt-in new tab, one still flower per gardener, a click opens its ch
   await panel.evaluate(() => chrome.storage.sync.set({ plaza: true }));
   const tab = await newTab();
   await expect.poll(() => tabUrl(tab)).toBe(`chrome-extension://${id}/plaza.html`);
+  await expect.poll(() => ctx.pages().some((p) => p.url().includes('plaza.html'))).toBe(true);
   const plaza = ctx.pages().find((p) => p.url().includes('plaza.html'));
   const bed = plaza.locator('#bed > li');
   await expect(bed).toHaveCount(2);
