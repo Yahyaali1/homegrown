@@ -18,6 +18,10 @@ export interface Gardener {
   devtools?: boolean;
   /** The person's notes for a web app without a connector, by host: in the instruction part when a run works there. */
   siteNotes?: Record<string, string>;
+  /** Hired from this companion pack (plan T12): its tools narrow the gardener's. */
+  preset?: string;
+  /** The onboarding interview's answers (none: not asked yet); also written after the instructions. */
+  profile?: { q: string; a: string }[];
 }
 
 /** A gardener's flower: never 10 petals (the Homegrown mark's), always leaning left, the leaf on the right. */
@@ -91,7 +95,13 @@ export interface Routine {
   for?: string;
   /** The skill each run follows (plan T8): set on each run's work; only for `plan` and `ask` work. */
   skillId?: string;
+  /** Measured abilities it needs before it can be turned on or run (a preset's seed). Only Hire sets them. */
+  needs?: Ability[];
 }
+
+/** A pack's read routine the person hasn't given a page yet: it stays paused (an event over it has url ''). */
+export const noPage = (w: Work): boolean => w.kind === 'read' && !w.urls.length;
+export const NO_PAGE = 'Set the page it watches first.';
 
 /** The work a routine's run does: with its skill, read at run time. */
 export const routineWork = (r: Routine): Work => (r.skillId && (r.work.kind === 'ask' || r.work.kind === 'plan') ? { ...r.work, skillId: r.skillId } : r.work);
@@ -329,7 +339,11 @@ export function parseGardener(raw: unknown): Gardener | null {
   const look = raw.look === undefined ? null : parseLook(raw.look);
   const notes = raw.siteNotes === undefined ? undefined : siteNotesOf(raw.siteNotes);
   if (notes === null) return null;
-  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }), ...(raw.devtools === true && { devtools: true }), ...(notes && Object.keys(notes).length && { siteNotes: notes }) };
+  if (raw.preset !== undefined && !str(raw.preset, 40)) return null;
+  const qa = (x: unknown) => isObj(x) && str(x.q, 300) && str(x.a, 300, 0);
+  if (raw.profile !== undefined && !(Array.isArray(raw.profile) && raw.profile.length <= 8 && raw.profile.every(qa))) return null;
+  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }), ...(raw.devtools === true && { devtools: true }), ...(notes && Object.keys(notes).length && { siteNotes: notes }),
+    ...(raw.preset !== undefined && { preset: raw.preset as string }), ...(raw.profile !== undefined && { profile: (raw.profile as { q: string; a: string }[]).map(({ q, a }) => ({ q, a })) }) };
 }
 
 /** Site notes: at most 20 hosts (each a site), each note 1–500 chars; null when invalid. */
@@ -397,7 +411,11 @@ function parseMention(raw: unknown): Mention | null {
 
 export function parseRoutine(raw: unknown): Routine | null {
   if (!isObj(raw) || raw.v !== 1 || !str(raw.id, 200) || !str(raw.gardenerId, 200) || !str(raw.name, 80)) return null;
-  const when = parseWhen(raw.when), work = parseWork(raw.work);
+  // Only a paused routine may lack its page (noPage).
+  const unset = raw.paused === true && isObj(raw.work) && raw.work.kind === 'read' && Array.isArray(raw.work.urls) && !raw.work.urls.length;
+  const work: Work | null = unset ? { kind: 'read', urls: [] } : parseWork(raw.work);
+  const w = raw.when;
+  const when: When | null = unset && isObj(w) && w.kind === 'event' && w.url === '' && int(w.every, 15, 1440) ? { kind: 'event', url: '', every: w.every } : parseWhen(w);
   if (!when || !work || !validTz(raw.tz) || typeof raw.paused !== 'boolean' || !time(raw.nextDue) || !time(raw.createdAt)) return null;
   const r: Routine = { v: 1, id: raw.id, gardenerId: raw.gardenerId, name: raw.name.trim(), when, tz: raw.tz, work, paused: raw.paused, nextDue: raw.nextDue, createdAt: raw.createdAt };
   if (typeof raw.lastRunId === 'string') r.lastRunId = raw.lastRunId;
@@ -405,6 +423,7 @@ export function parseRoutine(raw: unknown): Routine | null {
   if (raw.by === 'person' || raw.by === 'model' || raw.by === 'preset') r.by = raw.by;
   if (raw.missed === true) r.missed = true;
   if (str(raw.for, 200)) r.for = raw.for;
+  if (Array.isArray(raw.needs) && raw.needs.every((a) => typeof a === 'string')) r.needs = raw.needs as Ability[];
   if (raw.skillId !== undefined) {
     if (!str(raw.skillId, 200) || (work.kind !== 'ask' && work.kind !== 'plan')) return null;
     r.skillId = raw.skillId;

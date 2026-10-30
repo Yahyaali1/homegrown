@@ -131,7 +131,7 @@ function entityFile(e: Listed): HTMLElement {
   }), 'primary');
   const del = busyButton(e.confirmed ? 'Delete' : 'Discard', tryIt(err, async () => (await bg('entityDelete', { id: e.id }), await renderMemory())), 'ghost');
   const keep = !e.confirmed && busyButton('Keep', tryIt(err, async () => (await bg('entityKeep', { id: e.id }), await renderMemory())), 'secondary');
-  const by = e.confirmed ? (e.correction ? 'your correction' : e.by === 'person' ? '' : 'kept from a gardener') : e.fields.meeting ? 'meeting notes by the model, off until you keep them' : 'proposed by a gardener, off until you keep it';
+  const by = e.confirmed ? (e.correction ? 'your correction' : e.by === 'person' ? '' : 'kept from a gardener') : e.fields.meeting ? 'meeting notes by the model, off until you keep them' : e.by === 'person' ? 'from a companion pack, off until you keep it' : 'proposed by a gardener, off until you keep it';
   return kept(h('details', { className: 'file' }, h('summary', {}, e.name, by && h('span', { className: 'muted small', textContent: ` · ${by}` })),
     h('div', { className: 'stack' }, aliases, fields, template, body, err, h('div', { className: 'row' }, keep, save, del))), e.id);
 }

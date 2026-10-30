@@ -89,6 +89,12 @@ It also owns these parts:
     only). `turn` reads the run's skill at each start: `skillRefusal` fails a run whose skill is gone, off, another
     gardener's or needs what the pin lacks; a test run with `approvePlans` answers its plan yes with `answerPlan`.
     The worker also opens `hg-chat` v1 to read chat evidence.
+  - Companions (plan T12): `hire` (`{ presetId, sites, hireId? }`: `hireRecords`, sites only from the pack's
+    suggestions; template entities through `memory.ts` `putEntity` first, the gardener last; `hireId` names the
+    records, so a retry returns the same gardener). `gardenerSave` keeps the stored `preset`. `routineSave` keeps a
+    paused pack read with no page and refuses to turn it on (`NO_PAGE`); `gardenRun` refuses it too. A hired gardener's tools narrow to its pack (`allowedFor`).
+    `routineSave` keeps `needs` from the stored routine and refuses `paused: false` while the gardens model lacks one;
+    `gardenRun` refuses Run now the same way; `pin()` fails a run whose pinned abilities lack its routine's needs (`needsRefusal`, before the plan refusal).
   - Edited approvals (`parseEdit`): only an `approve` for `act`, `draft` or `notify` without `noEdit`, only with
     `yes` (`always` would grant the original call), args parsed again with `parseArgs` and stored as `answer.args`.
     The loop checks the edited call as a new call; the `call` action names its answer (`answered`), which `call`

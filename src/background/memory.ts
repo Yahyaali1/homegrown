@@ -281,7 +281,7 @@ export const handlers = {
     await put('entities', e);
     return bare(e);
   },
-  /** Keep a gardener's proposed file as it is: confirmed, still the model's words (so its template stays data). */
+  /** Keep a proposed file (a gardener's or a pack's) as it is: confirmed, `by` unchanged, so a model's template stays data. */
   async entityKeep({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
     mine(sender);
     const e = parseEntity(await done((await store('entities')).get(String(id))));

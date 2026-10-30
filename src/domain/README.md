@@ -101,7 +101,8 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener`, `Routine` (`by?`), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`, `files?`), `RunFile`, `Gardener` (`devtools?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (kind `help`: yes reads the page again, no fails the step with `HELP_REFUSED`; `questions?`,
+  - `records.ts`: `Gardener` (`preset?`, `profile?`, plan T12), `Routine` (`by?`, `needs?`; `noPage`/`NO_PAGE`: a
+    pack's read with no URL yet, which parses only paused), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`, `files?`), `RunFile`, `Gardener` (`devtools?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (kind `help`: yes reads the page again, no fails the step with `HELP_REFUSED`; `questions?`,
     `editedFrom?`, `noEdit?`, `answer.args?`), `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
     `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
     `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`, `historyGroup` (Needs you, Unread: ended after `seenAt`,
@@ -163,15 +164,22 @@ runtime adapters and storage live outside `domain/`.
     deleted, off, another gardener's, or needs missing from `run.abilities`), `skillParts` (the method is the
     instruction unless a model wrote it; files are data), `revise`, `accept`, `casePassed` (case-insensitive
     contains), `verdict`, `tested`, `evidenceOf` (chat answers marked down, a correction after one by
-    `correctionOf`, failed cases), `improveThink`, `proposalOf`, `unlinked`, `upgradeGarden`. `loop.ts` `think` puts a
+    `correctionOf`, failed cases), `improveThink`, `proposalOf`, `unlinked`, `upgradeGarden`, `needsRefusal` (plan T12: `NEEDS`
+    while the model lacks a need of a skill or routine). `loop.ts` `think` puts a
     skill's files ahead of the data, at most a third of what memory left. `Work` `plan`/`ask` and `Routine` have
     `skillId?` (`routineWork`); `GardenRun.approvePlans?`; `ChatTurn.skillId?`.
+  - `presets.ts` (plan T12, decision 12): companion packs as data, `PRESETS` (Rosa, Dana), `presetById`,
+    `Preset` (`look`, `instructions`, `interview` ≤ 8, suggested `sites`, `skills`/`routines` seeds with `needs`,
+    `tools` that only narrow, `templates`, `note`; bench cases live in `bench/workflows/<preset>.mjs`), `presetProblems` (a non-read seed names
+    `workflow:<preset>/<id>`), `direct`, `hireRecords` (gardener with `preset`, skills `by: 'preset'` off, routines
+    paused, template entities unkept, needs copied; a taken skill name gets a number), `withProfile` (interview answers
+    after the instructions, ≤ 2000), `SEED_RULE`.
   - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
     step outputs, turns and the answer only with `withText`. `trimmed(run)`: a run as broadcast and listed (outputs
     cut to 300).
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
     `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `EDITABLE` (`act`, `app_call`), `ToolSpec`, `Arg` (`record`: a value its parser takes),
-    `parseArgs`, `toolsFor` (`read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
+    `parseArgs`, `toolsFor` (`allowed`: a hired gardener's pack tools, which only narrow; `read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
     `agent.loop` or in a plan; `app_call` only with a usable app tool, its describe built by `appLines` from the
     person's lines and guidelines; a tool without a line isn't offered), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
     a borrowed tab), `devtoolsDigest` (≤ 20 console errors, ≤ 30 requests with status ≥ 400, no query strings, no

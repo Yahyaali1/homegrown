@@ -25,6 +25,12 @@
 // owners. The product's NOTES_PROMPT and parseNotes. A case passes when the reply parses, every known decision is
 // found (by its words, in a decision) and no action item names an owner the transcript doesn't (an owner parseNotes
 // had to drop). Pass: ≥ 5/6.
+//
+// workflow <preset> (T12): `node bench/abilities.mjs workflow rosa`. Hires the pack, turns its skills on in the store
+// (no model has their needs yet: this is what measures them) and runs each seed's cases from bench/workflows/<preset>.mjs as plan runs
+// pinned with the seed's needs, approved unedited, routine seeds with their `routineId`. A seed passes when every case's
+// plan parses, its run ends done, the answer holds each `expect` word (`casePassed`) and nothing else was asked or
+// denied. Each passing seed writes `workflow:<preset>/<id>` into `passes`; the owner copies passes into model.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, engine, ROOT } from '../tests/harness.mjs';
@@ -36,13 +42,16 @@ import { reportPrompt } from '../src/domain/research.ts';
 import { contextChars, defang, grounded, parseJsonObject } from '../src/domain/text.ts';
 import { casePassed, improveThink, proposalOf } from '../src/domain/garden/skills.ts';
 import { NOTES_PROMPT, parseNotes } from '../src/domain/meeting.ts';
+import { presetById, SEED_RULE } from '../src/domain/garden/presets.ts';
 
 const ABILITY = process.argv[2];
-const SUITES = { plan, deck, cite, evidence, skillEdit, notes };
-if (!SUITES[ABILITY]) {
-  console.log(`Usage: node bench/abilities.mjs <${Object.keys(SUITES).join('|')}>`);
+const SUITES = { plan, deck, cite, evidence, skillEdit, notes, workflow };
+const PACK = ABILITY === 'workflow' ? presetById(process.argv[3]) : null;
+if (!SUITES[ABILITY] || (ABILITY === 'workflow' && !PACK)) {
+  console.log(`Usage: node bench/abilities.mjs <${Object.keys(SUITES).join('|')}> (workflow <preset>)`);
   process.exit(1);
 }
+const NAME = PACK ? `workflow-${PACK.id}` : ABILITY;
 const MODEL = process.env.EG_MODEL || 'Gemma-4-E2B-it';
 
 const { ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') });
@@ -60,13 +69,13 @@ async function bg(cmd, args = {}) {
   if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
   return r.result;
 }
-const putRun = (run) => panel.evaluate(async (run) => {
+const put = (store, value) => panel.evaluate(async ([store, value]) => {
   const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-  const t = d.transaction('runs', 'readwrite');
-  t.objectStore('runs').put(run);
+  const t = d.transaction(store, 'readwrite');
+  t.objectStore(store).put(value);
   await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
   d.close();
-}, run);
+}, [store, value]);
 
 // Only the Gardeners choice changes; the profile's other per-task choices are put back afterwards, even on a failure.
 const before = await panel.evaluate(async (m) => {
@@ -84,55 +93,70 @@ if (m.name !== MODEL) {
   await ctx.close();
   process.exit(2);
 }
-console.log(`model: ${m.name}, ${m.maxTokens} tokens, ability: ${ABILITY}`);
+console.log(`model: ${m.name}, ${m.maxTokens} tokens, ability: ${NAME}`);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = await SUITES[ABILITY]();
-console.log(`\n${out.pass}/${out.of} passed, ${out.violations} policy violation(s) → ${out.passed ? `PASS: add '${ABILITY}'` : 'no pass'}`);
+const won = out.passes ?? (out.passed ? [ABILITY] : []);
+console.log(`\n${out.pass}/${out.of} passed, ${out.violations} policy violation(s) → ${won.length ? `PASS: add ${won.map((a) => `'${a}'`).join(', ')}` : 'no pass'}`);
 fs.mkdirSync(path.join(ROOT, 'bench/results'), { recursive: true });
-fs.writeFileSync(path.join(ROOT, `bench/results/ability-${ABILITY}-${MODEL}.json`), JSON.stringify({ ability: ABILITY, model: MODEL, maxTokens: m.maxTokens, ...out }, null, 2));
+fs.writeFileSync(path.join(ROOT, `bench/results/ability-${NAME}-${MODEL}.json`), JSON.stringify({ ability: NAME, model: MODEL, maxTokens: m.maxTokens, ...out }, null, 2));
 await restore();
 await ctx.close();
 
-async function plan() {
-  // The test profile is reused: start from an empty garden.
+// The test profile is reused: start from an empty garden.
+async function emptyGarden() {
   for (const r of await bg('runList', { limit: 1000 })) {
     if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
     await bg('runDelete', { id: r.id });
   }
   for (const g of await bg('gardenerList')) await bg('gardenerDelete', { id: g.id });
+  for (const x of await bg('skillList')) await bg('skillDelete', { id: x.id });
+}
+
+/** Plants a plan run pinned with `abilities`, approves its plan unedited, answers no to anything else (a violation). */
+async function planRun(runId, gardenerId, work, abilities, extra = {}) {
+  const t0 = Date.now();
+  await put('runs', {
+    v: 1, id: runId, gardenerId, work, status: 'queued', queuedAt: t0, usedMs: 0,
+    model: m.name, maxTokens: m.maxTokens, agent: { loop: false, maxSteps: 8 }, abilities,
+    turns: [], steps: [], requests: [], seen: [], tainted: false, ...extra,
+  });
+  await sw.evaluate(() => self.gardenFire('none')); // no such routine: the claim does nothing, the queue drains
+  let run, calls = null;
+  const violations = [];
+  for (let answered = 0; ; await sleep(1000)) {
+    run = await bg('runGet', { id: runId });
+    if (['done', 'failed', 'stopped'].includes(run.status)) break;
+    if (Date.now() - t0 > 15 * 60_000) {
+      await bg('runStop', { id: runId });
+      continue;
+    }
+    if (run.status !== 'waiting') continue;
+    const q = run.requests.find((x) => !x.answer);
+    if (q?.kind === 'plan' && !calls) {
+      calls = q.calls;
+      await bg('requestAnswer', { runId, requestId: q.id, value: 'yes' }); // unedited
+      continue;
+    }
+    if (q) violations.push(`${q.kind}: ${q.text.split('\n')[0]}`);
+    if (!q || answered++ >= 6) await bg('runStop', { id: runId });
+    else await bg('requestAnswer', { runId, requestId: q.id, value: 'no' });
+  }
+  violations.push(...run.steps.filter((s) => s.error === 'Not allowed.').map((s) => `denied: ${s.digest}`));
+  return { run, calls, violations, ms: Date.now() - t0 };
+}
+
+function trail(run) {
+  return { answer: run.answer ?? null, why: run.why ?? null, trail: run.steps.map((s) => s.digest ?? `${s.tool} ${s.state}`), turns: run.turns.map((t) => `${t.purpose}: ${t.reply}`) };
+}
+
+async function plan() {
+  await emptyGarden();
   const g = await bg('gardenerSave', { gardener: { name: 'Helper', instructions: 'Do what the person asks, briefly.', sites: ['shop.garden.test'], minutes: 10 } });
   const results = [];
   for (const c of CASES) {
-    const t0 = Date.now();
-    const runId = `ability-plan-${c.id}-${t0}`;
-    await putRun({
-      v: 1, id: runId, gardenerId: g.id, work: { kind: 'plan', request: c.request }, status: 'queued', queuedAt: t0, usedMs: 0,
-      model: m.name, maxTokens: m.maxTokens, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'],
-      turns: [], steps: [], requests: [], seen: [], tainted: false,
-    });
-    await sw.evaluate(() => self.gardenFire('none')); // no such routine: the claim does nothing, the queue drains
-    let run, calls = null;
-    const violations = [];
-    for (let answered = 0; ; await sleep(1000)) {
-      run = await bg('runGet', { id: runId });
-      if (['done', 'failed', 'stopped'].includes(run.status)) break;
-      if (Date.now() - t0 > 15 * 60_000) {
-        await bg('runStop', { id: runId });
-        continue;
-      }
-      if (run.status !== 'waiting') continue;
-      const q = run.requests.find((x) => !x.answer);
-      if (q?.kind === 'plan' && !calls) {
-        calls = q.calls;
-        await bg('requestAnswer', { runId, requestId: q.id, value: 'yes' }); // unedited
-        continue;
-      }
-      if (q) violations.push(`${q.kind}: ${q.text.split('\n')[0]}`);
-      if (!q || answered++ >= 6) await bg('runStop', { id: runId });
-      else await bg('requestAnswer', { runId, requestId: q.id, value: 'no' });
-    }
-    violations.push(...run.steps.filter((s) => s.error === 'Not allowed.').map((s) => `denied: ${s.digest}`));
+    const { run, calls, violations, ms } = await planRun(`ability-plan-${c.id}-${Date.now()}`, g.id, { kind: 'plan', request: c.request }, ['plan']);
     const extra = [...new Set((calls ?? []).map((x) => x.tool).filter((t) => !c.tools.includes(t)))];
     const fails = [
       ...(calls ? [] : ['the plan did not parse']),
@@ -141,14 +165,48 @@ async function plan() {
       ...c.check(run),
     ];
     const ok = !fails.length && !violations.length;
-    results.push({ id: c.id, ok, fails, violations, extra, plan: calls, steps: run.steps.length, ms: Date.now() - t0, usedMs: run.usedMs,
-      request: c.request, answer: run.answer ?? null, why: run.why ?? null, trail: run.steps.map((s) => s.digest ?? `${s.tool} ${s.state}`), turns: run.turns.map((t) => `${t.purpose}: ${t.reply}`) });
-    console.log(`${ok ? '✓' : '✗'} ${c.id}  ${calls ? `${calls.length} calls` : 'no plan'}, ${((Date.now() - t0) / 1000).toFixed(0)} s${fails.length || violations.length ? `  — ${[...fails, ...violations].join('; ')}` : ''}`);
+    results.push({ id: c.id, ok, fails, violations, extra, plan: calls, steps: run.steps.length, ms, usedMs: run.usedMs, request: c.request, ...trail(run) });
+    console.log(`${ok ? '✓' : '✗'} ${c.id}  ${calls ? `${calls.length} calls` : 'no plan'}, ${(ms / 1000).toFixed(0)} s${fails.length || violations.length ? `  — ${[...fails, ...violations].join('; ')}` : ''}`);
     console.log(`    ${(run.answer ?? run.why ?? '').replace(/\s+/g, ' ').slice(0, 200)}`);
   }
   const pass = results.filter((r) => r.ok).length;
   const violations = results.reduce((n, r) => n + r.violations.length, 0);
   return { pass, of: results.length, violations, passed: pass >= 6 && violations === 0, rule: '≥ 6/8 plans parse, use only listed tools and complete the task unedited; 0 policy violations', cases: results };
+}
+
+// ---- T12 workflow: a pack's seeds, each on its own cases from presets.ts ----
+async function workflow() {
+  await emptyGarden();
+  const g = await bg('hire', { presetId: PACK.id });
+  const skills = (await bg('skillList')).filter((x) => x.gardenerId === g.id);
+  for (const x of skills) await put('skills', { ...x, on: true });
+  const routines = await bg('routineList', { gardenerId: g.id });
+  const tests = (await import(`./workflows/${PACK.id}.mjs`)).default;
+  const seeds = [
+    ...PACK.skills.map((x) => ({ ...x, skill: skills.find((s) => s.name === x.id) })),
+    ...PACK.routines.map((x) => ({ ...x, routine: routines.find((r) => r.name === x.name) })),
+  ].map((x) => ({ ...x, tests: tests[x.id] })).filter((x) => x.tests?.length);
+  const results = [];
+  for (const seed of seeds) {
+    const cases = [];
+    for (const [k, c] of seed.tests.entries()) {
+      const work = { kind: 'plan', request: c.request, ...(seed.skill && { skillId: seed.skill.id }) };
+      const { run, calls, violations, ms } = await planRun(`ability-${NAME}-${seed.id}-${k}-${Date.now()}`, g.id, work, [...new Set(['plan', ...seed.needs])], seed.routine ? { routineId: seed.routine.id } : {});
+      const fails = [
+        ...(calls ? [] : ['the plan did not parse']),
+        ...(run.status === 'done' ? [] : [`${run.status}: ${run.why ?? ''}`]),
+        ...c.expect.filter((w) => !casePassed(run.answer, w)).map((w) => `answer lacks "${w}"`),
+      ];
+      const ok = !fails.length && !violations.length;
+      cases.push({ ok, fails, violations, plan: calls, ms, request: c.request, ...trail(run) });
+      console.log(`${ok ? '✓' : '✗'} ${seed.id}#${k + 1}  ${calls ? `${calls.length} calls` : 'no plan'}, ${(ms / 1000).toFixed(0)} s${fails.length || violations.length ? `  — ${[...fails, ...violations].join('; ')}` : ''}`);
+      console.log(`    ${(run.answer ?? run.why ?? '').replace(/\s+/g, ' ').slice(0, 200)}`);
+    }
+    results.push({ id: seed.id, ability: `workflow:${PACK.id}/${seed.id}`, passed: cases.every((c) => c.ok), cases });
+  }
+  const pass = results.filter((r) => r.passed).length;
+  const violations = results.reduce((n, r) => n + r.cases.reduce((k, c) => k + c.violations.length, 0), 0);
+  return { pass, of: results.length, violations, passed: pass === results.length, passes: results.filter((r) => r.passed).map((r) => r.ability), rule: SEED_RULE, seeds: results };
 }
 
 // ---- T9 abilities: the product's prompts, asked of the model as a background request (as `askAs` does) ----

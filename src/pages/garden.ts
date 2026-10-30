@@ -11,7 +11,7 @@ import { parseSettings } from '../domain/settings.ts';
 import { nextRuns } from '../domain/garden/schedule.ts';
 import { retryStep } from '../domain/garden/loop.ts';
 import { reportOf } from '../domain/garden/report.ts';
-import { helping, historyGroup, lookOf, parseWhen, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
+import { helping, historyGroup, lookOf, noPage, NO_PAGE, parseWhen, randomLook, type Created, type Gardener, type GardenRun, type Look, type Mention, type Request, type Routine, type Status, type When, type Work } from '../domain/garden/records.ts';
 import type { Note } from '../domain/garden/notes.ts';
 import { hostOf } from '../domain/text.ts';
 import type { Grant } from '../domain/garden/policy.ts';
@@ -19,11 +19,14 @@ import { describe, parseScenario } from '../domain/scrape/scenario.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
 import { addedLines, correctionOf, type Entity } from '../domain/memory.ts';
 import { openMemory } from './library.ts';
-import { EDIT_OFF, tested, type Evidence, type Skill, type SkillCase, type SkillFile } from '../domain/garden/skills.ts';
+import { EDIT_OFF, NEEDS, tested, type Evidence, type Skill, type SkillCase, type SkillFile } from '../domain/garden/skills.ts';
 import { diffText } from '../domain/compare.ts';
 import { MCP, STDIO, toolFrom, type AppTool, type ConnectorFacts, type Scope, type ServerTool } from '../domain/mcp.ts';
 import { appOpen, type App } from '../domain/apps.ts';
 import { site } from '../domain/garden/records.ts';
+import { PRESETS, presetById, withProfile } from '../domain/garden/presets.ts';
+import { questions } from '../ui/questions.ts';
+import type { Ability } from '../domain/model.ts';
 
 type Listed = Routine & { next: number };
 type Row = HTMLLIElement & { stage?: string; look?: string };
@@ -40,7 +43,7 @@ const notebooks = new Map<string, HTMLDetailsElement>(); // gardener id → its 
 const opened = new Set<string>(); // runs whose view is open
 const shown = new Set<string>(); // requests already reported shown
 let editing: Gardener | null = null;
-let abilities: Can = { ask: false, plan: false, skillEdit: false }; // what the gardens model can take, for follow-ups
+let abilities: Can = { ask: false, plan: false, skillEdit: false, model: '' }; // what the gardens model can take, for follow-ups
 let skills: Skill[] = [];
 let memory = new Map<string, Omit<Entity, 'vec'>>(); // memory files by id: a proposed one's card shows Keep / Discard
 let formLook: Look = randomLook();
@@ -61,9 +64,9 @@ function whenText(w: When): string {
     return `monthly on ${on} at ${w.at}`;
   }
   if (w.kind === 'once') return `once on ${w.date} at ${w.at}${w.deadline ? `, deadline ${w.deadline} min` : ''}`;
-  return `when ${w.url} changes (checked every ${w.every} min)${w.onlyIf ? ` and mentions ${w.onlyIf.join(', ')}` : ''}`;
+  return `when ${w.url || 'its page'} changes (checked every ${w.every} min)${w.onlyIf ? ` and mentions ${w.onlyIf.join(', ')}` : ''}`;
 }
-const workText = (w: Work) => (w.kind === 'read' ? `reads ${w.urls.length === 1 ? w.urls[0] : `${w.urls.length} pages`}` : w.kind === 'mission' ? `mission: ${w.goal}` : `${w.kind === 'plan' ? 'plans' : 'asks'}: ${w.request}`);
+const workText = (w: Work) => (w.kind === 'read' ? `reads ${!w.urls.length ? 'a page you set' : w.urls.length === 1 ? w.urls[0] : `${w.urls.length} pages`}` : w.kind === 'mission' ? `mission: ${w.goal}` : `${w.kind === 'plan' ? 'plans' : 'asks'}: ${w.request}`);
 const working = (s: Status) => s === 'queued' || s === 'running' || s === 'waiting';
 /** A one-off that fired: Done once no run of it (helpers too) still works. */
 const nextText = (r: Listed) => (r.when.kind === 'once' && r.paused && r.next <= Date.now()
@@ -98,13 +101,15 @@ function setLook(li: Row, look: Look): void {
 }
 
 /** Open requests ("Ask") need a gardens model whose measured `agent.loop` is true; "Plan first" needs `plan` (or the loop), as the worker checks. */
-type Can = { ask: boolean; plan: boolean; skillEdit: boolean };
+type Can = { ask: boolean; plan: boolean; skillEdit: boolean; model: string };
 async function canDo(): Promise<Can> {
   const { taskModels } = parseSettings(await chrome.storage.sync.get('taskModels'));
   const name = taskModels.gardens || (await engineCall<{ loaded: { name: string } | null }>('status').catch(() => null))?.loaded?.name || '';
   const ask = !!modelById(name)?.agent?.loop;
-  return { ask, plan: ask || can(name, 'plan'), skillEdit: can(name, 'skillEdit') };
+  return { ask, plan: ask || can(name, 'plan'), skillEdit: can(name, 'skillEdit'), model: name };
 }
+/** A seed the gardens model wasn't measured for: no Turn on, no Run now (the worker refuses them too). */
+const lacks = (x: { needs?: Ability[] }) => !!x.needs?.some((a) => !can(abilities.model, a));
 
 export async function renderGarden(): Promise<void> {
   try {
@@ -118,6 +123,7 @@ export async function renderGarden(): Promise<void> {
     $('#gardener-list').replaceChildren(...(gardeners.length ? gardeners.map((x) => gardenerItem(x, ask)) : [emptyPot('Gardeners grow here.')]));
     renderRuns();
     renderSkills();
+    renderHire();
     void renderConnectors();
     loaded = true;
   } catch (e) {
@@ -144,10 +150,53 @@ function gardenerItem(g: Gardener, ask: Can): HTMLLIElement {
         await renderGarden();
       }), 'ghost'), `Delete ${g.name}`)),
     err,
+    interview(g, err),
     mine.length ? h('ul', { className: 'list' }, ...mine.map(routineItem)) : null,
     grantsBox(g.id),
     notebook(g),
     add);
+}
+
+// ---- companions (plan T12): hire a pack, then its interview on first open ----
+
+const interviews = new Map<string, HTMLElement>(); // gardener id → its interview, kept across renders while it is asked
+
+/** A hired gardener not yet asked: its questions one at a time, each skippable. It never looks the person up. */
+function interview(g: Gardener, err: HTMLElement): HTMLElement | null {
+  const p = presetById(g.preset);
+  if (!p || g.profile || !p.interview.length) return null;
+  let box = interviews.get(g.id);
+  if (!box) {
+    interviews.set(g.id, (box = h('div', { className: 'stack' },
+      h('p', { className: 'muted small', textContent: `${g.name} would like to know a few things. Answer what you like; Skip leaves a question out. Your answers join ${g.name}’s instructions.` }),
+      questions(p.interview, (answers) => void tryIt(err, async () => {
+        const profile = p.interview.map(({ q }) => ({ q, a: answers[q] ?? '' })).filter((x) => x.a);
+        await bg('gardenerSave', { gardener: { ...g, profile, instructions: withProfile(g.instructions, profile) } });
+        interviews.delete(g.id);
+        await renderGarden();
+      })(), true))));
+  }
+  return box;
+}
+
+function renderHire(): void {
+  $('#garden-hire').replaceChildren(
+    h('p', { className: 'muted small', textContent: 'A companion arrives with skills and routines, all off until you turn them on. Most need a model measured for their workflow.' }),
+    h('ul', { className: 'list' }, ...PRESETS.map((p) => {
+      const err = errLine();
+      const hireId = crypto.randomUUID(); // a retry of this card's Hire makes no second gardener
+      const boxes = p.sites.map((x) => h('input', { type: 'checkbox', value: x, attrs: { 'aria-label': `${p.name} may read ${x} signed in` } }));
+      return h('li', { className: 'gardener' },
+        h('div', { className: 'head' }, flower(22, '', p.look),
+          h('span', { className: 't' }, h('b', { textContent: p.name }), h('span', { className: 'p', textContent: `${p.role} · ${count(p.skills.length, 'skill')} · ${count(p.routines.length, 'routine')}` })),
+          labelled(busyButton('Hire', tryIt(err, async () => {
+            await bg('hire', { presetId: p.id, hireId, sites: boxes.filter((b) => b.checked).map((b) => b.value) });
+            await renderGarden();
+          }), 'secondary'), `Hire ${p.name}`)),
+        p.note && h('p', { className: 'muted small', textContent: p.note }),
+        boxes.length ? h('div', { className: 'row' }, h('span', { className: 'muted small', textContent: 'Sites it may read signed in:' }), ...boxes.map((b) => h('label', { className: 'check' }, b, b.value))) : null,
+        err);
+    })));
 }
 
 // ---- the notebook: the person's notes for this gardener (or all), and the notes it took itself ----
@@ -237,17 +286,33 @@ function routineItem(r: Listed): HTMLLIElement {
   // A routine the gardener (or a preset) proposed stays off until the person turns it on here.
   const proposed = r.paused && r.by !== undefined && r.by !== 'person';
   const fired = r.when.kind === 'once' && r.paused && r.next <= Date.now(); // nothing to resume
-  const next = h('span', { className: 'result', textContent: proposed ? `Proposed by ${gardeners.find((x) => x.id === r.gardenerId)?.name ?? 'a gardener'}. Turn on?` : nextText(r) });
+  const blocked = lacks(r) || noPage(r.work);
+  const who = gardeners.find((x) => x.id === r.gardenerId)?.name ?? 'a gardener';
+  const next = h('span', { className: 'result', textContent: noPage(r.work) ? NO_PAGE : blocked ? NEEDS : proposed ? (r.by === 'preset' ? `From ${who}’s pack, off. Turn on?` : `Proposed by ${who}. Turn on?`) : nextText(r) });
   nextLines.set(r.id, next);
   return h('li', {},
     h('span', { className: 't' }, h('b', { textContent: r.name }), h('span', { className: 'p', textContent: `${whenText(r.when)} · ${workText(r.work)}` }),
       // Proposed: every page it would read, before the person turns it on (the goal and request are in full above).
-      proposed && r.work.kind === 'read' && h('span', { className: 'result', textContent: r.work.urls.join('\n') }), next),
+      proposed && r.work.kind === 'read' && r.work.urls.length > 0 && h('span', { className: 'result', textContent: r.work.urls.join('\n') }), next),
     h('div', { className: 'actions' },
-      !fired && labelled(busyButton(proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause', tryIt(err, async () => (await bg('routineSave', { routine: { ...r, paused: !r.paused } }), await renderGarden())), 'ghost'), `${proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause'} ${r.name}`),
-      labelled(busyButton('Run now', tryIt(err, () => bg('gardenRun', { routineId: r.id })), 'secondary'), `Run ${r.name} now`),
+      !fired && !(blocked && r.paused) && labelled(busyButton(proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause', tryIt(err, async () => (await bg('routineSave', { routine: { ...r, paused: !r.paused } }), await renderGarden())), 'ghost'), `${proposed ? 'Turn on' : r.paused ? 'Resume' : 'Pause'} ${r.name}`),
+      !blocked && labelled(busyButton('Run now', tryIt(err, () => bg('gardenRun', { routineId: r.id })), 'secondary'), `Run ${r.name} now`),
       labelled(busyButton('Delete', tryIt(err, async () => (await bg('routineDelete', { id: r.id }), await renderGarden())), 'ghost'), `Delete ${r.name}`)),
+    pagesBox(r, err),
     err);
+}
+
+/** A read routine's pages, set or replaced (the worker checks them against the gardener's sites); an event watches the first. */
+function pagesBox(r: Listed, err: HTMLElement): HTMLElement | null {
+  if (r.work.kind !== 'read') return null;
+  const urls = h('textarea', { rows: 2, defaultValue: r.work.urls.join('\n'), placeholder: 'Pages, one URL per line, on its sites', attrs: { 'aria-label': `Pages for ${r.name}` } });
+  const save = busyButton('Save pages', tryIt(err, async () => {
+    const list = lines(urls.value);
+    const when = r.when.kind === 'event' ? { ...r.when, url: list[0] ?? '' } : r.when;
+    await bg('routineSave', { routine: { ...r, when, work: { kind: 'read', urls: list } } });
+    await renderGarden();
+  }), 'secondary');
+  return h('details', { open: noPage(r.work) }, h('summary', { textContent: noPage(r.work) ? 'Set the page' : 'Change pages' }), urls, h('div', { className: 'row' }, save));
 }
 
 /** A routine's new run moved its next time: only the "Next:" lines change. */
@@ -255,7 +320,7 @@ async function refreshNext(): Promise<void> {
   routines = await bg<Listed[]>('routineList').catch(() => routines);
   for (const r of routines) {
     const el = nextLines.get(r.id);
-    if (el && !(r.paused && r.by !== undefined && r.by !== 'person')) el.textContent = nextText(r);
+    if (el && !(r.paused && r.by !== undefined && r.by !== 'person') && !lacks(r) && !noPage(r.work)) el.textContent = nextText(r);
   }
 }
 
@@ -397,7 +462,8 @@ function renderSkills(): void {
 function skillItem(s: Skill): HTMLLIElement {
   const err = errLine();
   const passed = s.cases.filter((c) => c.pass).length;
-  const status = !s.on ? (s.by === 'person' ? 'Off' : `Off: by ${s.by}. Turn on?`) : !s.cases.length ? 'No test cases' : tested(s) ? `${passed} of ${s.cases.length} cases passed` : 'Not tested yet';
+  const blocked = lacks(s);
+  const status = blocked ? NEEDS : !s.on ? (s.by === 'person' ? 'Off' : s.by === 'preset' ? 'Off: from the pack. Turn on?' : `Off: by ${s.by}. Turn on?`) : !s.cases.length ? 'No test cases' : tested(s) ? `${passed} of ${s.cases.length} cases passed` : 'Not tested yet';
   const owner = gardeners.find((x) => x.id === s.gardenerId)?.name;
   const who = s.gardenerId ? null : select('Test with', gardeners.map((x): [string, string] => [x.id, x.name]));
   const approve = h('input', { type: 'checkbox', attrs: { 'aria-label': 'Approve plans for this test' } });
@@ -406,8 +472,8 @@ function skillItem(s: Skill): HTMLLIElement {
       h('span', { className: 'p', textContent: [s.title, s.work === 'plan' ? 'plans' : 'asks', `v${s.version}`, ...(owner ? [owner] : [])].join(' · ') }),
       h('span', { className: 'result', textContent: status }), err),
     h('div', { className: 'actions' },
-      labelled(busyButton(s.on ? 'Turn off' : 'Turn on', tryIt(err, async () => (await bg('skillSave', { skill: { ...s, on: !s.on } }), await reloadSkills())), 'ghost'), `${s.on ? 'Turn off' : 'Turn on'} /${s.name}`),
-      labelled(busyButton('Test on cases', tryIt(err, async () => (await bg('skillTest', { id: s.id, gardenerId: who?.value, approvePlans: approve.checked }), await reloadSkills())), 'secondary'), `Test /${s.name} on its cases`),
+      !(blocked && !s.on) && labelled(busyButton(s.on ? 'Turn off' : 'Turn on', tryIt(err, async () => (await bg('skillSave', { skill: { ...s, on: !s.on } }), await reloadSkills())), 'ghost'), `${s.on ? 'Turn off' : 'Turn on'} /${s.name}`),
+      !blocked && labelled(busyButton('Test on cases', tryIt(err, async () => (await bg('skillTest', { id: s.id, gardenerId: who?.value, approvePlans: approve.checked }), await reloadSkills())), 'secondary'), `Test /${s.name} on its cases`),
       labelled(busyButton('Delete', tryIt(err, async () => {
         const linked = routines.filter((r) => r.skillId === s.id).length;
         if (!confirm(`Delete /${s.name}?${linked ? ` ${count(linked, 'routine')} that follow it will pause.` : ''}`)) return;

@@ -86,9 +86,11 @@ export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask
 
 /**
  * The tools offered to this run: the person's tabs only when they named some, `propose_routine` and `remember` only
- * with a loop or in a plan, `app_call` only with a usable app tool, described by `appLines`.
+ * with a loop or in a plan, `app_call` only with a usable app tool, described by `appLines`. `allowed`: a hired
+ * gardener's pack list, which only narrows.
  */
-export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS, connectors: ConnectorFacts[] = []): ToolSpec[] => tools.flatMap((t) => {
+export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS, connectors: ConnectorFacts[] = [], allowed?: string[]): ToolSpec[] => tools.flatMap((t) => {
+  if (allowed && !allowed.includes(t.name)) return [];
   if ((t.name === 'read_my_tab' || t.name === 'act_my_tab') && !mentionsOf(run).length) return [];
   if ((t.name === 'propose_routine' || t.name === 'remember') && !run.agent?.loop && run.work.kind !== 'plan') return [];
   if (t.name !== 'app_call') return [t];

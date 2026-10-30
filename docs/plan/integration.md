@@ -59,6 +59,11 @@ Done after the group agents report. Owner: the main session.
   gardener form's `#gardener-site-notes`; `docs/architecture.md` gains ADR-17. `hg-trust` is v3 (`connectors`).
   `domain/garden/classify.ts` adds `refund` to the sensitive words and exports `sensitiveWord`. `trimmed` moved from
   `background/garden.ts` to `domain/garden/report.ts`. DONE.
+- T12 (plan T): `static/sidepanel.html` gains Garden's "Hire a companion" card (`#hire`, `#garden-hire`).
+  `ui/questions.ts` `questions` takes an optional `skip` and a per-question `placeholder`. `domain/garden/tools.ts`
+  `toolsFor` takes an optional `allowed` list. `pages/library.ts` labels an unkept pack template "from a companion pack". `Gardener.preset?`, `Gardener.profile?`, `Routine.needs?` are optional
+  fields (records stay v1); no store or database version changes. `bench/abilities.mjs` gains `workflow <preset>` and
+  writes `results/ability-workflow-<preset>-<model>.json`. No other shared file changed. DONE.
 
 ## Known issues
 

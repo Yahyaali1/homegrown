@@ -8,7 +8,7 @@ import { factsOf, GARDEN_TOOLS, gardenNotice, MODEL_CHANGED, NeedsHelp, NeedsYou
 import { screencast } from './devtools.ts';
 import { htmlText } from './monitors.ts';
 import { recipesList } from './scrape.ts';
-import { addNote, confirmedEntities, deleteDocs, deleteNote, deleteNotes, listNotes, notesFor } from './memory.ts';
+import { addNote, confirmedEntities, deleteDocs, deleteNote, deleteNotes, listNotes, notesFor, putEntity } from './memory.ts';
 import { anchorsIn } from '../domain/memory.ts';
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
@@ -18,13 +18,14 @@ import { actOf, addSeen, alwaysOk, approveAllOk, callKey, failTaints, decide, on
 import { checkFetch, claim, DEADLINE, eventCheck, expired, nextAfter, nextBatch, overdue } from '../domain/garden/schedule.ts';
 import { downloadRun, ownsTab, TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
-import { accept, EDIT_OFF, evidenceOf, improveThink, NEEDS, parseSkill, proposalOf, revise, SKILL, skillRefusal, skillWork, slashOf, unlinked, unmet, upgradeGarden, verdict, type Skill } from '../domain/garden/skills.ts';
+import { accept, EDIT_OFF, evidenceOf, improveThink, NEEDS, needsRefusal, parseSkill, proposalOf, revise, SKILL, skillRefusal, skillWork, slashOf, unlinked, unmet, upgradeGarden, verdict, type Skill } from '../domain/garden/skills.ts';
 import { parseChat, type Chat } from '../domain/chat.ts';
 import { contextChars } from '../domain/text.ts';
-import { helping, mayStart, newRun, pruneIds, routineWork, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
+import { helping, mayStart, newRun, noPage, NO_PAGE, pruneIds, routineWork, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
 import { trimmed } from '../domain/garden/report.ts';
 import { factsOf as connectorFacts } from '../domain/mcp.ts';
+import { hireRecords, presetById } from '../domain/garden/presets.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
 const ALARM = 'garden:';
@@ -44,6 +45,8 @@ const getRun = async (id: string) => parseRun(await idb.get(await db, 'runs', id
 const skills = async () => parsed(await idb.all(await db, 'skills'), parseSkill);
 const getSkill = async (id: string) => parseSkill(await idb.get(await db, 'skills', id));
 /** The model gardeners use now: the chosen one, else the one loaded. */
+/** A hired gardener's pack tools (an unknown pack allows none); undefined for the person's own. */
+const allowedFor = (g: Gardener): string[] | undefined => (g.preset ? presetById(g.preset)?.tools ?? [] : undefined);
 const gardensModel = async () => (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
 
 // ---- progress ----
@@ -196,8 +199,11 @@ async function nextQueued(): Promise<GardenRun[]> {
   return nextBatch(runs, now);
 }
 
-/** Pins the model and its measured abilities when the run first goes running: what the engine's useModel rule picks, loaded. */
-async function pin(run: GardenRun): Promise<string | null> {
+/**
+ * Pins the model and its measured abilities when the run first goes running: what the engine's useModel rule picks,
+ * loaded. A routine's needs (plan T12) are checked before the work's own refusal, so a pack seed says what it lacks.
+ */
+async function pin(run: GardenRun, routine?: Routine): Promise<string | null> {
   if (!(run.model && run.maxTokens && run.agent)) {
     try {
       const m = await engine<{ name: string; maxTokens: number }>('resolve', { name: await modelFor('gardens') });
@@ -207,7 +213,7 @@ async function pin(run: GardenRun): Promise<string | null> {
       return e instanceof Error ? e.message : String(e);
     }
   }
-  return refusal(run);
+  return needsRefusal(routine, (a) => !!run.abilities?.includes(a)) ?? refusal(run);
 }
 
 /** What policy needs from storage, read fresh: a grant revoked or a recipe edited counts at once. */
@@ -238,7 +244,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
   const routine = run.routineId ? parseRoutine(await idb.get(d, 'routines', run.routineId)) ?? undefined : undefined;
   const skillId = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.skillId : undefined;
   const skill = skillId ? await getSkill(skillId) : null;
-  const why = gardener ? (await pin(run)) ?? skillRefusal(run, skill) : 'Its gardener was deleted.';
+  const why = gardener ? (await pin(run, routine)) ?? skillRefusal(run, skill) : 'Its gardener was deleted.';
   if (why || !gardener) {
     live.delete(run.id);
     return await finish('failed', why ?? '');
@@ -288,7 +294,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
     for (;;) {
       if (stop.signal.aborted) return;
       const known = await knownFor(gardener.id);
-      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run, TOOLS, known.connectors), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }),
+      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run, TOOLS, known.connectors, allowedFor(gardener)), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }),
         ...(anchors.length && { anchors }), ...(forEntity && { forEntity }), ...(skill && { skill }) };
       const a = next(run, ctx);
       if ('think' in a) {
@@ -600,7 +606,9 @@ export const handlers = {
     // Stored looks are read leniently; a new one must be valid (never the mark's 10 petals).
     if (gardener.look !== undefined && !parseLook(gardener.look)) throw new Error('A look has 5–9, 11 or 12 petals and leans 0.3–1.');
     // A new gardener (or one from before looks) gets a flower of its own at random.
-    const g = parseGardener({ v: 1, minutes: 10, ...gardener, look: gardener.look ?? randomLook(), id: gardener.id || crypto.randomUUID(), createdAt: gardener.createdAt ?? Date.now() });
+    // A hired gardener stays its pack's (its tools only narrow); only Hire sets a pack.
+    const old = gardener.id ? parseGardener(await idb.get(await db, 'gardeners', gardener.id)) : null;
+    const g = parseGardener({ v: 1, minutes: 10, ...gardener, preset: old?.preset, look: gardener.look ?? randomLook(), id: gardener.id || crypto.randomUUID(), createdAt: gardener.createdAt ?? Date.now() });
     if (!g) throw new Error('A gardener needs a name (up to 40 characters), instructions up to 2000, at most 20 sites and 1–60 minutes.');
     await idb.put(await db, 'gardeners', g);
     return g;
@@ -617,6 +625,33 @@ export const handlers = {
     await idb.del(await db, 'gardeners', id);
     return true;
   },
+  /**
+   * Hire a companion (plan T12): its gardener, its skills (off), its routines (paused) and its template files (unkept),
+   * each seed's needs copied on. Sites only from the pack's suggestions the person checked.
+   */
+  /**
+   * Hire a companion (plan T12): `hireRecords` stored, its files first and its gardener last, so a gardener means the
+   * hire is whole. `hireId` (the card's) names the records: a retry rewrites them and never makes a second gardener.
+   */
+  hire: async ({ presetId, sites = [], hireId }: { presetId: string; sites?: string[]; hireId?: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const p = presetById(String(presetId));
+    if (!p) throw new Error('No companion is called that.');
+    const hid = typeof hireId === 'string' && /^[\w-]{8,64}$/.test(hireId) ? hireId : crypto.randomUUID();
+    const d = await db;
+    const done = parseGardener(await idb.get(d, 'gardeners', hid));
+    if (done) return done;
+    let k = 0;
+    const made = hireRecords(p, { sites: Array.isArray(sites) ? sites : [], taken: (await skills()).filter((x) => x.gardenerId !== hid).map((x) => x.name),
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone, now: Date.now(), id: () => (k++ ? `${hid}.${k}` : hid) });
+    if (!made) throw new Error('That companion couldn’t be hired.');
+    for (const x of made.entities) await putEntity(x);
+    for (const x of made.skills) await idb.put(d, 'skills', x);
+    for (const x of made.routines) await idb.put(d, 'routines', x);
+    await idb.put(d, 'gardeners', made.gardener);
+    return made.gardener;
+  },
   routineList: async ({ gardenerId }: { gardenerId?: string }, sender?: Sender) => {
     page(sender);
     await ready();
@@ -627,7 +662,10 @@ export const handlers = {
     page(sender);
     await ready();
     const g = await mustGardener(String(routine.gardenerId ?? ''));
-    const w = checkWork(routine.work, g);
+    // A pack's routine with no page yet may stay paused; it turns on only once the person sets one.
+    const unset = parseWork(routine.work) === null && routine.paused === true && routine.work?.kind === 'read' && Array.isArray(routine.work.urls) && !routine.work.urls.length;
+    if (!unset && routine.paused === false && routine.work?.kind === 'read' && Array.isArray(routine.work.urls) && !routine.work.urls.length) throw new Error(NO_PAGE);
+    const w: Work = unset ? { kind: 'read', urls: [] } : checkWork(routine.work, g);
     // A routine finds its named tabs by URL on each run; a tab id means nothing by then.
     const work: Work = (w.kind === 'ask' || w.kind === 'plan') && w.tabs ? { ...w, tabs: w.tabs.map(({ url, title }) => ({ url, title })) } : w;
     if (routine.skillId) {
@@ -637,13 +675,16 @@ export const handlers = {
       if (w.kind !== 'ask' && w.kind !== 'plan') throw new Error('A routine with a skill asks or plans.');
     }
     const tz = routine.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const model = (await routines()).find((x) => x.id === routine.id)?.needs?.length ? await gardensModel() : '';
     const r = await idb.tx(await db, 'routines', 'readwrite', async (t) => {
       const old = routine.id ? parseRoutine(await idb.req(t.objectStore('routines').get(routine.id))) : null;
       const now = Date.now();
-      const r = parseRoutine({ v: 1, paused: false, ...old, ...routine, id: routine.id || crypto.randomUUID(), tz, work, createdAt: old?.createdAt ?? now, nextDue: now });
+      // Its needs are the worker's (only Hire sets them).
+      const r = parseRoutine({ v: 1, paused: false, ...old, ...routine, needs: old?.needs, id: routine.id || crypto.randomUUID(), tz, work, createdAt: old?.createdAt ?? now, nextDue: now });
       if (!r) throw new Error('This routine isn’t valid: it needs a name, a time and a time zone.');
+      if (!r.paused && needsRefusal(r, (a) => can(model, a))) throw new Error(NEEDS);
       // An event routine's first check is now: it only sets the snapshot later checks compare with.
-      r.nextDue = r.when.kind === 'event' ? now : nextAfter(r.when, r.tz, null, now);
+      r.nextDue = r.when.kind === 'event' || noPage(r.work) ? now : nextAfter(r.when, r.tz, null, now);
       if (r.when.kind === 'once' && !r.paused && r.nextDue <= now) throw new Error('That time has passed.');
       t.objectStore('routines').put(r);
       return r;
@@ -660,10 +701,13 @@ export const handlers = {
     const d = await db;
     const routine = routineId ? parseRoutine(await idb.get(d, 'routines', routineId)) : null;
     if (routineId && !routine) throw new Error('That routine no longer exists.');
+    if (routine && noPage(routine.work)) throw new Error(NO_PAGE);
     const earlier = followUp ? await getRun(String(followUp)) : null;
     if (followUp && !earlier) throw new Error('That run no longer exists.');
     if (earlier && ['queued', 'running', 'waiting'].includes(earlier.status)) throw new Error('It’s still working: queue the message instead.');
     const g = await mustGardener(earlier?.gardenerId ?? routine?.gardenerId ?? String(gardenerId ?? ''));
+    const name = await gardensModel();
+    if (needsRefusal(routine, (a) => can(name, a))) throw new Error(NEEDS);
     let w = checkWork(routine ? routineWork(routine) : work, g);
     if (earlier && w.kind !== 'ask' && w.kind !== 'plan') throw new Error('A follow-up is a request.');
     if (w.kind === 'ask' || w.kind === 'plan') {
@@ -671,7 +715,6 @@ export const handlers = {
       const hit = !routine && !earlier ? slashOf(w.request, await skills()) : null;
       if (typeof hit === 'string') throw new Error(hit);
       if (hit) w = skillWork(hit.skill, hit.rest, w.tabs);
-      const name = await gardensModel();
       await skillReady(w, g.id, name);
       if (!modelById(name)?.agent?.loop && (w.kind === 'ask' || !can(name, 'plan'))) throw new Error(w.kind === 'ask' ? OPEN_REFUSED : PLAN_REFUSED);
     }
@@ -819,7 +862,7 @@ export const handlers = {
         throw new Error('Read it first: this one can be approved 8 seconds after it is shown.');
       }
       if (q.kind === 'plan') {
-        const why = g ? answerPlan(r, { gardener: g, tools: toolsFor(r, TOOLS, known.connectors), now, ...known }, q, value as 'yes' | 'no', calls, now) : 'That gardener no longer exists.';
+        const why = g ? answerPlan(r, { gardener: g, tools: toolsFor(r, TOOLS, known.connectors, allowedFor(g)), now, ...known }, q, value as 'yes' | 'no', calls, now) : 'That gardener no longer exists.';
         if (why) throw new Error(why);
         return;
       }

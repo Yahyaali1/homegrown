@@ -80,7 +80,11 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   (the data part). Plan T8: Garden → Skills lists skills (on/off, Test on cases with "Approve plans for this test",
   cases with Pass / Fail marks where there is no `expect`, Improve with the evidence and a proposed edit as a
   `diffText` diff with Accept / Discard, History, Edit); the routine form's skill select ("Not tested yet" when no
-  case passed). `chat.ts`: `/name rest` sends the skill's method as the instruction and its files in `selection`,
+  case passed). Plan T12: Garden → "Hire a companion" (`#hire`, `#garden-hire`) has a card per pack with its
+  suggested sites as unchecked boxes; a hired gardener's row asks its interview once (`ui/questions.ts` with Skip),
+  then saves `profile` and the instructions with `withProfile`. A read routine has "Change pages" ("Set the page",
+  open, when it has none); an event routine watches the first page. A pack's `note` shows on its card. A routine or skill whose needs the gardens model
+  lacks shows "Needs a model measured for this workflow." and offers no Turn on, Run now or Test. `chat.ts`: `/name rest` sends the skill's method as the instruction and its files in `selection`,
   with `skillId` on the turn; typing `/` lists the skills that are on (`fuzzy`) in `#slash`. `showRequests()` re-renders the trays when
   the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen. Plan T11: Garden →
   Connectors lists connected apps (Edit, Check tools again, Delete) and the Connect form (name, URL, token, app hosts,

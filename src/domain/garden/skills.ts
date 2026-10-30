@@ -85,6 +85,9 @@ export const skillWork = (s: Skill, request: string, tabs?: Mention[]): Work =>
 /** The needs a model lacks. */
 export const unmet = (s: Pick<Skill, 'needs'>, has: (a: Ability) => boolean): Ability[] => (s.needs ?? []).filter((a) => !has(a));
 
+/** A skill or routine can't be turned on, or a run of it start, while the model lacks a need (plan T12). */
+export const needsRefusal = (x: Pick<Skill, 'needs'> | null | undefined, has: (a: Ability) => boolean): string | null => (x && unmet(x, has).length ? NEEDS : null);
+
 /** Why a run of `skill` can't start (checked at pin, against the run's pinned abilities); null when it can. */
 export function skillRefusal(run: GardenRun, skill: Skill | null | undefined): string | null {
   const id = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.skillId : undefined;

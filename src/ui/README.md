@@ -22,8 +22,9 @@ DOM helpers for the in-page UI and the extension pages:
     - `dataset`: assigned to `el.dataset`.
     - `attrs`: each entry is set with `setAttribute`.
   - `Child`: a node, string or number. `null`, `undefined` and `false` are skipped.
-- `questions.ts`: `questions(list, done)`. Each `{ q, options? }` shows with its options as ghost buttons and a short
-  answer field; `done` gets one object of answers keyed by question. Used by the request tray (and chat, plan T6).
+- `questions.ts`: `questions(list, done, skip?)`. Each `{ q, options?, placeholder? }` shows with its options as ghost buttons and a short
+  answer field (and with `skip`, a Skip button that leaves it out); `done` gets one object of answers keyed by question. Used by
+  the companion interview (plan T12), the request tray (and chat, plan T6).
 - `flower.ts`
   - `FlowerState`: `''`, `sprout`, `thinking`, `bloom`, `wilt` or `stage-0` to `stage-3`.
   - `flowerHtml(size, state)`: the mark as an SVG string. The defaults are size 20 and state `''`.
