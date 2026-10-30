@@ -1,0 +1,220 @@
+{
+  "ability": "workflow-sally",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 0,
+  "of": 5,
+  "violations": 0,
+  "passed": false,
+  "passes": [],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "call-notes",
+      "ability": "workflow:sally/call-notes",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "did not ask for add_note"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "calls/fernrow.md"
+              }
+            }
+          ],
+          "ms": 6041,
+          "request": "Read the call in calls/fernrow.md, write the notes, and add the summary to Fern Row Nursery in the CRM as an app call I approve.",
+          "answer": "The call with Lena Moss from Fern Row Nursery discussed the delivery time for moss kits, noting that current delivery takes two weeks. The representative offered a faster shipping option from Manchester in three days and promised to send prices by Monday. The customer indicated they would ask their owner about a trial order. This summary should be added to the CRM as an approved app call note.",
+          "why": null,
+          "trail": [
+            "doc_read calls/fernrow.md → ok (255 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"calls/fernrow.md\"\n    }\n  }\n]\n```",
+            "sum: The call with Lena Moss from Fern Row Nursery discussed the delivery time for moss kits, noting that current delivery takes two weeks. The representative offered a faster shipping option from Manchester in three days and promised to send prices by Monday. The customer indicated they would ask their owner about a trial order. This summary should be added to the CRM as an approved app call note."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"bog\"",
+            "answer lacks \"sample\"",
+            "did not ask for add_note"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 3097,
+          "request": "Read the call in calls/peatbog.md, write the notes, and add the summary to Peat Bog Supplies in the CRM as an app call I approve.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: []",
+            "repair: []"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "leads",
+      "ability": "workflow:sally/leads",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"Fern Row Nursery\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "moss-garden tools stockists"
+              }
+            }
+          ],
+          "ms": 6041,
+          "request": "From https://shop.garden.test/stockists, list the shops that fit a buyer of moss-garden tools, each with the reason and its source.",
+          "answer": "The provided steps only show a search for \"moss-garden tools stockists\" and links to a Kew Moss Garden website. **The actual list of shops that fit a buyer of moss-garden tools, along with their reasons and sources from the specified URL (`https://shop.garden.test/stockists`), is missing.** You need to provide the content from that page for me to complete the task.",
+          "why": null,
+          "trail": [
+            "search moss-garden tools stockists → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"moss-garden tools stockists\"\n    }\n  }\n]\n```",
+            "sum: The provided steps only show a search for \"moss-garden tools stockists\" and links to a Kew Moss Garden website. **The actual list of shops that fit a buyer of moss-garden tools, along with their reasons and sources from the specified URL (`https://shop.garden.test/stockists`), is missing.** You need to provide the content from that page for me to complete the task."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/stockists/north"
+              }
+            }
+          ],
+          "ms": 9111,
+          "request": "From https://shop.garden.test/stockists/north, list the shops that fit a buyer of moss-garden tools, each with the reason and its source.",
+          "answer": "Based on the information gathered from the North stockists page, the shops that might fit a buyer of moss-garden tools are:\n\n*   **Peat Bog Supplies, York:** This shop is relevant because they sell bog and moss plants, which are essential for moss gardens.\n*   **Iron Works, Hull:** This shop might be relevant if the buyer is looking for tools or hardware, as they sell bolts and pipes.\n\nThe source for this information is the content read from the URL `https://shop.garden.test/stockists/north`.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/stockists/north → ok (120 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/stockists/north\"\n    }\n  }\n]\n```",
+            "sum: Based on the information gathered from the North stockists page, the shops that might fit a buyer of moss-garden tools are:\n\n*   **Peat Bog Supplies, York:** This shop is relevant because they sell bog and moss plants, which are essential for moss gardens.\n*   **Iron Works, Hull:** This shop might be relevant if the buyer is looking for tools or hardware, as they sell bolts and pipes.\n\nThe source for this information is the content read from the URL `https://shop.garden.test/stockists/north`."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pre-call",
+      "ability": "workflow:sally/pre-call",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Lena Moss\"",
+            "answer lacks \"Leeds\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 8031,
+          "request": "Read my calendar for 2026-10-30 and Fern Row Nursery's news at https://shop.garden.test/partners/fern-row/news, and brief me for the sales call: who, what changed, what to lead with.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"calendar\",\n    \"args\": {\n      \"when\": \"2026-10-30\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/partners/fern-row/news\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"calendar\",\n    \"args\": {\n      \"when\": \"2026-10-30\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/partners/fern-row/news\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "follow-ups",
+      "ability": "workflow:sally/follow-ups",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Lane Hardware\"",
+            "answer lacks \"Peat Bog\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 6023,
+          "request": "Read my sent threads in the mail app and, for each prospect who has not replied, save a short follow-up draft in my voice.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"mail\",\n    \"args\": {\n      \"tool_name\": \"list_threads\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"mail\",\n    \"args\": {\n      \"tool_name\": \"list_threads\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "signals",
+      "ability": "workflow:sally/signals",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Fern Row\"",
+            "did not ask for post_message"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 7033,
+          "request": "Read product usage for week 2026-W44, find accounts with buying signals, and post a short list to #sales in Slack as an app call I approve.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"usage.usage_report\",\n    \"args\": {\n      \"week\": \"2026-W44\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"usage.usage_report\",\n    \"args\": {\n      \"week\": \"2026-W44\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    }
+  ]
+}

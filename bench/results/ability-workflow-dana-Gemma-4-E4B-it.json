@@ -1,0 +1,271 @@
+{
+  "ability": "workflow-dana",
+  "model": "Gemma-4-E4B-it",
+  "maxTokens": 4096,
+  "pass": 2,
+  "of": 4,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:dana/root-cause",
+    "workflow:dana/smoke"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "root-cause",
+      "ability": "workflow:dana/root-cause",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://staging.garden.test/basket"
+              }
+            }
+          ],
+          "ms": 13162,
+          "request": "Find the root cause of the broken basket at https://staging.garden.test/basket.",
+          "answer": "The root cause of the broken basket is a `TypeError` occurring in `basket.js` at line 42 because the `price` variable is undefined. This suggests that the data being passed to the component or function is missing the expected price property. A fix would involve ensuring that the data object contains a `price` field before it is used in the basket logic.",
+          "why": null,
+          "trail": [
+            "read_page https://staging.garden.test/basket → ok (110 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/basket\"\n    }\n  }\n]\n```",
+            "sum: The root cause of the broken basket is a `TypeError` occurring in `basket.js` at line 42 because the `price` variable is undefined. This suggests that the data being passed to the component or function is missing the expected price property. A fix would involve ensuring that the data object contains a `price` field before it is used in the basket logic."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://staging.garden.test/login"
+              }
+            }
+          ],
+          "ms": 14129,
+          "request": "Why can't people sign in at https://staging.garden.test/login? Find the root cause.",
+          "answer": "The root cause is an expired authentication token during the sign-in process. The error message is: \"Request POST /api/session failed: 401 Unauthorized (token expired).\" The suggested fix is to refresh or re-authenticate the user to obtain a new, valid token.",
+          "why": null,
+          "trail": [
+            "read_page https://staging.garden.test/login → ok (78 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/login\"\n    }\n  }\n]\n```",
+            "sum: The root cause is an expired authentication token during the sign-in process. The error message is: \"Request POST /api/session failed: 401 Unauthorized (token expired).\" The suggested fix is to refresh or re-authenticate the user to obtain a new, valid token."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "docs-plan",
+      "ability": "workflow:dana/docs-plan",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"gotcha\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://docs.garden.test/upload"
+              }
+            }
+          ],
+          "ms": 13120,
+          "request": "Plan how we add file uploads, from the docs at https://docs.garden.test/upload.",
+          "answer": "The implementation plan for adding file uploads is to use the `POST /v2/files` endpoint. This endpoint allows for uploading a single file and has a maximum file size limit of 25 MB, with a rate limit of 10 requests per second. A key consideration is that the older `/v1/upload` endpoint is deprecated and will be removed in June.",
+          "why": null,
+          "trail": [
+            "read_page https://docs.garden.test/upload → ok (168 chars)"
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://docs.garden.test/upload\"\n    }\n  }\n]",
+            "sum: The implementation plan for adding file uploads is to use the `POST /v2/files` endpoint. This endpoint allows for uploading a single file and has a maximum file size limit of 25 MB, with a rate limit of 10 requests per second. A key consideration is that the older `/v1/upload` endpoint is deprecated and will be removed in June."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://docs.garden.test/webhooks"
+              }
+            }
+          ],
+          "ms": 16144,
+          "request": "Plan how we receive webhooks, from the docs at https://docs.garden.test/webhooks.",
+          "answer": "Based on the documentation provided, the plan to receive webhooks involves two main steps:\n\n1.  **Register a URL:** You must register a specific URL with the service to receive events.\n2.  **Handle Incoming Events:** When an event is received, you must check the `X-Garden-Signature` header for verification.\n\n**Gotchas:**\n*   **Retries:** Each event is automatically retried up to 3 times.\n*   **Payload Limit:** Payloads exceeding 1 MB will be dropped.",
+          "why": null,
+          "trail": [
+            "read_page https://docs.garden.test/webhooks → ok (166 chars)"
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://docs.garden.test/webhooks\"\n    }\n  }\n]",
+            "sum: Based on the documentation provided, the plan to receive webhooks involves two main steps:\n\n1.  **Register a URL:** You must register a specific URL with the service to receive events.\n2.  **Handle Incoming Events:** When an event is received, you must check the `X-Garden-Signature` header for verification.\n\n**Gotchas:**\n*   **Retries:** Each event is automatically retried up to 3 times.\n*   **Payload Limit:** Payloads exceeding 1 MB will be dropped."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "smoke",
+      "ability": "workflow:dana/smoke",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "act",
+              "args": {
+                "url": "https://staging.garden.test/signup",
+                "steps": {
+                  "strict": true,
+                  "instructions": [
+                    {
+                      "fill": [
+                        "#email",
+                        "test@garden.test"
+                      ]
+                    },
+                    {
+                      "click": "#go"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "ms": 14116,
+          "request": "Smoke-test sign up on https://staging.garden.test/signup: fill #email with test@garden.test, click #go, and report whether the next page says Welcome.",
+          "answer": "The smoke test was successful. After filling in the email address and clicking the \"go\" button, the next page displayed the message \"Welcome Welcome! Your account is ready.\"",
+          "why": null,
+          "trail": [
+            "act https://staging.garden.test/signup → ok (39 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/signup\",\n      \"steps\": {\n        \"instructions\": [\n          {\n            \"fill\": [\"#email\", \"test@garden.test\"]\n          },\n          {\n            \"click\": \"#go\"\n          }\n        ]\n      }\n    }\n  }\n]\n```",
+            "sum: The smoke test was successful. After filling in the email address and clicking the \"go\" button, the next page displayed the message \"Welcome Welcome! Your account is ready.\""
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "act",
+              "args": {
+                "url": "https://staging.garden.test/checkout",
+                "steps": {
+                  "strict": true,
+                  "instructions": [
+                    {
+                      "click": "#next"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "ms": 11102,
+          "request": "Smoke-test checkout on https://staging.garden.test/checkout: click #next and report any error the next page shows.",
+          "answer": "The smoke test on the checkout page was successful up to the click on `#next`. However, the next page displayed an error message: **\"Checkout error Error 502: the delivery service is unavailable.\"**",
+          "why": null,
+          "trail": [
+            "act https://staging.garden.test/checkout → ok (62 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\",\n      \"steps\": {\n        \"instructions\": [\n          {\n            \"click\": \"#next\"\n          }\n        ]\n      }\n    }\n  }\n]\n```",
+            "sum: The smoke test on the checkout page was successful up to the click on `#next`. However, the next page displayed an error message: **\"Checkout error Error 502: the delivery service is unavailable.\"**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repro",
+      "ability": "workflow:dana/repro",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"R-12\"",
+            "answer lacks \"no results\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 11064,
+          "request": "Read bug report R-12 in the tracker, try its steps on https://staging.garden.test/search (fill #q with fern, click #find), and file a bug in the tracker with steps, expected and actual.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"tracker\",\n    \"args\": {\n      \"tool\": \"get_report\",\n      \"args\": {\n        \"id\": \"R-12\"\n      }\n    }\n  }\n]\n```",
+            "repair: [\n  {\n    \"tool\": \"tracker\",\n    \"args\": {\n      \"tool\": \"get_report\",\n      \"args\": {\n        \"id\": \"R-12\"\n      }\n    }\n  }\n]"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"R-14\"",
+            "answer lacks \"502\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 11089,
+          "request": "Read bug report R-14 in the tracker, try its steps on https://staging.garden.test/checkout (click #next), and file a bug in the tracker with steps, expected and actual.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"tracker\",\n    \"args\": {\n      \"tool\": \"get_report\",\n      \"args\": {\n        \"id\": \"R-14\"\n      }\n    }\n  }\n]\n```",
+            "repair: [{\"tool\": \"tracker\", \"args\": {\"tool\": \"get_report\", \"args\": {\"id\": \"R-14\"}}}]"
+          ]
+        }
+      ]
+    }
+  ]
+}

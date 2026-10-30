@@ -156,8 +156,8 @@ test('no pack offers act_my_tab or propose_routine; write-heavy packs write only
   const known = { connectors: [{ id: 'c', name: 'Stripe', url: 'https://mcp.stripe.test/', tools: [{ name: 'create_refund', describe: 'refund', scope: 'ask' as const, schema: {} }, { name: 'send_reply', describe: 'reply', scope: 'ask' as const, schema: {} }], guidelines: '' }] };
   assert.ok(actOf({ tool: 'app_call', args: { connector: 'c', tool: 'create_refund', args: {} } }, known as never)?.why);
   assert.ok(actOf({ tool: 'app_call', args: { connector: 'c', tool: 'send_reply', args: {} } }, known as never)?.why);
-  for (const w of ['reply_to_conversation', 'chat_postMessage', 'add_replies', 'posted']) assert.ok(sensitiveWord(w), w);
-  for (const w of ['postal code', 'postcode', 'Messages', 'read_conversation']) assert.equal(sensitiveWord(w), null, w);
+  for (const w of ['reply_to_conversation', 'chat_postMessage', 'add_replies', 'posted', 'Pay', 'pay_invoice', 'Pay now']) assert.ok(sensitiveWord(w), w);
+  for (const w of ['postal code', 'postcode', 'Messages', 'read_conversation', 'get_payment', 'list_payments', 'Payment history']) assert.equal(sensitiveWord(w), null, w);
 });
 
 test('a seed that watches a page the person chooses ships with no page and stays paused', () => {

@@ -1,0 +1,267 @@
+{
+  "ability": "workflow-theo",
+  "model": "Gemma-4-E4B-it",
+  "maxTokens": 4096,
+  "pass": 1,
+  "of": 6,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:theo/scorecard"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "scorecard",
+      "ability": "workflow:theo/scorecard",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/applicants/ida"
+              }
+            }
+          ],
+          "ms": 13076,
+          "request": "Score the applicant at https://shop.garden.test/applicants/ida against this scorecard: people leadership, writing.",
+          "answer": "Based on the provided profile, here is the scoring for Ida Fenwick:\n\n**People Leadership: 4/4** - Ida demonstrated strong leadership by hiring and training 4 staff members and successfully managing operations at Kew Moss Garden.\n**Writing: 4/4** - Ida's writing skills are evidenced by her creation of the staff handbook.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/applicants/ida → ok (158 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/applicants/ida\"\n    }\n  }\n]\n```",
+            "sum: Based on the provided profile, here is the scoring for Ida Fenwick:\n\n**People Leadership: 4/4** - Ida demonstrated strong leadership by hiring and training 4 staff members and successfully managing operations at Kew Moss Garden.\n**Writing: 4/4** - Ida's writing skills are evidenced by her creation of the staff handbook."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/applicants/tom"
+              }
+            }
+          ],
+          "ms": 12066,
+          "request": "Score the applicant at https://shop.garden.test/applicants/tom against this scorecard: people leadership, writing.",
+          "answer": "Based on the provided profile, here is the scoring for Tom Ashby:\n\n*   **People Leadership:** 4 (He has been a Team Lead at Lane Hardware for 3 years and led a team of 9.)\n*   **Writing:** 1 (No writing samples were provided in the profile.)",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/applicants/tom → ok (107 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/applicants/tom\"\n    }\n  }\n]\n```",
+            "sum: Based on the provided profile, here is the scoring for Tom Ashby:\n\n*   **People Leadership:** 4 (He has been a Team Lead at Lane Hardware for 3 years and led a team of 9.)\n*   **Writing:** 1 (No writing samples were provided in the profile.)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "talent-map",
+      "ability": "workflow:theo/talent-map",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"32,000\"",
+            "answer lacks \"39,000\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "head gardener salaries"
+              }
+            }
+          ],
+          "ms": 11071,
+          "request": "Map head gardener salaries from https://shop.garden.test/salaries.",
+          "answer": "The provided steps only show the initial search for \"head gardener salaries\" and the subsequent visit to a blog page for \"Kew Moss Garden.\" **The results do not contain the salary data needed to map head gardener salaries.** To complete the task, the system needs to read the actual salary pages for the companies found and extract the required information (company, typical title, salary range, and source) to populate the requested table.",
+          "why": null,
+          "trail": [
+            "search head gardener salaries → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"head gardener salaries\"\n    }\n  }\n]\n```",
+            "sum: The provided steps only show the initial search for \"head gardener salaries\" and the subsequent visit to a blog page for \"Kew Moss Garden.\" **The results do not contain the salary data needed to map head gardener salaries.** To complete the task, the system needs to read the actual salary pages for the companies found and extract the required information (company, typical title, salary range, and source) to populate the requested table."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"28,000\"",
+            "answer lacks \"35,000\"",
+            "answer lacks \"Peat Bog\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "garden designer salaries"
+              }
+            }
+          ],
+          "ms": 12069,
+          "request": "Map garden designer salaries from https://shop.garden.test/salaries/designers.",
+          "answer": "The provided steps only show the initial search for \"garden designer salaries\" and the subsequent visit to a blog post on a specific company's website. **The task cannot be completed** because the necessary salary data from the company pages or the specific salary page for \"garden designer salaries\" has not been accessed or extracted. To answer the task, the system needs to read the salary information from the relevant pages and present it in the requested table format.",
+          "why": null,
+          "trail": [
+            "search garden designer salaries → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"garden designer salaries\"\n    }\n  }\n]\n```",
+            "sum: The provided steps only show the initial search for \"garden designer salaries\" and the subsequent visit to a blog post on a specific company's website. **The task cannot be completed** because the necessary salary data from the company pages or the specific salary page for \"garden designer salaries\" has not been accessed or extracted. To answer the task, the system needs to read the salary information from the relevant pages and present it in the requested table format."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "debrief",
+      "ability": "workflow:theo/debrief",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"handbook\"",
+            "answer lacks \"hire\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "interview-ida.md"
+              }
+            }
+          ],
+          "ms": 8051,
+          "request": "Debrief the interview in calls/interview-ida.md against the scorecard: people leadership, writing.",
+          "answer": "I cannot complete the debrief because the document `interview-ida.md` was not found. Please provide the content of the interview document so I can analyze it against the scorecard for people leadership and writing.",
+          "why": null,
+          "trail": [
+            "doc_read interview-ida.md → failed: No document at interview-ida.md."
+          ],
+          "turns": [
+            "plan: [{\"tool\": \"doc_read\", \"args\": {\"path\": \"interview-ida.md\"}}]",
+            "sum: I cannot complete the debrief because the document `interview-ida.md` was not found. Please provide the content of the interview document so I can analyze it against the scorecard for people leadership and writing."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sourcing",
+      "ability": "workflow:theo/sourcing",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Ana Ruiz\"",
+            "answer lacks \"Ida Fenwick\"",
+            "answer lacks \"booking\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 19137,
+          "request": "Find people like my example hire Maja (she built a payments system) by what they built: read https://shop.garden.test/people, list each builder with the reason, and look up Ana Ruiz and Ida Fenwick in my ATS to flag anyone already there.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/people\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ana Ruiz\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ida Fenwick\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/people\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ana Ruiz\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ida Fenwick\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "applicants",
+      "ability": "workflow:theo/applicants",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Ida\"",
+            "answer lacks \"Tom\"",
+            "did not ask for add_note"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 7058,
+          "request": "Read new applicants for head gardener in my ATS, score each on people leadership and writing with a reason per score, and add the scores as ATS notes as app calls I approve.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [{\"tool\": \"ats\", \"args\": {\"role\": \"head gardener\"}}]",
+            "repair: [{\"tool\": \"ats\", \"args\": {\"role\": \"head gardener\"}}]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stuck",
+      "ability": "workflow:theo/stuck",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Tom Ashby\"",
+            "answer lacks \"Ruth Hale\"",
+            "answer lacks \"9\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 10262,
+          "request": "Read my ATS pipeline and list candidates who have been at the same stage for more than 5 days, with the stage and days.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"ats\",\n    \"tool_name\": \"pipeline\",\n    \"args\": {}\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"ats\",\n    \"tool\": \"pipeline\",\n    \"args\": {}\n  }\n]\n```"
+          ]
+        }
+      ]
+    }
+  ]
+}

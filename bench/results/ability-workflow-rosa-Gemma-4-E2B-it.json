@@ -10,6 +10,7 @@
     "workflow:rosa/directory",
     "workflow:rosa/market-map"
   ],
+  "unrun": [],
   "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
   "seeds": [
     {
@@ -25,6 +26,8 @@
             "answer lacks \"11.25\""
           ],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": [
             {
               "tool": "search",
@@ -33,7 +36,7 @@
               }
             }
           ],
-          "ms": 5146,
+          "ms": 6043,
           "request": "Should I buy the Ash or the Birch trowel? Compare https://shop.garden.test/trowel-a and https://shop.garden.test/trowel-b.",
           "answer": "Please provide the results of the planned steps so I can answer your question. I need the content from the links you provided (https://shop.garden.test/trowel-a and https://shop.garden.test/trowel-b) and the search results to compare the Ash and Birch trowels and give you a recommendation.",
           "why": null,
@@ -53,6 +56,8 @@
             "answer lacks \"3 year\""
           ],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": [
             {
               "tool": "search",
@@ -61,7 +66,7 @@
               }
             }
           ],
-          "ms": 5501,
+          "ms": 6081,
           "request": "Which kettle has the longer warranty: the one at https://shop.garden.test/kettles/oak or https://shop.garden.test/kettles/fern?",
           "answer": "I am sorry, but the provided steps and the search results do not contain the necessary information to determine which kettle has the longer warranty. The steps only suggest searching for the warranty information, and the provided results point to a general garden website and a blog post, but they do not contain the specific warranty details for the Oak or Fern kettles.",
           "why": null,
@@ -84,6 +89,8 @@
           "ok": true,
           "fails": [],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": [
             {
               "tool": "read_page",
@@ -92,7 +99,7 @@
               }
             }
           ],
-          "ms": 8485,
+          "ms": 8047,
           "request": "List every branch on https://shop.garden.test/branches with its address and phone.",
           "answer": "The provided information lists two branches: London and Manchester. The address and phone number for each branch are as follows: London is located at 12 Fern Row with a phone number of 020 7946 0018, and Manchester is located at 4 Moss Lane with a phone number of 0161 496 0723.",
           "why": null,
@@ -108,6 +115,8 @@
           "ok": true,
           "fails": [],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": [
             {
               "tool": "read_page",
@@ -116,7 +125,7 @@
               }
             }
           ],
-          "ms": 7148,
+          "ms": 7107,
           "request": "List every author on https://shop.garden.test/authors with the year they were born.",
           "answer": "The authors listed on the page are Tom Ashby (born 1947), Ida Fenwick (born 1958), and Ruth Hale (born 1971).",
           "why": null,
@@ -143,6 +152,8 @@
             "answer lacks \"warranty\""
           ],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": [
             {
               "tool": "search",
@@ -151,7 +162,7 @@
               }
             }
           ],
-          "ms": 4036,
+          "ms": 7031,
           "request": "Make a short deck on the kettles at https://shop.garden.test/kettles: open each kettle's page.",
           "answer": "Please provide the results of the planned steps you mentioned. I need the content gathered from visiting the kettle pages to create the deck.",
           "why": null,
@@ -173,8 +184,10 @@
             "answer lacks \"Cedar\""
           ],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": null,
-          "ms": 11079,
+          "ms": 15063,
           "request": "Make a short deck comparing https://shop.garden.test/trowel-a, https://shop.garden.test/trowel-b and https://shop.garden.test/trowel-c.",
           "answer": null,
           "why": "The model's reply couldn't be read.",
@@ -195,6 +208,8 @@
           "ok": true,
           "fails": [],
           "violations": [],
+          "asked": [],
+          "reached": [],
           "plan": [
             {
               "tool": "read_page",
@@ -215,7 +230,7 @@
               }
             }
           ],
-          "ms": 16106,
+          "ms": 18125,
           "request": "Map the trowels for sale: read https://shop.garden.test/trowel-a, https://shop.garden.test/trowel-b and https://shop.garden.test/trowel-c and group them by blade, with each price.",
           "answer": "The trowels have been mapped by blade type and their corresponding prices. The results show:\n\n*   **Ash Trowel:** Forged steel blade, priced at £14.50.\n*   **Birch Trowel:** Stainless blade, priced at £11.25.\n*   **Cedar Trowel:** Carbon steel blade, priced at £12.99.",
           "why": null,
@@ -227,6 +242,39 @@
           "turns": [
             "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/trowel-a\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/trowel-b\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/trowel-c\"\n    }\n  }\n]\n```",
             "sum: The trowels have been mapped by blade type and their corresponding prices. The results show:\n\n*   **Ash Trowel:** Forged steel blade, priced at £14.50.\n*   **Birch Trowel:** Stainless blade, priced at £11.25.\n*   **Cedar Trowel:** Carbon steel blade, priced at £12.99."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/kettles/oak"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/kettles/fern"
+              }
+            }
+          ],
+          "ms": 16291,
+          "request": "Map the kettles for sale: read https://shop.garden.test/kettles/oak and https://shop.garden.test/kettles/fern and group them by material, with each warranty.",
+          "answer": "The kettles are mapped as follows: the Oak Kettle is made of enamel with a 1-year warranty, and the Fern Kettle is made of copper with a 3-year warranty.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/kettles/oak → ok (52 chars)",
+            "read_page https://shop.garden.test/kettles/fern → ok (54 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/kettles/oak\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/kettles/fern\"\n    }\n  }\n]\n```",
+            "sum: The kettles are mapped as follows: the Oak Kettle is made of enamel with a 1-year warranty, and the Fern Kettle is made of copper with a 3-year warranty."
           ]
         }
       ]

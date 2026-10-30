@@ -1,0 +1,307 @@
+{
+  "ability": "workflow-martin",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 2,
+  "of": 4,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:martin/repurpose",
+    "workflow:martin/seo-drop"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "repurpose",
+      "ability": "workflow:martin/repurpose",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/moss-care"
+              }
+            }
+          ],
+          "ms": 17239,
+          "request": "Turn the post at https://shop.garden.test/blog/moss-care into a LinkedIn post, a post for X and a newsletter section.",
+          "answer": "Here are the repurposed content pieces based on the provided information:\n\n**LinkedIn Post:**\nMoss is at its greenest in March! 🌿 To keep your moss thriving, remember these key tips: maintain consistent dampness (never wet!), and keep it out of direct, full sun. Plus, a weekly rake to remove fallen leaves will keep things looking pristine. What are your favorite moss care tips? #MossCare #Gardening #PlantTips\n\n**X Post (Twitter):**\nMoss is greenest in March! 💚 Keep it damp (not wet) & out of full sun. Rake leaves weekly for the best look. Simple moss care tips! #Moss #GardeningHacks\n\n**Newsletter Section:**\n**March Moss Maintenance Tip:** Moss reaches its peak greenness in March! To maintain this vibrant look, ensure your moss stays consistently damp but never wet, and shield it from intense, full sun. Don't forget to rake away fallen leaves weekly for a tidy appearance.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/blog/moss-care → ok (134 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/moss-care\"\n    }\n  }\n]\n```",
+            "sum: Here are the repurposed content pieces based on the provided information:\n\n**LinkedIn Post:**\nMoss is at its greenest in March! 🌿 To keep your moss thriving, remember these key tips: maintain consistent dampness (never wet!), and keep it out of direct, full sun. Plus, a weekly rake to remove fallen leaves will keep things looking pristine. What are your favorite moss care tips? #MossCare #Gardening #PlantTips\n\n**X Post (Twitter):**\nMoss is greenest in March! 💚 Keep it damp (not wet) & out of full sun. Rake leaves weekly for the best look. Simple moss care tips! #Moss #GardeningHacks\n\n**Newsletter Section:**\n**March Moss Maintenance Tip:** Moss reaches its peak greenness in March! To maintain this vibrant look, ensure your moss stays consistently damp but never wet, and shield it from intense, full sun. Don't forget to rake away fallen leaves weekly for a tidy appearance."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/ferns"
+              }
+            }
+          ],
+          "ms": 14215,
+          "request": "Turn the post at https://shop.garden.test/blog/ferns into a LinkedIn post, a post for X and a newsletter section.",
+          "answer": "Here are the repurposed content based on the provided draft:\n\n**LinkedIn Post:**\nDiscover the secrets to thriving ferns in your garden! 🌿 Ferns truly flourish in deep shade. To keep them happy, remember to water them twice a week during the summer months and give them a trim by cutting off old fronds in February. What shade-loving plants are you growing this season? #Ferns #GardeningTips #PlantCare #ShadeGarden\n\n**X (Twitter) Post:**\nWant lush ferns? 💚 They love deep shade! Water twice a week in summer & prune old fronds in February. Simple steps for fern success! 🌱 #Ferns #Gardening #PlantHacks\n\n**Newsletter Section:**\n**🌿 Fern Focus: Thriving in Shade**\nDid you know ferns thrive in deep shade? For optimal growth, water your ferns twice a week during the summer and perform a light pruning of old fronds in February. Keep your shade garden lush!",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/blog/ferns → ok (114 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/ferns\"\n    }\n  }\n]\n```",
+            "sum: Here are the repurposed content based on the provided draft:\n\n**LinkedIn Post:**\nDiscover the secrets to thriving ferns in your garden! 🌿 Ferns truly flourish in deep shade. To keep them happy, remember to water them twice a week during the summer months and give them a trim by cutting off old fronds in February. What shade-loving plants are you growing this season? #Ferns #GardeningTips #PlantCare #ShadeGarden\n\n**X (Twitter) Post:**\nWant lush ferns? 💚 They love deep shade! Water twice a week in summer & prune old fronds in February. Simple steps for fern success! 🌱 #Ferns #Gardening #PlantHacks\n\n**Newsletter Section:**\n**🌿 Fern Focus: Thriving in Shade**\nDid you know ferns thrive in deep shade? For optimal growth, water your ferns twice a week during the summer and perform a light pruning of old fronds in February. Keep your shade garden lush!"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "seo-drop",
+      "ability": "workflow:martin/seo-drop",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/search-console"
+              }
+            }
+          ],
+          "ms": 13280,
+          "request": "Why did my search traffic drop? Read https://shop.garden.test/search-console.",
+          "answer": "Based on the provided Search Console data, your search traffic dropped significantly for the `/blog/moss-care` page, which saw a decrease from 1200 clicks in September to 300 in October. The most likely reason cited is that the page lost its featured snippet on October 6th. The data does not provide information on the specific queries that lost the most clicks or the exact reasons for the drop on the `/kettles` page.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/search-console → ok (205 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/search-console\"\n    }\n  }\n]\n```",
+            "sum: Based on the provided Search Console data, your search traffic dropped significantly for the `/blog/moss-care` page, which saw a decrease from 1200 clicks in September to 300 in October. The most likely reason cited is that the page lost its featured snippet on October 6th. The data does not provide information on the specific queries that lost the most clicks or the exact reasons for the drop on the `/kettles` page."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/search-console/queries"
+              }
+            }
+          ],
+          "ms": 17291,
+          "request": "Which queries lost clicks and why? Read https://shop.garden.test/search-console/queries.",
+          "answer": "The query that lost the most clicks is **\"trowel price\"**, which saw a significant drop from 500 clicks in September to 120 clicks in October. The most likely reason for this loss is indicated by the note: **the trowel page was moved to a new URL on October 2nd with no redirect.**\n\nThe data does not provide specific reasons *why* users stopped clicking on the \"trowel price\" query, only the fact that the page location changed without a redirect.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/search-console/queries → ok (215 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/search-console/queries\"\n    }\n  }\n]\n```",
+            "sum: The query that lost the most clicks is **\"trowel price\"**, which saw a significant drop from 500 clicks in September to 120 clicks in October. The most likely reason for this loss is indicated by the note: **the trowel page was moved to a new URL on October 2nd with no redirect.**\n\nThe data does not provide specific reasons *why* users stopped clicking on the \"trowel price\" query, only the fact that the page location changed without a redirect."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "listening",
+      "ability": "workflow:martin/listening",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"handle\"",
+            "answer lacks \"delivery\"",
+            "answer lacks \"https://shop.garden.test/reviews\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "https://shop.garden.test/reviews"
+              }
+            }
+          ],
+          "ms": 6138,
+          "request": "Group what people say in the reviews on https://shop.garden.test/reviews into themes, quoting one review per theme with the link.",
+          "answer": "Please provide the actual reviews from the link so I can group them into themes and quote one review per theme. I have only been provided with the URL and some related links, but not the content of the reviews themselves.",
+          "why": null,
+          "trail": [
+            "search https://shop.garden.test/reviews → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"https://shop.garden.test/reviews\"\n    }\n  }\n]\n```",
+            "sum: Please provide the actual reviews from the link so I can group them into themes and quote one review per theme. I have only been provided with the URL and some related links, but not the content of the reviews themselves."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"rust\"",
+            "answer lacks \"11.25\"",
+            "answer lacks \"https://shop.garden.test/forum\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "https://shop.garden.test/forum"
+              }
+            }
+          ],
+          "ms": 9264,
+          "request": "Group what people say on https://shop.garden.test/forum into themes, quoting one post per theme with the link.",
+          "answer": "The provided steps only involved searching the forum and visiting external links, but they did not include the actual content of the forum posts. Therefore, I cannot group the people's comments into themes and quote one post per theme as requested.",
+          "why": null,
+          "trail": [
+            "search https://shop.garden.test/forum → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"https://shop.garden.test/forum\"\n    }\n  }\n]\n```",
+            "sum: The provided steps only involved searching the forum and visiting external links, but they did not include the actual content of the forum posts. Therefore, I cannot group the people's comments into themes and quote one post per theme as requested."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "content-brief",
+      "ability": "workflow:martin/content-brief",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"5,400\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/analytics"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/moss-care"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/ferns"
+              }
+            },
+            {
+              "tool": "mission",
+              "args": {
+                "goal": "Analyze the content of the two best posts and the analytics to identify key themes, successful content formats, and areas for future content ideas."
+              }
+            }
+          ],
+          "ms": 207085,
+          "request": "Read my analytics at https://shop.garden.test/analytics, then my two best posts https://shop.garden.test/blog/moss-care and https://shop.garden.test/blog/ferns, and write a content brief with three ideas.",
+          "answer": "The planned steps were partially completed. You successfully read the analytics and the content of your two best posts. However, the final step, \"Analyze the content of the two best posts and the analytics,\" was incomplete because the system was unable to access the content of the posts you linked (it returned Wikipedia links instead of the actual blog content).\n\nTo proceed, I need the actual content of the two blog posts, \"Caring for moss in March\" and \"Ferns in shade,\" so I can effectively analyze them and generate three content ideas based on your analytics.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/analytics → ok (222 chars)",
+            "read_page https://shop.garden.test/blog/moss-care → ok (134 chars)",
+            "read_page https://shop.garden.test/blog/ferns → ok (114 chars)",
+            "mission Analyze the content of the two best posts and the analytics  → ok (6 rows)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/analytics\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/moss-care\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/ferns\"\n    }\n  },\n  {\n    \"tool\": \"mission\",\n    \"args\": {\n      \"goal\": \"Analyze the content of the two best posts and the analytics to identify key themes, successful content formats, and areas for future content ideas.\"\n    }\n  }\n]\n```",
+            "sum: The planned steps were partially completed. You successfully read the analytics and the content of your two best posts. However, the final step, \"Analyze the content of the two best posts and the analytics,\" was incomplete because the system was unable to access the content of the posts you linked (it returned Wikipedia links instead of the actual blog content).\n\nTo proceed, I need the actual content of the two blog posts, \"Caring for moss in March\" and \"Ferns in shade,\" so I can effectively analyze them and generate three content ideas based on your analytics."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"2,800\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/analytics/august"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/ferns"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/moss-care"
+              }
+            },
+            {
+              "tool": "mission",
+              "args": {
+                "goal": "Find common themes, high-performing content angles, and audience pain points across the August analytics, the ferns blog, and the moss care blog to generate three distinct content ideas."
+              }
+            }
+          ],
+          "ms": 60315,
+          "request": "Read my August analytics at https://shop.garden.test/analytics/august, then https://shop.garden.test/blog/ferns and https://shop.garden.test/blog/moss-care, and write a content brief with three ideas.",
+          "answer": "Based on the analytics and content provided, here is a content brief with three ideas:\n\nThe common themes across the analyzed content are **specific care instructions for different plant types (ferns and moss)** and **seasonal timing** for optimal care (e.g., March for moss, summer for ferns). High-performing content angles focus on practical, actionable advice.\n\nHere are three content ideas:\n\n1.  **Seasonal Care Guide:** Create a comprehensive guide titled \"Your Ultimate Guide to Fern and Moss Care Through the Seasons,\" combining the best tips from the existing posts and highlighting when to focus on watering, light, and maintenance for both plants.\n2.  **Troubleshooting Series:** Develop a series of short, engaging posts addressing common problems, such as \"Why are my ferns yellowing?\" or \"Fixing Moss Overgrowth,\" leveraging the existing high-view content as a foundation.\n3.  **\"Shade Sanctuary\" Feature:** Since \"Ferns in shade\" performed well, create a deep-dive article focusing entirely on creating the perfect, low-light environment for ferns, including tips on humidity and specific pot choices.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/analytics/august → ok (183 chars)",
+            "read_page https://shop.garden.test/blog/ferns → ok (114 chars)",
+            "read_page https://shop.garden.test/blog/moss-care → ok (134 chars)",
+            "mission Find common themes, high-performing content angles, and audi → ok (0 rows)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/analytics/august\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/ferns\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/moss-care\"\n    }\n  },\n  {\n    \"tool\": \"mission\",\n    \"args\": {\n      \"goal\": \"Find common themes, high-performing content angles, and audience pain points across the August analytics, the ferns blog, and the moss care blog to generate three distinct content ideas.\"\n    }\n  }\n]\n```",
+            "sum: Based on the analytics and content provided, here is a content brief with three ideas:\n\nThe common themes across the analyzed content are **specific care instructions for different plant types (ferns and moss)** and **seasonal timing** for optimal care (e.g., March for moss, summer for ferns). High-performing content angles focus on practical, actionable advice.\n\nHere are three content ideas:\n\n1.  **Seasonal Care Guide:** Create a comprehensive guide titled \"Your Ultimate Guide to Fern and Moss Care Through the Seasons,\" combining the best tips from the existing posts and highlighting when to focus on watering, light, and maintenance for both plants.\n2.  **Troubleshooting Series:** Develop a series of short, engaging posts addressing common problems, such as \"Why are my ferns yellowing?\" or \"Fixing Moss Overgrowth,\" leveraging the existing high-view content as a foundation.\n3.  **\"Shade Sanctuary\" Feature:** Since \"Ferns in shade\" performed well, create a deep-dive article focusing entirely on creating the perfect, low-light environment for ferns, including tips on humidity and specific pot choices."
+          ]
+        }
+      ]
+    }
+  ]
+}

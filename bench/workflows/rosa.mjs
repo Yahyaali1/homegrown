@@ -17,5 +17,6 @@ export default {
   ],
   'market-map': [
     { request: `Map the trowels for sale: read ${SHOP}/trowel-a, ${SHOP}/trowel-b and ${SHOP}/trowel-c and group them by blade, with each price.`, expect: ['Ash', 'Birch', 'Cedar', '14.50', '11.25', '12.99'] },
+    { request: `Map the kettles for sale: read ${SHOP}/kettles/oak and ${SHOP}/kettles/fern and group them by material, with each warranty.`, expect: ['Oak', 'Fern', 'enamel', 'copper'] },
   ],
 };

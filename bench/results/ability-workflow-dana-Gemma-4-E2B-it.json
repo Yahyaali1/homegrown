@@ -1,0 +1,243 @@
+{
+  "ability": "workflow-dana",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 1,
+  "of": 4,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:dana/root-cause"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "root-cause",
+      "ability": "workflow:dana/root-cause",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://staging.garden.test/basket"
+              }
+            }
+          ],
+          "ms": 7058,
+          "request": "Find the root cause of the broken basket at https://staging.garden.test/basket.",
+          "answer": "The root cause appears to be a `TypeError: price is undefined` occurring at `basket.js:42`. This suggests that the code is attempting to access a `price` variable that has not been defined or is missing when rendering the basket. A potential fix would be to ensure that the necessary data (like the price) is loaded or passed correctly to the `basket.js` script before it tries to use it.",
+          "why": null,
+          "trail": [
+            "read_page https://staging.garden.test/basket → ok (110 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/basket\"\n    }\n  }\n]\n```",
+            "sum: The root cause appears to be a `TypeError: price is undefined` occurring at `basket.js:42`. This suggests that the code is attempting to access a `price` variable that has not been defined or is missing when rendering the basket. A potential fix would be to ensure that the necessary data (like the price) is loaded or passed correctly to the `basket.js` script before it tries to use it."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://staging.garden.test/login"
+              }
+            }
+          ],
+          "ms": 6059,
+          "request": "Why can't people sign in at https://staging.garden.test/login? Find the root cause.",
+          "answer": "The root cause is that the authentication token used for the login request has expired. The error message is: `Request POST /api/session failed: 401 Unauthorized (token expired).` The suggested fix is to implement a mechanism to refresh or re-acquire a valid authentication token before attempting the login request.",
+          "why": null,
+          "trail": [
+            "read_page https://staging.garden.test/login → ok (78 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/login\"\n    }\n  }\n]\n```",
+            "sum: The root cause is that the authentication token used for the login request has expired. The error message is: `Request POST /api/session failed: 401 Unauthorized (token expired).` The suggested fix is to implement a mechanism to refresh or re-acquire a valid authentication token before attempting the login request."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "docs-plan",
+      "ability": "workflow:dana/docs-plan",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"25 MB\"",
+            "answer lacks \"deprecated\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "https://docs.garden.test/upload"
+              }
+            }
+          ],
+          "ms": 4048,
+          "request": "Plan how we add file uploads, from the docs at https://docs.garden.test/upload.",
+          "answer": "The provided steps only cover the initial research phase. To complete the task of planning how to add file uploads based on the documentation, the following is missing:\n\n**Missing Information:** The actual numbered implementation plan and the \"Gotchas\" list derived from reading the documentation have not been provided.",
+          "why": null,
+          "trail": [
+            "search https://docs.garden.test/upload → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"https://docs.garden.test/upload\"\n    }\n  }\n]\n```",
+            "sum: The provided steps only cover the initial research phase. To complete the task of planning how to add file uploads based on the documentation, the following is missing:\n\n**Missing Information:** The actual numbered implementation plan and the \"Gotchas\" list derived from reading the documentation have not been provided."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"X-Garden-Signature\"",
+            "answer lacks \"1 MB\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "https://docs.garden.test/webhooks"
+              }
+            }
+          ],
+          "ms": 4062,
+          "request": "Plan how we receive webhooks, from the docs at https://docs.garden.test/webhooks.",
+          "answer": "The initial step of reading the documentation was completed, yielding two relevant results: the main webhook documentation and a link to a related blog post.\n\n**What is missing:** The actual implementation plan and the \"Gotchas\" list based on the documentation have not yet been generated.",
+          "why": null,
+          "trail": [
+            "search https://docs.garden.test/webhooks → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"https://docs.garden.test/webhooks\"\n    }\n  }\n]\n```",
+            "sum: The initial step of reading the documentation was completed, yielding two relevant results: the main webhook documentation and a link to a related blog post.\n\n**What is missing:** The actual implementation plan and the \"Gotchas\" list based on the documentation have not yet been generated."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "smoke",
+      "ability": "workflow:dana/smoke",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"welcome\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 8041,
+          "request": "Smoke-test sign up on https://staging.garden.test/signup: fill #email with test@garden.test, click #go, and report whether the next page says Welcome.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/signup\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"type\": \"fill\",\n              \"selector\": \"#email\",\n              \"text\": \"test@garden.test\"\n            }\n          ]\n        },\n        {\n          \"instructions\": [\n            {\n              \"type\": \"click\",\n              \"selector\": \"#go\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/signup\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/signup\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"type\": \"fill\",\n              \"selector\": \"#email\",\n              \"text\": \"test@garden.test\"\n            }\n          ]\n        },\n        {\n          \"instructions\": [\n            {\n              \"type\": \"click\",\n              \"selector\": \"#go\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/signup\"\n    }\n  }\n]\n```"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"502\"",
+            "answer lacks \"delivery\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 5026,
+          "request": "Smoke-test checkout on https://staging.garden.test/checkout: click #next and report any error the next page shows.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"click\": \"#next\"\n            }\n          ]\n        }\n      ]\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"click\": \"#next\"\n            }\n          ]\n        }\n      ]\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repro",
+      "ability": "workflow:dana/repro",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"R-12\"",
+            "answer lacks \"no results\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 10043,
+          "request": "Read bug report R-12 in the tracker, try its steps on https://staging.garden.test/search (fill #q with fern, click #find), and file a bug in the tracker with steps, expected and actual.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/search\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"click\": \"css\",\n              \"wait\": 1000\n            }\n          ]\n        },\n        {\n          \"instructions\": [\n            {\n              \"fill\": [\n                \"css\",\n                \"#q\",\n                \"fern\"\n              ]\n            }\n          ]\n        },\n        {\n          \"instructions\": [\n            {\n              \"click\": \"#find\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/search\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/search\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"type\": \"click\",\n              \"selector\": \"#find\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/search\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"type\": \"fill\",\n              \"selector\": \"#q\",\n              \"text\": \"fern\"\n            }\n          ]\n        },\n        {\n          \"instructions\": [\n            {\n              \"type\": \"click\",\n              \"selector\": \"#find\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/search\"\n    }\n  }\n]\n```"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"R-14\"",
+            "answer lacks \"502\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 11044,
+          "request": "Read bug report R-14 in the tracker, try its steps on https://staging.garden.test/checkout (click #next), and file a bug in the tracker with steps, expected and actual.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"tracker\",\n      \"tool\": \"get_report\",\n      \"args\": {\n        \"id\": \"R-14\"\n      }\n    }\n  },\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"click\": \"#next\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\"\n    }\n  }\n]\n```",
+            "repair: [\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\"\n    }\n  },\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\",\n      \"steps\": [\n        {\n          \"instructions\": [\n            {\n              \"click\": \"#next\"\n            }\n          ]\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/checkout\"\n    }\n  },\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"tracker\",\n      \"tool\": \"file_bug\",\n      \"args\": {\n        \"title\": \"R-14: Issue encountered when clicking #next on checkout\",\n        \"body\": \"Steps:\\n1. Navigate to https://staging.garden.test/checkout\\n2. Click #next\\nExpected Result: The page should proceed to the next step of the checkout process.\\nActual Result: [Describe what actually happened after clicking #next, based on the page read in step 3]\"\n      }\n    }\n  }\n]"
+          ]
+        }
+      ]
+    }
+  ]
+}

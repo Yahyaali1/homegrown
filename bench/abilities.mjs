@@ -30,11 +30,13 @@
 // (no model has their needs yet: this is what measures them) and runs each seed's cases from bench/workflows/<preset>.mjs as plan runs
 // pinned with the seed's needs, approved unedited, routine seeds with their `routineId`. A seed passes when every case's
 // plan parses, its run ends done, the answer holds each `expect` word (`casePassed`) and nothing else was asked or
-// denied. Each passing seed writes `workflow:<preset>/<id>` into `passes`; the owner copies passes into model.ts.
+// denied. App calls go to a fake MCP server (bench/fake-mcp.mjs) under the normal ask flow; sensitive ones are always
+// answered no (see the workflow suite). Each passing seed writes `workflow:<preset>/<id>` into `passes`; the owner copies passes into model.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, engine, ROOT } from '../tests/harness.mjs';
 import { BING, CASES, PAGES, html } from './garden-fixtures.mjs';
+import { fakeMcp } from './fake-mcp.mjs';
 import { CITES, DECKS, EVIDENCE } from './output-fixtures.mjs';
 import { DECK_MAX, tableText, writeDeck } from '../src/domain/outputs.ts';
 import { citeFiles } from '../src/domain/reading.ts';
@@ -112,10 +114,14 @@ async function emptyGarden() {
   }
   for (const g of await bg('gardenerList')) await bg('gardenerDelete', { id: g.id });
   for (const x of await bg('skillList')) await bg('skillDelete', { id: x.id });
+  for (const c of await bg('connectorList')) await bg('connectorDelete', { id: c.id });
 }
 
-/** Plants a plan run pinned with `abilities`, approves its plan unedited, answers no to anything else (a violation). */
-async function planRun(runId, gardenerId, work, abilities, extra = {}) {
+/**
+ * Plants a plan run pinned with `abilities`, approves its plan unedited, answers no to anything else (a violation).
+ * `answer(q)`: a planted answer for a request the case expects ('yes' or 'no'), or null for a violation.
+ */
+async function planRun(runId, gardenerId, work, abilities, extra = {}, answer = () => null) {
   const t0 = Date.now();
   await put('runs', {
     v: 1, id: runId, gardenerId, work, status: 'queued', queuedAt: t0, usedMs: 0,
@@ -139,9 +145,10 @@ async function planRun(runId, gardenerId, work, abilities, extra = {}) {
       await bg('requestAnswer', { runId, requestId: q.id, value: 'yes' }); // unedited
       continue;
     }
-    if (q) violations.push(`${q.kind}: ${q.text.split('\n')[0]}`);
+    const planted = q && answer(q);
+    if (q && !planted) violations.push(`${q.kind}: ${q.text.split('\n')[0]}`);
     if (!q || answered++ >= 6) await bg('runStop', { id: runId });
-    else await bg('requestAnswer', { runId, requestId: q.id, value: 'no' });
+    else await bg('requestAnswer', { runId, requestId: q.id, value: planted || 'no' });
   }
   violations.push(...run.steps.filter((s) => s.error === 'Not allowed.').map((s) => `denied: ${s.digest}`));
   return { run, calls, violations, ms: Date.now() - t0 };
@@ -174,14 +181,31 @@ async function plan() {
   return { pass, of: results.length, violations, passed: pass >= 6 && violations === 0, rule: '≥ 6/8 plans parse, use only listed tools and complete the task unedited; 0 policy violations', cases: results };
 }
 
-// ---- T12 workflow: a pack's seeds, each on its own cases from presets.ts ----
+// ---- T12 workflow: a pack's seeds, each on its own cases from bench/workflows/<preset>.mjs ----
+// A case may plant `docs` ({ path: text }, the gardener's own documents: meeting notes stand in for T10 docs) and name
+// the app tools it expects to be asked (`asks`: { tool: 'yes' | 'no' }). Apps (the file's `apps` export) run on a
+// fake MCP server and are connected before the cases. An app call is asked every time (ADR-17): the bench answers yes
+// to a tool the person marked Read, and the case's planted answer to the others; a sensitive one is always answered no
+// (never auto-approved), so the case grades that the run proposed it. Any other request is a violation. A case fails
+// when an `asks` tool was never asked, or when a sensitive app tool reached the server.
 async function workflow() {
   await emptyGarden();
+  const mod = await import(`./workflows/${PACK.id}.mjs`);
+  const mcp = mod.apps ? await fakeMcp(mod.apps) : null;
+  try {
+    for (const c of mcp?.connectors ?? []) await bg('connectorSave', { connector: c });
+    return await workflowCases(mod.default, mcp);
+  } finally {
+    mcp?.close();
+  }
+}
+
+async function workflowCases(tests, mcp) {
   const g = await bg('hire', { presetId: PACK.id });
   const skills = (await bg('skillList')).filter((x) => x.gardenerId === g.id);
   for (const x of skills) await put('skills', { ...x, on: true });
   const routines = await bg('routineList', { gardenerId: g.id });
-  const tests = (await import(`./workflows/${PACK.id}.mjs`)).default;
+  const appTools = (mcp?.connectors ?? []).flatMap((c) => c.tools);
   const seeds = [
     ...PACK.skills.map((x) => ({ ...x, skill: skills.find((s) => s.name === x.id) })),
     ...PACK.routines.map((x) => ({ ...x, routine: routines.find((r) => r.name === x.name) })),
@@ -190,23 +214,38 @@ async function workflow() {
   for (const seed of seeds) {
     const cases = [];
     for (const [k, c] of seed.tests.entries()) {
+      for (const [p, text] of Object.entries(c.docs ?? {})) await bg('docSave', { doc: { gardenerId: g.id, path: p, text } });
+      const asked = [];
+      const answer = (q) => {
+        if (q.kind !== 'approve' || q.tool !== 'app_call') return null;
+        const tool = /, tool (\w+):/.exec(q.text)?.[1];
+        const planted = q.sensitive ? 'no' : appTools.find((t) => t.name === tool)?.scope === 'read' ? 'yes' : c.asks?.[tool];
+        if (!planted || (q.sensitive && !c.asks?.[tool])) return null;
+        asked.push({ tool, sensitive: q.sensitive, answer: planted });
+        return planted;
+      };
+      const n = mcp?.calls.length ?? 0;
       const work = { kind: 'plan', request: c.request, ...(seed.skill && { skillId: seed.skill.id }) };
-      const { run, calls, violations, ms } = await planRun(`ability-${NAME}-${seed.id}-${k}-${Date.now()}`, g.id, work, [...new Set(['plan', ...seed.needs])], seed.routine ? { routineId: seed.routine.id } : {});
+      const { run, calls, violations, ms } = await planRun(`ability-${NAME}-${seed.id}-${k}-${Date.now()}`, g.id, work, [...new Set(['plan', ...seed.needs])], seed.routine ? { routineId: seed.routine.id } : {}, answer);
+      const reached = (mcp?.calls.slice(n) ?? []).map((x) => x.tool);
       const fails = [
         ...(calls ? [] : ['the plan did not parse']),
         ...(run.status === 'done' ? [] : [`${run.status}: ${run.why ?? ''}`]),
         ...c.expect.filter((w) => !casePassed(run.answer, w)).map((w) => `answer lacks "${w}"`),
+        ...Object.keys(c.asks ?? {}).filter((t) => !asked.some((a) => a.tool === t)).map((t) => `did not ask for ${t}`),
+        ...reached.filter((t) => c.asks?.[t] === 'no').map((t) => `${t} reached the app`),
       ];
       const ok = !fails.length && !violations.length;
-      cases.push({ ok, fails, violations, plan: calls, ms, request: c.request, ...trail(run) });
+      cases.push({ ok, fails, violations, asked, reached, plan: calls, ms, request: c.request, ...trail(run) });
       console.log(`${ok ? '✓' : '✗'} ${seed.id}#${k + 1}  ${calls ? `${calls.length} calls` : 'no plan'}, ${(ms / 1000).toFixed(0)} s${fails.length || violations.length ? `  — ${[...fails, ...violations].join('; ')}` : ''}`);
       console.log(`    ${(run.answer ?? run.why ?? '').replace(/\s+/g, ' ').slice(0, 200)}`);
     }
     results.push({ id: seed.id, ability: `workflow:${PACK.id}/${seed.id}`, passed: cases.every((c) => c.ok), cases });
   }
+  const unrun = [...PACK.skills, ...PACK.routines].filter((x) => x.needs.length && !tests[x.id]?.length).map((x) => x.id);
   const pass = results.filter((r) => r.passed).length;
   const violations = results.reduce((n, r) => n + r.cases.reduce((k, c) => k + c.violations.length, 0), 0);
-  return { pass, of: results.length, violations, passed: pass === results.length, passes: results.filter((r) => r.passed).map((r) => r.ability), rule: SEED_RULE, seeds: results };
+  return { pass, of: results.length, violations, passed: pass === results.length, passes: results.filter((r) => r.passed).map((r) => r.ability), unrun, rule: SEED_RULE, seeds: results };
 }
 
 // ---- T9 abilities: the product's prompts, asked of the model as a background request (as `askAs` does) ----

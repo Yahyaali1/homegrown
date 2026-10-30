@@ -1,0 +1,349 @@
+{
+  "ability": "workflow-theo",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 1,
+  "of": 6,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:theo/sourcing"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "scorecard",
+      "ability": "workflow:theo/scorecard",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"4 staff\"",
+            "answer lacks \"handbook\""
+          ],
+          "violations": [],
+          "asked": [
+            {
+              "tool": "find_candidate",
+              "sensitive": false,
+              "answer": "yes"
+            }
+          ],
+          "reached": [
+            "find_candidate"
+          ],
+          "plan": [
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "ats",
+                "tool": "find_candidate",
+                "args": {
+                  "name": "ida"
+                }
+              }
+            }
+          ],
+          "ms": 8058,
+          "request": "Score the applicant at https://shop.garden.test/applicants/ida against this scorecard: people leadership, writing.",
+          "answer": "Please provide the applicant's profile or the request names you are referring to so I can score the applicant against the scorecard.\n\nCurrently, I only have the following information:\n*   **Scorecard Item [0]:** `app_call ats → ok (15 chars)`\n*   **Applicant Profile Snippet:** `Not in the ATS.`\n\nI need the actual applicant profile to assess the \"people leadership\" and \"writing\" aspects.",
+          "why": null,
+          "trail": [
+            "app_call ats → ok (15 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"ats\",\n      \"tool\": \"find_candidate\",\n      \"args\": {\n        \"name\": \"ida\"\n      }\n    }\n  }\n]\n```",
+            "sum: Please provide the applicant's profile or the request names you are referring to so I can score the applicant against the scorecard.\n\nCurrently, I only have the following information:\n*   **Scorecard Item [0]:** `app_call ats → ok (15 chars)`\n*   **Applicant Profile Snippet:** `Not in the ATS.`\n\nI need the actual applicant profile to assess the \"people leadership\" and \"writing\" aspects."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"9\""
+          ],
+          "violations": [],
+          "asked": [
+            {
+              "tool": "find_candidate",
+              "sensitive": false,
+              "answer": "yes"
+            }
+          ],
+          "reached": [
+            "find_candidate"
+          ],
+          "plan": [
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "ats",
+                "tool": "find_candidate",
+                "args": {
+                  "name": "tom"
+                }
+              }
+            }
+          ],
+          "ms": 10170,
+          "request": "Score the applicant at https://shop.garden.test/applicants/tom against this scorecard: people leadership, writing.",
+          "answer": "Based on the provided information, I cannot score the applicant. The only information given is a single line from the scorecard:\n\n* **[0] app_call ats → ok (15 chars): Not in the ATS.**\n\nTo score the applicant against the \"people leadership\" and \"writing\" criteria, I need the actual applicant profile and the specific criteria/lines of the scorecard you are referring to.\n\n**What is missing:** The applicant's profile and the full scorecard with the specific criteria for \"people leadership\" and \"writing.\"",
+          "why": null,
+          "trail": [
+            "app_call ats → ok (15 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"ats\",\n      \"tool\": \"find_candidate\",\n      \"args\": {\n        \"name\": \"tom\"\n      }\n    }\n  }\n]\n```",
+            "sum: Based on the provided information, I cannot score the applicant. The only information given is a single line from the scorecard:\n\n* **[0] app_call ats → ok (15 chars): Not in the ATS.**\n\nTo score the applicant against the \"people leadership\" and \"writing\" criteria, I need the actual applicant profile and the specific criteria/lines of the scorecard you are referring to.\n\n**What is missing:** The applicant's profile and the full scorecard with the specific criteria for \"people leadership\" and \"writing.\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": "talent-map",
+      "ability": "workflow:theo/talent-map",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"32,000\"",
+            "answer lacks \"39,000\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "head gardener salaries"
+              }
+            }
+          ],
+          "ms": 7086,
+          "request": "Map head gardener salaries from https://shop.garden.test/salaries.",
+          "answer": "I am sorry, but I cannot complete the task as requested.\n\nThe provided steps only show the initial search for \"head gardener salaries\" and a link to a blog post about spring at Kew Moss Garden. I have not yet executed the subsequent steps, such as visiting the salary pages or company pages, nor have I received any results from those steps. Therefore, I do not have the necessary information to generate the requested table mapping head gardener salaries.",
+          "why": null,
+          "trail": [
+            "search head gardener salaries → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"head gardener salaries\"\n    }\n  }\n]\n```",
+            "sum: I am sorry, but I cannot complete the task as requested.\n\nThe provided steps only show the initial search for \"head gardener salaries\" and a link to a blog post about spring at Kew Moss Garden. I have not yet executed the subsequent steps, such as visiting the salary pages or company pages, nor have I received any results from those steps. Therefore, I do not have the necessary information to generate the requested table mapping head gardener salaries."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"28,000\"",
+            "answer lacks \"35,000\"",
+            "answer lacks \"Peat Bog\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "garden designer salaries"
+              }
+            }
+          ],
+          "ms": 5076,
+          "request": "Map garden designer salaries from https://shop.garden.test/salaries/designers.",
+          "answer": "Please provide the results of the planned steps so I can map the garden designer salaries for you. I need the output from the search and visit steps to create the requested table.",
+          "why": null,
+          "trail": [
+            "search garden designer salaries → ok (2 results)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"garden designer salaries\"\n    }\n  }\n]\n```",
+            "sum: Please provide the results of the planned steps so I can map the garden designer salaries for you. I need the output from the search and visit steps to create the requested table."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "debrief",
+      "ability": "workflow:theo/debrief",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"handbook\"",
+            "answer lacks \"hire\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "interview-ida.md"
+              }
+            }
+          ],
+          "ms": 6126,
+          "request": "Debrief the interview in calls/interview-ida.md against the scorecard: people leadership, writing.",
+          "answer": "The debrief failed because the required document, `interview-ida.md`, was not found. Therefore, I cannot provide a debrief against the scorecard for people leadership and writing. Please provide the content of `interview-ida.md` so I can complete the task.",
+          "why": null,
+          "trail": [
+            "doc_read interview-ida.md → failed: No document at interview-ida.md."
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"interview-ida.md\"\n    }\n  }\n]\n```",
+            "sum: The debrief failed because the required document, `interview-ida.md`, was not found. Therefore, I cannot provide a debrief against the scorecard for people leadership and writing. Please provide the content of `interview-ida.md` so I can complete the task."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sourcing",
+      "ability": "workflow:theo/sourcing",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [
+            {
+              "tool": "find_candidate",
+              "sensitive": false,
+              "answer": "yes"
+            },
+            {
+              "tool": "find_candidate",
+              "sensitive": false,
+              "answer": "yes"
+            }
+          ],
+          "reached": [
+            "find_candidate",
+            "find_candidate"
+          ],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/people"
+              }
+            },
+            {
+              "tool": "search",
+              "args": {
+                "query": "Ana Ruiz"
+              }
+            },
+            {
+              "tool": "search",
+              "args": {
+                "query": "Ida Fenwick"
+              }
+            },
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "ats",
+                "tool": "find_candidate",
+                "args": {
+                  "name": "Ana Ruiz"
+                }
+              }
+            },
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "ats",
+                "tool": "find_candidate",
+                "args": {
+                  "name": "Ida Fenwick"
+                }
+              }
+            }
+          ],
+          "ms": 21496,
+          "request": "Find people like my example hire Maja (she built a payments system) by what they built: read https://shop.garden.test/people, list each builder with the reason, and look up Ana Ruiz and Ida Fenwick in my ATS to flag anyone already there.",
+          "answer": "Based on the provided steps, here is the summary of the analysis:\n\nThe process successfully identified the builders listed on the Garden shop page: Ana Ruiz (built the booking system at Kew Moss Garden), Ida Fenwick (built a plant-loss tracker for a nursery), and Leo Park (Head of Growth, built nothing listed). The ATS check confirmed that Ana Ruiz is not in the ATS, while Ida Fenwick is already in the ATS at the \"stage Interview\" stage.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/people → ok (182 chars)",
+            "search Ana Ruiz → ok (2 results)",
+            "search Ida Fenwick → ok (2 results)",
+            "app_call ats → ok (15 chars)",
+            "app_call ats → ok (41 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/people\"\n    }\n  },\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"Ana Ruiz\"\n    }\n  },\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"Ida Fenwick\"\n    }\n  },\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"ats\",\n      \"tool\": \"find_candidate\",\n      \"args\": {\n        \"name\": \"Ana Ruiz\"\n      }\n    }\n  },\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"ats\",\n      \"tool\": \"find_candidate\",\n      \"args\": {\n        \"name\": \"Ida Fenwick\"\n      }\n    }\n  }\n]\n```",
+            "sum: Based on the provided steps, here is the summary of the analysis:\n\nThe process successfully identified the builders listed on the Garden shop page: Ana Ruiz (built the booking system at Kew Moss Garden), Ida Fenwick (built a plant-loss tracker for a nursery), and Leo Park (Head of Growth, built nothing listed). The ATS check confirmed that Ana Ruiz is not in the ATS, while Ida Fenwick is already in the ATS at the \"stage Interview\" stage."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "applicants",
+      "ability": "workflow:theo/applicants",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Ida\"",
+            "answer lacks \"Tom\"",
+            "did not ask for add_note"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 6056,
+          "request": "Read new applicants for head gardener in my ATS, score each on people leadership and writing with a reason per score, and add the scores as ATS notes as app calls I approve.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"list_applicants\",\n    \"args\": {\n      \"role\": \"head gardener\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"list_applicants\",\n    \"args\": {\n      \"role\": \"head gardener\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stuck",
+      "ability": "workflow:theo/stuck",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Tom Ashby\"",
+            "answer lacks \"Ruth Hale\"",
+            "answer lacks \"9\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 5060,
+          "request": "Read my ATS pipeline and list candidates who have been at the same stage for more than 5 days, with the stage and days.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"ats\",\n      \"tool\": \"pipeline\"\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"ats\",\n      \"tool\": \"pipeline\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    }
+  ]
+}

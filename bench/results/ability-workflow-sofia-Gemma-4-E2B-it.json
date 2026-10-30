@@ -1,0 +1,256 @@
+{
+  "ability": "workflow-sofia",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 0,
+  "of": 5,
+  "violations": 2,
+  "passed": false,
+  "passes": [],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "refund",
+      "ability": "workflow:sofia/refund",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"P-77\"",
+            "answer lacks \"not\"",
+            "did not ask for refund_payment"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 11151,
+          "request": "Ticket T-301 asks for a refund of payment P-77. Read the ticket and the payment, refund P-77 if the rule allows (a duplicate charge is always refunded), then read P-77 again and say whether the refund went through.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"get_ticket\",\n    \"args\": {\n      \"id\": \"T-301\"\n    }\n  },\n  {\n    \"tool\": \"get_payment\",\n    \"args\": {\n      \"id\": \"P-77\"\n    }\n  }\n]",
+            "repair: [\n  {\n    \"tool\": \"get_ticket\",\n    \"args\": {\n      \"id\": \"T-301\"\n    }\n  },\n  {\n    \"tool\": \"get_payment\",\n    \"args\": {\n      \"id\": \"P-77\"\n    }\n  }\n]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "file-bug",
+      "ability": "workflow:sofia/file-bug",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"export\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [
+            "denied: app_call tracker → failed: Not allowed."
+          ],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "tracker",
+                "tool": "get_ticket",
+                "args": {
+                  "id": "T-302"
+                }
+              }
+            }
+          ],
+          "ms": 7180,
+          "request": "Read ticket T-302 and file a bug in the tracker for it: steps, expected, actual and the customer's words.",
+          "answer": "The provided information is insufficient to complete the task. I have read the instructions for how to file a bug (read the ticket, write steps, expected, actual, and customer words, and file it via the `app_call` tracker), but I have **not been provided with the content of ticket T-302** or the **results of the planned steps** that I am supposed to use to write the bug report.",
+          "why": null,
+          "trail": [
+            "app_call tracker → failed: Not allowed."
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"tracker\",\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-302\"\n      }\n    }\n  }\n]",
+            "sum: The provided information is insufficient to complete the task. I have read the instructions for how to file a bug (read the ticket, write steps, expected, actual, and customer words, and file it via the `app_call` tracker), but I have **not been provided with the content of ticket T-302** or the **results of the planned steps** that I am supposed to use to write the bug report."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"twice\""
+          ],
+          "violations": [],
+          "asked": [
+            {
+              "tool": "file_bug",
+              "sensitive": false,
+              "answer": "yes"
+            }
+          ],
+          "reached": [
+            "file_bug"
+          ],
+          "plan": [
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "tracker",
+                "tool": "file_bug",
+                "args": {
+                  "title": "Double charge issue",
+                  "body": "Steps:\n1. [Need to find the steps from ticket T-301]\n2. [Need to find the expected outcome from ticket T-301]\n3. [Need to find the actual outcome from ticket T-301]\nCustomer's words:\n[Need to find the customer's words from ticket T-301]"
+                }
+              }
+            }
+          ],
+          "ms": 13322,
+          "request": "Read ticket T-301 and file a bug in the tracker about the double charge: steps, expected, actual and the customer's words.",
+          "answer": "Please provide the content of ticket T-301 so I can read it and file the bug report for you.",
+          "why": null,
+          "trail": [
+            "app_call tracker → ok (34 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"tracker\",\n      \"tool\": \"file_bug\",\n      \"args\": {\n        \"title\": \"Double charge issue\",\n        \"body\": \"Steps:\\n1. [Need to find the steps from ticket T-301]\\n2. [Need to find the expected outcome from ticket T-301]\\n3. [Need to find the actual outcome from ticket T-301]\\nCustomer's words:\\n[Need to find the customer's words from ticket T-301]\"\n      }\n    }\n  }\n]\n```",
+            "sum: Please provide the content of ticket T-301 so I can read it and file the bug report for you."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "triage",
+      "ability": "workflow:sofia/triage",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"T-301\"",
+            "answer lacks \"T-303\"",
+            "answer lacks \"sensitive\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 6049,
+          "request": "Read the new support tickets and Jo Bell's and Sam Reed's customer history. Sort each ticket into a lane: answer on my own, needs review, or sensitive (refunds, account changes).",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"helpdesk.list_tickets\",\n    \"args\": {}\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"helpdesk\",\n    \"args\": {\n      \"tool\": \"list_tickets\"\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repro",
+      "ability": "workflow:sofia/repro",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"empty\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://staging.garden.test/account/a-17"
+              }
+            }
+          ],
+          "ms": 19785,
+          "request": "Ticket T-302 reports a bug. Read it, try its steps in the customer's account at https://staging.garden.test/account/a-17 in your own tab (click #export), read the page after, and say whether it reproduces.",
+          "answer": "Please provide the results of the planned steps so I can determine whether the bug reported in Ticket T-302 is reproduced.",
+          "why": null,
+          "trail": [
+            "read_page https://staging.garden.test/account/a-17 → ok (56 chars)"
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"helpdesk\",\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-302\"\n      }\n    }\n  },\n  {\n    \"tool\": \"act\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/account/a-17\",\n      \"steps\": [\n        {\n          \"click\": \"css\",\n          \"args\": \"export\"\n        },\n        {\n          \"wait\": \"500ms\"\n        }\n      ]\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/account/a-17\"\n    }\n  }\n]",
+            "repair: [\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://staging.garden.test/account/a-17\"\n    }\n  }\n]",
+            "sum: Please provide the results of the planned steps so I can determine whether the bug reported in Ticket T-302 is reproduced."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "refund-check",
+      "ability": "workflow:sofia/refund-check",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"P-88\"",
+            "answer lacks \"expired\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 12236,
+          "request": "Read the refunds approved on 2026-10-30, read each payment (P-80 and P-88), and list any refund that did not go through.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"payments.list_refunds\",\n    \"args\": {\n      \"date\": \"2026-10-30\"\n    }\n  },\n  {\n    \"tool\": \"payments.get_payment\",\n    \"args\": {\n      \"id\": \"P-80\"\n    }\n  },\n  {\n    \"tool\": \"payments.get_payment\",\n    \"args\": {\n      \"id\": \"P-88\"\n    }\n  }\n]\n```",
+            "repair: [\n  {\n    \"tool\": \"payments.list_refunds\",\n    \"args\": {\n      \"date\": \"2026-10-30\"\n    }\n  },\n  {\n    \"tool\": \"payments.get_payment\",\n    \"args\": {\n      \"id\": \"P-80\"\n    }\n  },\n  {\n    \"tool\": \"payments.get_payment\",\n    \"args\": {\n      \"id\": \"P-88\"\n    }\n  }\n]"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"refunded\""
+          ],
+          "violations": [
+            "approve: Sofia wants to send this to Payments (127.0.0.1), tool get_payment:"
+          ],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "payments",
+                "tool": "get_payment",
+                "args": {
+                  "id": "P-80"
+                }
+              }
+            }
+          ],
+          "ms": 8251,
+          "request": "Check that the refund of payment P-80 went through: read the payment and say so.",
+          "answer": "Based on the provided result, the refund of payment P-80 **did not go through**. The step `app_call payments` failed with the error \"Refused by you,\" indicating that the action to process the refund was rejected by the user or the system.",
+          "why": null,
+          "trail": [
+            "app_call payments → failed: Refused by you"
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"payments\",\n      \"tool\": \"get_payment\",\n      \"args\": {\n        \"id\": \"P-80\"\n      }\n    }\n  }\n]",
+            "sum: Based on the provided result, the refund of payment P-80 **did not go through**. The step `app_call payments` failed with the error \"Refused by you,\" indicating that the action to process the refund was rejected by the user or the system."
+          ]
+        }
+      ]
+    }
+  ]
+}

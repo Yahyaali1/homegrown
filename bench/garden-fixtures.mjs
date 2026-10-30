@@ -1,7 +1,9 @@
 // The garden-eval fixtures: 8 requests over pages served by Playwright routes (ADR-14), each with an outcome check in
 // code and the tools it needs. Shared by garden-eval.mjs (open requests) and abilities.mjs (plan).
 export const SHOP = 'https://shop.garden.test';
-const KEW = 'https://kewmoss.test';
+export const KEW = 'https://kewmoss.test';
+export const STAGE = 'https://staging.garden.test';
+export const DOCS = 'https://docs.garden.test';
 export const html = (title, body) => `<!doctype html><html><head><title>${title}</title></head><body><h1>${title}</h1>${body}</body></html>`;
 
 export const PAGES = {
@@ -29,6 +31,33 @@ export const PAGES = {
   [`${SHOP}/salaries`]: html('Gardener salaries', '<ul><li>Garden Shop: head gardener, £32,000–£36,000</li><li>Kew Moss Garden: head gardener, £34,000–£39,000</li></ul>'),
   [`${SHOP}/applicants/ida`]: html('Ida Fenwick, applicant', '<p>Ran the moss nursery at Kew Moss Garden for 6 years: hired and trained 4 staff, cut plant losses by half.</p><p>Wrote the staff handbook.</p>'),
   [`${SHOP}/stockists`]: html('Stockists', '<ul><li>Fern Row Nursery, London: sells moss kits</li><li>Lane Hardware, Leeds: sells paint and nails</li></ul>'),
+  // Second cases per seed, Dana's staging and docs, and Sofia's customer account (bench/workflows/*.mjs).
+  [`${SHOP}/stockists/north`]: html('Stockists in the north', '<ul><li>Peat Bog Supplies, York: sells bog and moss plants</li><li>Iron Works, Hull: sells bolts and pipes</li></ul>'),
+  [`${SHOP}/forum`]: html('Forum', '<ul><li>"My Birch Trowel blade rusted in a week." (Kim)</li><li>"Rust spots on the Birch blade after one wet day." (Lee)</li><li>"£11.25 is a fair price for the Birch Trowel." (Ana)</li></ul>'),
+  [`${SHOP}/blog/ferns`]: html('Ferns in shade', '<p>Ferns grow best in deep shade. Water them twice a week in summer and cut old fronds in February.</p>'),
+  [`${SHOP}/search-console`]: html('Search Console: pages, September vs October', '<table><tr><th>Page</th><th>Clicks Sep</th><th>Clicks Oct</th></tr><tr><td>/blog/moss-care</td><td>1200</td><td>300</td></tr><tr><td>/kettles</td><td>400</td><td>380</td></tr></table><p>Note: the moss-care page lost its featured snippet on 6 October.</p>'),
+  [`${SHOP}/search-console/queries`]: html('Search Console: queries, September vs October', '<table><tr><th>Query</th><th>Clicks Sep</th><th>Clicks Oct</th></tr><tr><td>trowel price</td><td>500</td><td>120</td></tr><tr><td>moss kit</td><td>220</td><td>210</td></tr></table><p>Note: the trowel page was moved to a new URL on 2 October with no redirect.</p>'),
+  [`${SHOP}/analytics`]: html('Analytics: top posts, September', '<ol><li><a href="/blog/moss-care">Caring for moss in March</a>: 5,400 views</li><li><a href="/blog/ferns">Ferns in shade</a>: 3,100 views</li><li>Watering cans compared: 900 views</li></ol>'),
+  [`${SHOP}/analytics/august`]: html('Analytics: top posts, August', '<ol><li><a href="/blog/ferns">Ferns in shade</a>: 2,800 views</li><li><a href="/blog/moss-care">Caring for moss in March</a>: 2,500 views</li></ol>'),
+  [`${SHOP}/invoices/october`]: html('Invoices, October', '<table><tr><th>Vendor</th><th>Date</th><th>Amount</th></tr><tr><td>Kew Print</td><td>8 Oct</td><td>£95</td></tr></table><p>Expected vendors: Fern Freight, Kew Print.</p>'),
+  [`${SHOP}/applicants/tom`]: html('Tom Ashby, applicant', '<p>Team lead at Lane Hardware for 3 years: led a team of 9.</p><p>No writing samples given.</p>'),
+  [`${SHOP}/salaries/designers`]: html('Garden designer salaries', '<ul><li>Fern Row Nursery: garden designer, £28,000–£31,000</li><li>Peat Bog Supplies: garden designer, £30,000–£35,000</li></ul>'),
+  [`${SHOP}/people`]: html('Builders we admire', '<ul><li>Ana Ruiz: built the booking system at Kew Moss Garden</li><li>Ida Fenwick: built a plant-loss tracker for a nursery</li><li>Leo Park: Head of Growth, built nothing listed</li></ul>'),
+  [`${SHOP}/partners/fern-row/news`]: html('Fern Row Nursery news', '<p>October: Fern Row Nursery opened a second shop in Leeds and hired Lena Moss as head buyer.</p>'),
+  [`${KEW}/about`]: html('About Kew Moss Garden', '<p>Kew Moss Garden is a visitor garden for mosses, founded 1998. Ana Ruiz became director in August. Raised £1m in October to build a cafe.</p>'),
+  [`${KEW}/jobs`]: html('Jobs at Kew Moss Garden', '<ul><li>Cafe manager</li><li>Head of Partnerships</li></ul>'),
+  [`${STAGE}/basket`]: html('Basket', '<p class="error">Something went wrong. TypeError: price is undefined at basket.js:42</p><p>Your basket could not be shown.</p>'),
+  [`${STAGE}/login`]: html('Sign in', '<p class="error">Request POST /api/session failed: 401 Unauthorized (token expired).</p><form><input name="email"><button>Sign in</button></form>'),
+  [`${STAGE}/signup`]: html('Sign up', '<form action="/signup/done"><label>Email <input id="email" name="email"></label><button id="go" type="submit">Sign up</button></form>'),
+  [`${STAGE}/signup/done`]: html('Welcome', '<p>Welcome! Your account is ready.</p>'),
+  [`${STAGE}/checkout`]: html('Checkout', '<form action="/checkout/next"><button id="next" type="submit">Continue</button></form>'),
+  [`${STAGE}/checkout/next`]: html('Checkout error', '<p class="error">Error 502: the delivery service is unavailable.</p>'),
+  [`${STAGE}/search`]: html('Search', '<form action="/search/results"><input id="q" name="q"><button id="find" type="submit">Find</button></form>'),
+  [`${STAGE}/search/results`]: html('Search results', '<p>No results.</p>'),
+  [`${STAGE}/account/a-17`]: html('Account A-17: Jo Bell', '<p>Plan: Gardener. Export history:</p><form action="/account/a-17/export"><button id="export" type="submit">Export CSV</button></form>'),
+  [`${STAGE}/account/a-17/export`]: html('Export failed', '<p class="error">Export failed: the file is empty.</p>'),
+  [`${DOCS}/upload`]: html('Upload API', '<p>POST /v2/files uploads one file. Max file size: 25 MB. Rate limit: 10 requests per second.</p><p>Warning: /v1/upload is deprecated and will be removed in June.</p>'),
+  [`${DOCS}/webhooks`]: html('Webhooks', '<p>Register a URL to get events. Each event is retried 3 times.</p><p>Warning: check the X-Garden-Signature header on every event. Payloads over 1 MB are dropped.</p>'),
 };
 export const BING = `<!doctype html><html><body><ol id="b_results">
 <li class="b_algo"><h2><a href="${KEW}/visit">Visit Kew Moss Garden</a></h2><div class="b_caption"><p>Plan your visit: tickets, getting here and opening times.</p></div></li>
