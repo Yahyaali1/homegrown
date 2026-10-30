@@ -4,7 +4,7 @@
 import { isExtensionPage } from './pagerequest.ts';
 import * as trust from './trust.ts';
 import { sitesOf } from '../domain/garden/records.ts';
-import { callText, factsOf, parseConnector, rpcBody, rpcReply, serverTools, serverUrl, type Connector, type ServerTool } from '../domain/mcp.ts';
+import { callText, factsOf, MAX_REPLY, parseConnector, replyOf, rpcBody, rpcReply, sseSplit, tokenFor, serverTools, serverUrl, type Connector, type ServerTool } from '../domain/mcp.ts';
 
 const TIMEOUT = 30_000;
 const VERSION = '2025-06-18';
@@ -31,22 +31,27 @@ async function rpc(s: Session, method: string, params?: Record<string, unknown>)
   if (!res.ok) throw new Error(`The server answered ${res.status}.`);
   s.session ??= res.headers.get('mcp-session-id') ?? undefined;
   const stream = (res.headers.get('content-type') ?? '').includes('text/event-stream');
-  let body = '';
+  // Read until the reply to this request arrives (a stream may stay open after it), at most MAX_REPLY; a stream's
+  // complete events are parsed once each, as they arrive.
+  let buf = '', size = 0;
   let r: ReturnType<typeof rpcReply> = null;
-  if (!stream) r = rpcReply(await res.text(), id, false);
-  else {
-    // Read until the reply to this request arrives; the server may keep the stream open after it.
-    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        body += value ?? '';
-        if ((r = rpcReply(body, id, true)) || done) break;
-      }
-    } finally {
-      void reader.cancel().catch(() => {});
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      size += value?.length ?? 0;
+      if (size > MAX_REPLY) throw new Error('The server’s reply is too long (over 1 MB).');
+      buf += value ?? '';
+      if (stream) {
+        const s = sseSplit(done ? `${buf}\n\n` : buf);
+        buf = s.rest;
+        if ((r = replyOf(s.messages, id)) || done) break;
+      } else if (done) break;
     }
+  } finally {
+    void reader.cancel().catch(() => {});
   }
+  if (!stream) r = rpcReply(buf, id, false);
   if (!r) throw new Error('The server sent no reply.');
   if ('error' in r) throw new Error(r.error);
   return r.result;
@@ -93,13 +98,16 @@ export const handlers = {
     page(sender);
     const u = serverUrl(url);
     if (!u) throw new Error('A server URL starts with https:// (or http://localhost for a test server).');
-    return probe(u, tokenOf(token) ?? (id ? (await trust.connectors()).find((c) => c.id === id)?.token : undefined));
+    // A kept token goes only to the origin it was given for.
+    return probe(u, tokenFor(id ? (await trust.connectors()).find((c) => c.id === id) : undefined, u, tokenOf(token)));
   },
   /** Saves what the person confirmed. With no token sent, a kept one stays. */
   connectorSave: async ({ connector }: { connector: Partial<Connector> }, sender?: Sender) => {
     page(sender);
     const old = connector.id ? (await trust.connectors()).find((c) => c.id === connector.id) : undefined;
-    const token = tokenOf(connector.token) ?? old?.token;
+    const url = serverUrl(connector.url);
+    if (!url) throw new Error('A server URL starts with https:// (or http://localhost for a test server).');
+    const token = tokenFor(old, url, tokenOf(connector.token));
     const { sites: hosts, refused } = sitesOf(Array.isArray(connector.hosts) ? connector.hosts : []);
     if (refused.length) throw new Error(`These can’t be app hosts: ${refused.join(', ')}`);
     const c = parseConnector({ v: 1, guidelines: '', ...connector, hosts, id: connector.id || crypto.randomUUID(), createdAt: old?.createdAt ?? Date.now(), ...(token ? { token } : { token: undefined }) });

@@ -68,10 +68,13 @@ export function serverTools(result: unknown): ServerTool[] {
   }));
 }
 
-/** The form's first choice for a tool: Ask (Read when the server hints read-only, Off when unusable), its text pre-filled. */
+/**
+ * The form's first choice for a tool: Ask (Read when the server hints read-only, Off when unusable). Its line is empty
+ * until the person writes one: the server's description is only shown as a quote.
+ */
 export const toolFrom = (s: ServerTool, chosen: Partial<Pick<AppTool, 'describe' | 'scope'>> = {}): AppTool => ({
   name: s.name, schema: s.schema,
-  describe: (chosen.describe ?? s.description).replace(/\s+/g, ' ').trim().slice(0, MCP.describe),
+  describe: (chosen.describe ?? '').replace(/\s+/g, ' ').trim().slice(0, MCP.describe),
   scope: s.unusable ? 'off' : chosen.scope ?? (s.readOnly ? 'read' : 'ask'),
 });
 
@@ -139,6 +142,20 @@ export function argsText(s: Schema): string {
 
 // ---- JSON-RPC over Streamable HTTP ----
 
+/**
+ * The token to send to `url`: the one typed, else the kept one, but only to the origin it was given for. A kept token
+ * with a new origin and none typed throws: the person types it again.
+ */
+export function tokenFor(kept: { url: string; token?: string | undefined } | undefined, url: string, typed: string | undefined): string | undefined {
+  if (typed) return typed;
+  if (!kept?.token) return undefined;
+  if (new URL(kept.url).origin === new URL(url).origin) return kept.token;
+  throw new Error('The server moved to another address: type its token again.');
+}
+
+/** A reply larger than this fails: a server can't fill the worker's memory. */
+export const MAX_REPLY = 1_000_000;
+
 export const rpcBody = (id: number | undefined, method: string, params?: Record<string, unknown>): string =>
   JSON.stringify({ jsonrpc: '2.0', ...(id !== undefined && { id }), method, ...(params && { params }) });
 
@@ -154,17 +171,26 @@ export function sseMessages(text: string): unknown[] {
   });
 }
 
+/** The complete events at the front of a stream's buffer, parsed, and the partial one left. */
+export function sseSplit(buf: string): { messages: unknown[]; rest: string } {
+  const lf = buf.lastIndexOf('\n\n'), crlf = buf.lastIndexOf('\r\n\r\n');
+  const cut = Math.max(lf < 0 ? -1 : lf + 2, crlf < 0 ? -1 : crlf + 4);
+  return cut < 0 ? { messages: [], rest: buf } : { messages: sseMessages(buf.slice(0, cut)), rest: buf.slice(cut) };
+}
+
 /** The reply to request `id` in a body (JSON or an event stream): the last message with that id. null: none yet. */
-export function rpcReply(body: string, id: number, stream: boolean): { result: unknown } | { error: string } | null {
-  let messages: unknown[] = [];
-  if (stream) messages = sseMessages(body);
-  else {
-    try {
-      messages = [JSON.parse(body) as unknown].flat();
-    } catch {
-      return { error: 'The server’s reply isn’t JSON.' };
-    }
+export function rpcReply(body: string, id: number, stream: boolean): Reply | null {
+  if (stream) return replyOf(sseMessages(body), id);
+  try {
+    return replyOf([JSON.parse(body) as unknown].flat(), id);
+  } catch {
+    return { error: 'The server’s reply isn’t JSON.' };
   }
+}
+
+type Reply = { result: unknown } | { error: string };
+/** The last message for `id` among these, or null. */
+export function replyOf(messages: unknown[], id: number): Reply | null {
   const m = messages.filter(isObj).findLast((x) => x.id === id);
   if (!m) return null;
   if (isObj(m.error)) return { error: `The server said: ${String(m.error.message ?? 'error').slice(0, 300)}` };

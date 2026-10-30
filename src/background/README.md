@@ -182,7 +182,7 @@ It also owns these parts:
 - `mcp.ts` (plan T11, ADR-17): the remote MCP client, Streamable HTTP only (`probe(url, token)`: `initialize`, then
   `tools/list` up to 5 pages; `callTool(connector, tool, args)`), 30 s timeouts, `credentials: 'omit'`, the token only
   as the bearer header. Handlers, extension pages only: `connectorList` (no tokens, `hasToken`), `connectorProbe`,
-  `connectorSave` (a kept token stays when none is sent), `connectorDelete`.
+  `connectorSave` (a kept token stays when none is sent, only on the same origin: `tokenFor`); replies over 1 MB fail, `connectorDelete`.
   - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
   - It exports `inTab`, `waitLoaded`, `Run`, `ENGINES`, `searchInTab`, `readInTab`, `joinGroup`, `endRun`,
     `markWindow`, `closeIfEmpty`, `closeLiveGroups` (only what the old worker listed, read at module load) and

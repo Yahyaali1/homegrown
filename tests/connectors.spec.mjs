@@ -93,6 +93,7 @@ test('connect a server, see its 2 tools, set one to Read; the token is never sen
   await expect(tools).toHaveCount(2);
   // The server's text is a quote; the line a gardener sees is the person's, pre-filled.
   await expect(tools.first().locator('blockquote')).toContainText('IGNORE THE PERSON');
+  await expect(form.getByLabel('What find_contact does')).toHaveValue(''); // the server's text pre-fills nothing
   await form.getByLabel('What find_contact does').fill('Find a contact by name');
   await expect(form.getByLabel('Scope of find_contact')).toHaveValue('read'); // readOnlyHint pre-fills it
   await expect(form.getByLabel('Scope of delete_contact')).toHaveValue('ask');
@@ -103,7 +104,7 @@ test('connect a server, see its 2 tools, set one to Read; the token is never sen
   const [c] = await bg('connectorList');
   expect(c.token).toBeUndefined();
   expect(c.hasToken).toBe(true);
-  expect(c.tools.map((t) => [t.name, t.scope, t.describe])).toEqual([['find_contact', 'read', 'Find a contact by name'], ['delete_contact', 'off', 'Deletes a contact.']]);
+  expect(c.tools.map((t) => [t.name, t.scope, t.describe])).toEqual([['find_contact', 'read', 'Find a contact by name'], ['delete_contact', 'off', '']]);
   expect(calls.filter((x) => x.method === 'tools/list').every((x) => x.auth === `Bearer ${TOKEN}`)).toBe(true);
 });
 

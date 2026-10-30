@@ -6,7 +6,7 @@ import { actOf, alwaysOk, approveAllOk, argsKey, decide, taintsAfter, type Grant
 import { TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { newRun, parseGardener, type Gardener, type GardenRun, type Request, type Work } from '../../src/domain/garden/records.ts';
 import { trimmed } from '../../src/domain/garden/report.ts';
-import { argsText, callText, checkArgs, factsOf, parseConnector, rpcReply, serverTools, toolFrom, type Connector, type ServerTool } from '../../src/domain/mcp.ts';
+import { argsText, callText, checkArgs, factsOf, parseConnector, replyOf, rpcReply, serverTools, sseSplit, toolFrom, tokenFor, type Connector, type ServerTool } from '../../src/domain/mcp.ts';
 import { appNamed, appOpen } from '../../src/domain/apps.ts';
 
 const g: Gardener = { v: 1, id: 'g1', name: 'Clerk', instructions: 'Be brief.', sites: ['shop.com'], minutes: 10, createdAt: 0 };
@@ -16,7 +16,7 @@ const TOKEN = 'sk-secret-123';
 const conn: Connector = {
   v: 1, id: 'crm', name: 'CRM', url: 'https://mcp.crm.com/mcp', token: TOKEN, hosts: ['app.crm.com'], guidelines: 'Always search by email first.', createdAt: 0,
   tools: [toolFrom(server('find_contact'), { describe: 'Find a contact by name', scope: 'read' }), toolFrom(server('update_note'), { describe: 'Update a note' }),
-    toolFrom(server('refund_order'), { describe: 'Give money back', scope: 'read' }), toolFrom(server('hidden_tool'), { describe: 'Never shown', scope: 'off' })],
+    toolFrom(server('refund_order'), { describe: 'Give money back', scope: 'read' }), toolFrom(server('hidden_tool'), { describe: 'Never shown', scope: 'off' }), toolFrom(server('list_deals'))],
 };
 const ctx: Ctx = { gardener: g, tools: TOOLS, now: 1000, connectors: [factsOf(conn)] };
 const WITH = { model: 'm', maxTokens: 8192, agent: { loop: true, maxSteps: 8 }, abilities: ['plan' as const] };
@@ -31,6 +31,18 @@ test('an SSE reply with two events parses to the last JSON-RPC result for its id
   assert.deepEqual(rpcReply('{"jsonrpc":"2.0","id":1,"error":{"message":"nope"}}', 1, false), { error: 'The server said: nope' });
   assert.equal(callText({ content: [{ type: 'text', text: 'a' }, { type: 'image' }] }), 'a\n[image]');
   assert.throws(() => callText({ isError: true, content: [{ type: 'text', text: 'bad' }] }), /The app said: bad/);
+  // A stream is parsed event by event: a partial event waits for the rest.
+  const a = sseSplit('data: {"id":1,"result":1}\n\ndata: {"id":2,');
+  assert.deepEqual([a.messages, a.rest], [[{ id: 1, result: 1 }], 'data: {"id":2,']);
+  assert.deepEqual(replyOf(sseSplit(`${a.rest}"result":2}\r\n\r\n`).messages, 2), { result: 2 });
+});
+
+test('a kept token goes only to the origin it was given for', () => {
+  const kept = { url: 'https://mcp.crm.com/mcp', token: TOKEN };
+  assert.equal(tokenFor(kept, 'https://mcp.crm.com/v2', undefined), TOKEN);
+  assert.throws(() => tokenFor(kept, 'https://evil.example/mcp', undefined), /type its token again/);
+  assert.equal(tokenFor(kept, 'https://evil.example/mcp', 'new'), 'new');
+  assert.equal(tokenFor({ url: kept.url }, 'https://evil.example/mcp', undefined), undefined);
 });
 
 test('checkArgs refuses an unknown key, a wrong type, a missing required key, a bad enum and a long string', () => {
@@ -93,7 +105,8 @@ test('the choose prompt holds the confirmed describe and guidelines, never the s
   assert.ok('think' in a);
   assert.match(a.think.prompt, /tool "find_contact" \{q: string, limit\?: integer\}: Find a contact by name/);
   assert.match(a.think.prompt, /Guidelines for CRM: Always search by email first\./);
-  assert.doesNotMatch(a.think.prompt, /SERVER TEXT|hidden_tool|Never shown/);
+  assert.doesNotMatch(a.think.prompt, /SERVER TEXT|hidden_tool|Never shown|list_deals/, 'Off and undescribed tools are left out');
+  assert.equal(toolFrom(server('list_deals')).describe, '', 'the server’s text pre-fills nothing');
   assert.ok(!toolsFor(run()).some((t) => t.name === 'app_call'), 'no connector: no app_call');
 });
 
@@ -131,6 +144,7 @@ test('connect <name> finds a known app, and an open app is told by its hosts', (
   assert.equal(appNamed('linear')?.name, 'Linear');
   assert.equal(appNamed('hubspt')?.name, 'HubSpot');
   assert.equal(appNamed('zzz'), null);
+  assert.equal(appNamed('the dots'), null, 'any other "connect …" stays a chat message');
   assert.deepEqual(appOpen('https://app.crm.com/deals', '', [factsOf(conn)]), { name: 'CRM', connector: 'crm' });
   assert.equal(appOpen('https://app.hubspot.com/x', '', [])?.name, 'HubSpot');
   assert.deepEqual(appOpen('https://tool.example/x', ' Acme  Desk ', []), { name: 'Acme Desk' });

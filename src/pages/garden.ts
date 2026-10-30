@@ -620,14 +620,14 @@ function connectForm(c: Linked | null, rows: ToolRow[] = [], app?: App): { form:
     shown = r;
     read.length = 0;
     list.replaceChildren(...r.map(({ tool, server }) => {
-      const describe = h('input', { maxLength: MCP.describe, value: tool.describe, attrs: { 'aria-label': `What ${tool.name} does` } });
+      const describe = h('input', { maxLength: MCP.describe, value: tool.describe, placeholder: 'What it does, in your words: offered only once written', attrs: { 'aria-label': `What ${tool.name} does` } });
       const scope = select(`Scope of ${tool.name}`, SCOPES);
       scope.value = tool.scope;
       const why = server?.unusable;
       if (why) scope.disabled = describe.disabled = true;
       read.push(() => ({ ...tool, describe: describe.value.trim(), scope: why ? 'off' : (scope.value as Scope) }));
       return h('li', { className: 'tool' }, h('span', { className: 't' }, h('b', { textContent: tool.name }),
-        // The server's words, quoted: they only pre-fill the line below, which is what a gardener sees.
+        // The server's words, quoted only: the line below, the person's, is all a gardener sees.
         ...(server?.description ? [h('blockquote', { className: 'muted small', textContent: server.description })] : []),
         ...(why ? [h('span', { className: 'err', textContent: `Off: ${why}.` })] : []), describe), scope);
     }));
@@ -643,9 +643,6 @@ function connectForm(c: Linked | null, rows: ToolRow[] = [], app?: App): { form:
   };
   if (app) fill(app);
   const listTools = labelled(busyButton('List tools', tryIt(err, async () => {
-    // Asked on this click: the server's origin, beyond pages (granted already when Homegrown reads every site).
-    const origin = `${new URL(url.value).origin}/*`;
-    if (!(await chrome.permissions.request({ origins: [origin] }))) throw new Error('Homegrown needs to reach that server to connect it.');
     const listed = await bg<ServerTool[]>('connectorProbe', { url: url.value, token: token.value, ...(c && { id: c.id }) });
     if (!listed.length) throw new Error('The server lists no tools.');
     showTools(listed.map((x) => ({ server: x, tool: toolFrom(x) })));

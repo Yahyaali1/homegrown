@@ -390,11 +390,11 @@ $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   if (!typed && !imageData) return;
   input.value = '';
   slashList.hidden = true;
-  // "connect <name>": the Connect form in Garden, filled in from a known app, for the person to confirm. No model.
-  const connect = !tpl && !imageData && /^connect\s+(.{1,60})$/i.exec(typed);
-  if (connect) {
+  // "connect <name>" naming a known app: the Connect form in Garden, filled in, for the person to confirm. No model.
+  const app = !tpl && !imageData ? appNamed(/^connect\s+(.{1,60})$/i.exec(typed)?.[1] ?? '') : null;
+  if (app) {
     document.querySelector<HTMLElement>('.tabs [data-tab=garden]')?.click();
-    return openConnect(appNamed(connect[1]!) ?? { name: connect[1]!.trim() });
+    return openConnect(app);
   }
   // `/name rest`: the skill's method is the instruction, its files ride in the data. Off, or needing what the chat's
   // model lacks, it is refused.

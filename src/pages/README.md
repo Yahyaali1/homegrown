@@ -84,10 +84,10 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   with `skillId` on the turn; typing `/` lists the skills that are on (`fuzzy`) in `#slash`. `showRequests()` re-renders the trays when
   the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen. Plan T11: Garden →
   Connectors lists connected apps (Edit, Check tools again, Delete) and the Connect form (name, URL, token, app hosts,
-  guidelines; List tools asks the server's origin, then each tool shows the server's description as a quote, an
-  editable line the person confirms, and Off / Ask each time / Read); `openConnect(app)` fills it in. `#app-open`
+  guidelines; List tools shows each tool with the server's description as a quote, an empty line the person
+  writes (a tool is offered only once it has one), and Off / Ask each time / Read); `openConnect(app)` fills it in. `#app-open`
   says which app the active tab shows (`appOpen`). The gardener form's site notes (`host: note` lines) are
-  `Gardener.siteNotes`. `chat.ts`: `connect <name>` opens that form filled from `appNamed`, with no model.
+  `Gardener.siteNotes`. `chat.ts`: `connect <name>` naming a known app (`appNamed`) opens that form filled in, with no model; any other message is chat.
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its
   tab and window; Done, Skip) and question cards; an approve in the person's own tab, or for an app tool not marked Read (`alwaysOk` false), has no Always; an

@@ -254,7 +254,8 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
   Off, Ask each time, or Read (may be allowed with Always). Every call is asked unless you allowed that exact Read call,
   and a run that read your signed-in pages asks every call. Calls with words like pay, refund, delete or send are
   sensitive (8 s, never allowed for good). The token stays in Homegrown's own database and goes only to that server.
-  A server's tool descriptions never reach the model: only the line you confirmed does.
+  A server's tool descriptions never reach the model: only the line you write for a tool does, and a tool without one
+  isn't offered.
 
 ## How it's built
 

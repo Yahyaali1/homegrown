@@ -72,8 +72,9 @@ runtime adapters and storage live outside `domain/`.
   the term, or a failed call, falls back to the term plus up to 3 longer title words.
 - `mcp.ts` (plan T11, ADR-17): `Connector` (`v: 1`, `token?`), `ConnectorFacts` (without the token, what policy and
   pages see), `factsOf`, `AppTool` (`describe` the person confirmed, `scope` `off` / `ask` / `read`), `Schema`,
-  `serverTools` (`tools/list` → `ServerTool` with `unusable`), `toolFrom` (the form's first choice), `parseConnector`,
-  `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `rpcBody`, `sseMessages`, `rpcReply`,
+  `serverTools` (`tools/list` → `ServerTool` with `unusable`), `toolFrom` (the form's first choice: an empty line), `tokenFor`
+  (a kept token only to its origin), `parseConnector`,
+  `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `rpcBody`, `sseMessages`, `sseSplit`, `rpcReply`, `replyOf`, `MAX_REPLY`,
   `callText`, `STDIO`.
 - `apps.ts` (plan T11): `APPS` (known remote MCP servers: name, URL, docs, hosts), `appNamed` ("connect <name>",
   `fuzzy`), `appOpen(url, meta, connectors)` (a connected app, a known one, else the page's own name).
@@ -166,7 +167,7 @@ runtime adapters and storage live outside `domain/`.
     `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `EDITABLE` (`act`, `app_call`), `ToolSpec`, `Arg` (`record`: a value its parser takes),
     `parseArgs`, `toolsFor` (`read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
     `agent.loop` or in a plan; `app_call` only with a usable app tool, its describe built by `appLines` from the
-    confirmed lines and guidelines), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
+    person's lines and guidelines; a tool without a line isn't offered), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
     a borrowed tab), `devtoolsDigest` (≤ 20 console errors, ≤ 30 requests with status ≥ 400, no query strings, no
     bodies), `downloadRun` (a download's run by referrer; never one the person's tabs also have open, never a guess).
     `parseArgs` refuses unknown keys and `evaluate` steps.

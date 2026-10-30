@@ -102,7 +102,8 @@ export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS, connectors: 
  */
 export function appLines(connectors: ConnectorFacts[]): string {
   return connectors.flatMap((c) => {
-    const tools = c.tools.filter((t) => t.scope !== 'off' && !unusable(t.name, t.schema));
+    // A tool the person hasn't described yet isn't offered: its only text would be the server's.
+    const tools = c.tools.filter((t) => t.scope !== 'off' && t.describe.trim() && !unusable(t.name, t.schema));
     if (!tools.length) return [];
     const head = `- connector "${c.id.replace(/["\\\n]/g, '')}" (${c.name.replace(/\s+/g, ' ')}):`;
     const guide = c.guidelines.trim() ? [`  Guidelines for ${c.name.replace(/\s+/g, ' ')}: ${c.guidelines.trim()}`] : [];
