@@ -168,12 +168,14 @@ runtime adapters and storage live outside `domain/`.
     while the model lacks a need of a skill or routine). `loop.ts` `think` puts a
     skill's files ahead of the data, at most a third of what memory left. `Work` `plan`/`ask` and `Routine` have
     `skillId?` (`routineWork`); `GardenRun.approvePlans?`; `ChatTurn.skillId?`.
-  - `presets.ts` (plan T12, decision 12): companion packs as data, `PRESETS` (Rosa, Dana), `presetById`,
+  - `presets.ts` (plan T12, decision 12): companion packs as data, `PRESETS` (Rosa, Dana; T13: Martin, Olivia, Cora, Sally, Theo, Sofia, and Ellis built from Sally, Theo and Olivia seeds by `reuse`, re-gated on `workflow:ellis/<id>`), `presetById`,
     `Preset` (`look`, `instructions`, `interview` ≤ 8, suggested `sites`, `skills`/`routines` seeds with `needs`,
     `tools` that only narrow, `templates`, `note`; bench cases live in `bench/workflows/<preset>.mjs`), `presetProblems` (a non-read seed names
     `workflow:<preset>/<id>`), `direct`, `hireRecords` (gardener with `preset`, skills `by: 'preset'` off, routines
     paused, template entities unkept, needs copied; a taken skill name gets a number), `withProfile` (interview answers
     after the instructions, ≤ 2000), `SEED_RULE`.
+  - `../plaza.ts` (plan T13): `plazaThink(name, { notes, answers, history })` (data only; history titles only when
+    given, which the worker does only with `plazaHistory` on), `plazaLine`, `plazaDay`.
   - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
     step outputs, turns and the answer only with `withText`. `trimmed(run)`: a run as broadcast and listed (outputs
     cut to 300).

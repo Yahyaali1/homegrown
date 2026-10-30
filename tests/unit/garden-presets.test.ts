@@ -8,6 +8,10 @@ import { NEEDS, needsRefusal, parseSkill, skillRefusal, slashOf } from '../../sr
 import { TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { parseEntity } from '../../src/domain/memory.ts';
 import type { Ability } from '../../src/domain/model.ts';
+import { actOf } from '../../src/domain/garden/policy.ts';
+import { sensitiveWord } from '../../src/domain/garden/classify.ts';
+import { plazaLine, plazaThink } from '../../src/domain/plaza.ts';
+import { parseSettings } from '../../src/domain/settings.ts';
 
 let n = 0;
 const hire = (id: string, o: { sites?: string[]; taken?: string[] } = {}) =>
@@ -126,4 +130,67 @@ test('Regulation watch ships with no page: it parses only paused, and with a pag
   const set = parseRoutine({ ...watch, paused: false, when: { ...watch.when, url }, work: { kind: 'read', urls: [url] } });
   assert.ok(set && !noPage(set.work) && set.when.kind === 'event' && set.when.url === url);
   assert.equal(parseRoutine({ ...watch, work: { kind: 'read', urls: [url] } }), null, 'a page without the event url is refused');
+});
+
+// ---- T13: seven more packs and Companion Plaza ----
+
+test('all 9 companions; the seven T13 packs parse and each ship at least 3 routines, all off', () => {
+  assert.deepEqual(PRESETS.map((p) => p.id).sort(), ['cora', 'dana', 'ellis', 'martin', 'olivia', 'rosa', 'sally', 'sofia', 'theo']);
+  for (const id of ['martin', 'olivia', 'cora', 'sally', 'theo', 'ellis', 'sofia']) {
+    const p = presetById(id)!;
+    assert.deepEqual(presetProblems(p), [], id);
+    assert.ok(p.routines.length >= 3, `${id} has ${p.routines.length} routines`);
+    const made = hire(id);
+    assert.ok(made.routines.every((r) => r.paused) && made.skills.every((s) => !s.on), id);
+    assert.equal(new Set(p.routines.map((r) => r.name)).size, p.routines.length, `${id} routine names are unique`);
+    assert.equal(new Set([...p.skills, ...p.routines].map((x) => x.id)).size, p.skills.length + p.routines.length, `${id} seed ids are unique`);
+  }
+});
+
+test('no pack offers act_my_tab or propose_routine; write-heavy packs write only through asked app calls', () => {
+  for (const p of PRESETS) {
+    assert.ok(!p.tools.includes('act_my_tab') && !p.tools.includes('propose_routine'), p.id);
+  }
+  for (const id of ['olivia', 'sally', 'theo', 'sofia', 'ellis']) assert.ok(presetById(id)!.tools.includes('app_call'), id);
+  // Code decides: an app call that refunds or sends is sensitive from the call alone (asked with the 8 s rule).
+  const known = { connectors: [{ id: 'c', name: 'Stripe', url: 'https://mcp.stripe.test/', tools: [{ name: 'create_refund', describe: 'refund', scope: 'ask' as const, schema: {} }, { name: 'send_reply', describe: 'reply', scope: 'ask' as const, schema: {} }], guidelines: '' }] };
+  assert.ok(actOf({ tool: 'app_call', args: { connector: 'c', tool: 'create_refund', args: {} } }, known as never)?.why);
+  assert.ok(actOf({ tool: 'app_call', args: { connector: 'c', tool: 'send_reply', args: {} } }, known as never)?.why);
+  for (const w of ['reply_to_conversation', 'chat_postMessage', 'add_replies', 'posted']) assert.ok(sensitiveWord(w), w);
+  for (const w of ['postal code', 'postcode', 'Messages', 'read_conversation']) assert.equal(sensitiveWord(w), null, w);
+});
+
+test('a seed that watches a page the person chooses ships with no page and stays paused', () => {
+  const watch = hire('martin').routines.find((r) => r.name === 'Competitor watch')!;
+  assert.ok(noPage(watch.work) && watch.paused && !(watch.needs ?? []).length);
+  assert.equal(parseRoutine({ ...watch, paused: false }), null);
+});
+
+test('Ellis reuses Sally, Theo and Olivia seeds, re-gated on her own workflow abilities', () => {
+  const ellis = presetById('ellis')!;
+  for (const [from, id] of [['sally', 'leads'], ['theo', 'sourcing'], ['olivia', 'inbox-sort']] as const) {
+    const mine = ellis.routines.find((r) => r.id === id)!, theirs = presetById(from)!.routines.find((r) => r.id === id)!;
+    assert.deepEqual(mine.work, theirs.work);
+    assert.ok(mine.needs.includes(`workflow:ellis/${id}`) && !mine.needs.includes(`workflow:${from}/${id}`));
+  }
+  const leads = hire('ellis').routines.find((r) => r.name === 'Lookalike leads')!;
+  assert.equal(needsRefusal(leads, has('workflow:sally/leads', 'plan')), NEEDS, "Sally's measurement doesn't turn on Ellis's copy");
+});
+
+test('the Plaza prompt holds history titles only when plazaHistory is on; data only', () => {
+  const o = { notes: ['Checked EU battery rules'], answers: ['Two rules changed in October.'] };
+  const off = plazaThink('Rosa', { ...o, history: null });
+  const on = plazaThink('Rosa', { ...o, history: ['My bank statement'] });
+  assert.ok(!off.data.includes('visited') && !off.data.includes('bank'));
+  assert.ok(on.data.includes('My bank statement'));
+  assert.ok(off.data.includes('EU battery rules') && off.data.includes('October'));
+  assert.ok(!off.prompt.includes('EU battery') && !on.prompt.includes('bank'), 'notes and history stay in the data part');
+  assert.equal(plazaLine('"Two rules changed."\nmore'), 'Two rules changed.');
+  assert.equal(plazaLine('\n\n'), '');
+});
+
+test('Plaza settings are off by default', () => {
+  const s = parseSettings({});
+  assert.equal(s.plaza, false);
+  assert.equal(s.plazaHistory, false);
 });

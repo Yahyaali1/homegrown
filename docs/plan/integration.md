@@ -64,6 +64,11 @@ Done after the group agents report. Owner: the main session.
   `toolsFor` takes an optional `allowed` list. `pages/library.ts` labels an unkept pack template "from a companion pack". `Gardener.preset?`, `Gardener.profile?`, `Routine.needs?` are optional
   fields (records stay v1); no store or database version changes. `bench/abilities.mjs` gains `workflow <preset>` and
   writes `results/ability-workflow-<preset>-<model>.json`. No other shared file changed. DONE.
+- T13 (plan T): `background/main.ts` adds the `tabs.onCreated` new-tab redirect to `plaza.html` (only an exact
+  `chrome://newtab/` pending URL, only with `plaza` on). `domain/settings.ts` adds the `plaza` and `plazaHistory`
+  switches (off), with toggles in `sidepanel.html` and `settings.html`. `scripts/build.mjs` adds the `plaza` entry.
+  `pages/chat.ts` takes `pending.gardenerId` (Ask <name>). `bench/garden-fixtures.mjs` gains 8 pages for the pack
+  cases. No preset lists `propose_routine` any more (Rosa and Dana included). No store or version changes. DONE.
 
 ## Known issues
 

@@ -89,6 +89,10 @@ It also owns these parts:
     only). `turn` reads the run's skill at each start: `skillRefusal` fails a run whose skill is gone, off, another
     gardener's or needs what the pin lacks; a test run with `approvePlans` answers its plan yes with `answerPlan`.
     The worker also opens `hg-chat` v1 to read chat evidence.
+  - Plaza (plan T13): `plazaLines` (extension pages): today's lines from `storage.local`; on a new day it writes
+    them once in the background lane (`askAs`, owner `plaza`) from each gardener's own notes and done answers, plus
+    the last 20 history titles only with `plazaHistory` on. `main.ts` sends a tab whose `pendingUrl` is exactly
+    `chrome://newtab/` to `plaza.html` while `plaza` is on.
   - Companions (plan T12): `hire` (`{ presetId, sites, hireId? }`: `hireRecords`, sites only from the pack's
     suggestions; template entities through `memory.ts` `putEntity` first, the gardener last; `hireId` names the
     records, so a retry returns the same gardener). `gardenerSave` keeps the stored `preset`. `routineSave` keeps a

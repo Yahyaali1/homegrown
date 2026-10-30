@@ -8,7 +8,7 @@ import { factsOf, GARDEN_TOOLS, gardenNotice, MODEL_CHANGED, NeedsHelp, NeedsYou
 import { screencast } from './devtools.ts';
 import { htmlText } from './monitors.ts';
 import { recipesList } from './scrape.ts';
-import { addNote, confirmedEntities, deleteDocs, deleteNote, deleteNotes, listNotes, notesFor, putEntity } from './memory.ts';
+import { handlers as memoryHandlers, addNote, confirmedEntities, deleteDocs, deleteNote, deleteNotes, listNotes, notesFor, putEntity } from './memory.ts';
 import { anchorsIn } from '../domain/memory.ts';
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
@@ -26,6 +26,8 @@ import type { Grant } from '../domain/garden/policy.ts';
 import { trimmed } from '../domain/garden/report.ts';
 import { factsOf as connectorFacts } from '../domain/mcp.ts';
 import { hireRecords, presetById } from '../domain/garden/presets.ts';
+import { plazaDay, plazaLine, plazaThink } from '../domain/plaza.ts';
+import { parseSettings } from '../domain/settings.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
 const ALARM = 'garden:';
@@ -469,6 +471,28 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
   }
 }
 
+// ---- Companion Plaza: one line a day per gardener, in the background lane ----
+
+let plazaBusy = false;
+async function writePlaza(day: string): Promise<void> {
+  const model = await gardensModel();
+  if (!model) return;
+  // History titles join only with the setting on (decision 14).
+  const history = parseSettings(await chrome.storage.sync.get('plazaHistory')).plazaHistory
+    ? (await memoryHandlers.memHistory({ limit: 20 })).map((x) => x.title).filter(Boolean) : null;
+  const runs = await allRuns();
+  const lines: Record<string, string> = {};
+  for (const g of await gardeners()) {
+    const notes = (await listNotes(g.id)).filter((n) => n.gardenerId === g.id).map((n) => n.text);
+    const answers = runs.filter((r) => r.gardenerId === g.id && r.status === 'done' && r.answer).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0)).map((r) => r.answer!);
+    if (!notes.length && !answers.length) continue; // nothing of its own to say
+    const t = plazaThink(g.name, { notes, answers, history });
+    const line = plazaLine((await askAs(t.prompt, t.data, { task: 'gardens', model, owner: 'plaza' }).catch(() => ({ text: '' }))).text);
+    if (line) lines[g.id] = line;
+  }
+  await chrome.storage.local.set({ plazaLines: { day, history: !!history, lines } });
+}
+
 // ---- handlers ----
 
 /** Extension pages only: garden records and answers never come from a content script. Inside the worker: allowed. */
@@ -598,6 +622,20 @@ async function updateRun(id: string, change: (r: GardenRun) => void): Promise<Ga
 
 export const handlers = {
   gardenerList: async (_: unknown, sender?: Sender) => (page(sender), await ready(), gardeners()),
+  /** Today's Plaza lines by gardener id; a stale day starts writing them (they arrive through storage). */
+  async plazaLines(_: unknown, sender?: Sender) {
+    page(sender);
+    const day = plazaDay(new Date());
+    const kept = (await chrome.storage.local.get('plazaLines')).plazaLines as { day?: string; history?: boolean; lines?: Record<string, string> } | undefined;
+    // Lines written with history are dropped once plazaHistory is off (and rewritten when it changes either way).
+    const history = parseSettings(await chrome.storage.sync.get('plazaHistory')).plazaHistory;
+    if (kept?.day === day && !!kept.history === history) return kept.lines ?? {};
+    if (!plazaBusy) {
+      plazaBusy = true;
+      void writePlaza(day).catch(() => {}).finally(() => (plazaBusy = false));
+    }
+    return {};
+  },
   gardenerSave: async ({ gardener }: { gardener: Partial<Gardener> }, sender?: Sender) => {
     page(sender);
     await ready();

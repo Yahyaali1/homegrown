@@ -12,6 +12,7 @@ The entry scripts for the extension's own pages. `scripts/build.mjs` bundles the
 | `settings.ts` | `settings.js` |
 | `reader.ts` | `reader.js` |
 | `outputs.ts` | `outputs.js` |
+| `plaza.ts` | `plaza.js` |
 
 The pages of these scripts (`sidepanel.html`, `agent.html`, `library.html`, `settings.html` and
 `reader.html` in `static/`) load `ui/theme.js` in the `<head>`. `static/offscreen.html` is not one of them:
@@ -131,6 +132,10 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   Keep and Delete) and the savings meter. Chat's `/meetings <question>` (no skill of that name) puts the closest
   transcript parts in the data. Both pages link to
   Outputs. `openMemory(id)` opens a file or document (a run's `doc` or `memory` card).
+- `plaza.ts` (`plaza.html`, plan T13): Companion Plaza. Each gardener's flower (`flower` with `lookOf`), still, with
+  its name; today's lines above (`bg('plazaLines')`, updated through `storage.local`). A click turns the flower one
+  petal (not under Reduce Motion), opens the side panel and sets `pending` with `gardenerId`; chat then shows
+  "Ask <name>…" and puts the gardener's instructions before the new chat's first message.
 - `outputs.ts` (`outputs.html`, plan T9): with `?id=`, one artifact from `bg('artifactGet')`; without, the list
   (`artifactList`, Delete), "Brand kit from a site" (`brandRead`) and "Write a brief".
   - Table or chart: Table · Bars · Line (`ui/chart.ts`, with KPI cards); cells edit in place, rows are added and

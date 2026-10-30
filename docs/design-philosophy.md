@@ -117,6 +117,7 @@ in the loop; it is the machine, and the machine is steady.
   - Words always say what went wrong.
 - **Stillness is the default.** At rest nothing moves: no idle animation, no breathing launcher.
   The garden is calm until you touch it.
+  Companion Plaza (plan T13) keeps this: its flowers stand still in a bed and never wander; only a click turns one.
 - **Reduce Motion means a still flower.** Bloom, the grow loop and turn all collapse to one frame: the plant shows still, in full bloom. State
   still shows in words ("Thinking…", "Goal met").
 
@@ -133,6 +134,7 @@ in the loop; it is the machine, and the machine is steady.
 | Nothing yet (empty list) | An empty pot |
 | Failed (error) | Wilts: droops, drops petals, seed goes gray |
 | Off on this site | Hidden (turning it off is a choice, not a failure) |
+| A companion in Plaza | Still, in its own look; a click turns it one petal (none under Reduce Motion) |
 
 **Next places for the same language:**
 - Model downloads could grow from empty pot to bloom by quarters.

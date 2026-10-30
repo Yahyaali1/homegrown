@@ -27,7 +27,7 @@ const host = (u: string | undefined): string => {
   }
 };
 
-const WORDS = /\b(pay|buy|order|purchase|check ?out|delete|remove|send|transfer|refund|(un)?subscribe|confirm|password)/i;
+const WORDS = /\b(pay|buy|order|purchase|check ?out|delete|remove|send|transfer|refund|repl(y|ies)|post(s|ed|ing)?\b|(un)?subscribe|confirm|password)/i;
 
 /** The first sensitive word in a name or text (`delete_contact`, `sendEmail` split into words), or null. */
 export const sensitiveWord = (text: string): string | null =>

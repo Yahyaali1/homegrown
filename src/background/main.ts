@@ -226,6 +226,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+// Companion Plaza (decision 14): with the setting on, a new blank tab goes to plaza.html. Only that exact URL is touched.
+// ponytail: the default page may flash first; a manifest override can't be switched off at run time.
+chrome.tabs.onCreated.addListener(async (tab) => {
+  if (tab.id === undefined || tab.incognito || tab.pendingUrl !== 'chrome://newtab/') return;
+  if (parseSettings(await chrome.storage.sync.get('plaza')).plaza) await chrome.tabs.update(tab.id, { url: chrome.runtime.getURL('plaza.html') }).catch(() => {});
+});
 chrome.runtime.onStartup.addListener(ensureEngine);
 chrome.runtime.onInstalled.addListener(ensureEngine);
 // Seeding is idempotent, so it runs on every worker start: onInstalled isn't guaranteed to fire (an unpacked reload

@@ -21,6 +21,8 @@ export const SWITCHES = {
   shoppingSense: { label: 'Look for the same product cheaper elsewhere', default: false },
   linksInActiveTab: { label: 'Open answer links in the active tab when it is on the same site', default: true },
   meetingOffer: { label: 'Offer to record calls on Meet, Zoom and Teams', default: true },
+  plaza: { label: 'Companion Plaza on new tabs (replaces any other new-tab page)', default: false },
+  plazaHistory: { label: 'Let Plaza talk about pages you visited', default: false },
 } as const satisfies Record<string, { label: string; default: boolean }>;
 export type SwitchKey = keyof typeof SWITCHES;
 

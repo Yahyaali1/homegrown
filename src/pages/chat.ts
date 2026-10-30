@@ -34,6 +34,7 @@ let nextMode: Mode = 'fast';
 let query = ''; // the search, marked in the open chat
 let attached: string | null = null; // a selection waiting for an instruction
 let imageData: string | null = null;
+let asking: { name: string; instructions: string } | null = null; // a companion picked in Plaza, for the next new chat
 let liveId = ''; // the generation streaming now
 const streams = new Map<string, (t: string) => void>(); // generate id → token callback
 
@@ -210,6 +211,7 @@ async function newChat(first: string): Promise<Chat> {
 
 function open(c: Chat | null): void {
   chat = c;
+  if (asking) (asking = null), (input.placeholder = 'Message the model…');
   try {
     if (c) localStorage.chat = c.id;
     else delete localStorage.chat;
@@ -220,8 +222,11 @@ function open(c: Chat | null): void {
 /** Adds the person's turn and streams the answer; `image` rides along unsaved. */
 async function send(turn: ChatTurn, config: Record<string, number> = {}, image?: string): Promise<void> {
   deps.showTab('chat');
+  const persona = chat ? null : asking;
   if (!chat) open(await newChat(turn.label ?? turn.text));
   const c = chat!;
+  // The companion's instructions lead the chat's first message, as the plan prefix does.
+  if (persona) turn = { ...turn, label: turn.label ?? turn.text, text: `${persona.instructions}\n\n${turn.text}` };
   if (planFirst(c)) turn = { ...turn, label: turn.label ?? turn.text, text: `${PLAN_FIRST}\n\n${turn.text}` };
   await save(c, (s) => upsertTurns(s, [turn]));
   $('#messages').append(turnEl(c, turn, c.turns.length - 1));
@@ -466,11 +471,18 @@ async function fetchImage(srcUrl: string): Promise<string> {
   }
 }
 
-interface Pending { kind: TaskKind; title: string; prompt?: string; selection?: string; srcUrl?: string; error?: string }
+interface Pending { kind: TaskKind; title: string; prompt?: string; selection?: string; srcUrl?: string; error?: string; gardenerId?: string }
 async function runAction(a: Pending): Promise<void> {
   open(null);
   deps.showTab('chat');
   if (a.error) return void addMessage('error', a.error);
+  if (a.gardenerId) {
+    const g = (await bg<{ id: string; name: string; instructions: string }[]>('gardenerList')).find((x) => x.id === a.gardenerId);
+    if (!g) return void addMessage('error', 'That companion is gone.');
+    asking = { name: g.name, instructions: g.instructions };
+    input.placeholder = `Ask ${g.name}…`;
+    return void input.focus();
+  }
   if (a.kind === 'text') {
     if (!a.prompt) {
       // A custom question or Open in chat: keep the text and ask what to do with it.
