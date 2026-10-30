@@ -27,7 +27,11 @@ const host = (u: string | undefined): string => {
   }
 };
 
-const WORDS = /\b(pay|buy|order|purchase|check ?out|delete|remove|send|transfer|(un)?subscribe|confirm|password)/i;
+const WORDS = /\b(pay|buy|order|purchase|check ?out|delete|remove|send|transfer|refund|(un)?subscribe|confirm|password)/i;
+
+/** The first sensitive word in a name or text (`delete_contact`, `sendEmail` split into words), or null. */
+export const sensitiveWord = (text: string): string | null =>
+  WORDS.exec(text.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2'))?.[0] ?? null;
 
 /** Why this step is sensitive (always asked, never granted), or null: it may be granted. */
 export function classify(t: Target): string | null {

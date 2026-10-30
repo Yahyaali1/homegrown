@@ -16,6 +16,8 @@ export interface Gardener {
   look?: Look;
   /** Its reads and acts add the page's console errors and failed requests (needs the `debugger` permission). */
   devtools?: boolean;
+  /** The person's notes for a web app without a connector, by host: in the instruction part when a run works there. */
+  siteNotes?: Record<string, string>;
 }
 
 /** A gardener's flower: never 10 petals (the Homegrown mark's), always leaning left, the leaf on the right. */
@@ -246,10 +248,12 @@ export interface Request {
   /** An edited call asked again (it turned sensitive): the request whose edited yes it follows. It can't be edited again. */
   editedFrom?: string;
   noEdit?: true;
+  /** An approve Always can't answer: an app tool the person didn't mark Read. */
+  noAlways?: true;
 }
 
 // `urls`: a recipe's, and each helper's share of a read; `readUrls`: a read, split into helpers above `urls`.
-export const LIMITS = { sites: 20, urls: 5, readUrls: 25, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
+export const LIMITS = { siteNote: 500, sites: 20, urls: 5, readUrls: 25, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
 
 // Shared-hosting suffixes: anyone can publish under them, so one entry would trust every tenant.
 export const PUBLIC_SUFFIXES = [
@@ -323,7 +327,20 @@ export function parseGardener(raw: unknown): Gardener | null {
   if (refused.length || !int(minutes, 1, 60) || !time(raw.createdAt)) return null;
   // An unknown look (a newer build's, or broken) is dropped, never the gardener: the UI draws one from its id.
   const look = raw.look === undefined ? null : parseLook(raw.look);
-  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }), ...(raw.devtools === true && { devtools: true }) };
+  const notes = raw.siteNotes === undefined ? undefined : siteNotesOf(raw.siteNotes);
+  if (notes === null) return null;
+  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }), ...(raw.devtools === true && { devtools: true }), ...(notes && Object.keys(notes).length && { siteNotes: notes }) };
+}
+
+/** Site notes: at most 20 hosts (each a site), each note 1–500 chars; null when invalid. */
+export function siteNotesOf(raw: unknown): Record<string, string> | null {
+  if (!isObj(raw) || Object.keys(raw).length > LIMITS.sites) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (site(k) !== k || !str(v, LIMITS.siteNote)) return null;
+    out[k] = v.trim();
+  }
+  return out;
 }
 
 export function parseWhen(raw: unknown): When | null {

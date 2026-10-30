@@ -5,6 +5,8 @@ import { hostOf } from '../text.ts';
 import { describe, parseScenario, type Instruction, type Scenario } from '../scrape/scenario.ts';
 import { riskOf } from '../scrape/tools.ts';
 import { docRefused, MEM } from '../memory.ts';
+import { checkArgs, unusable, type AppTool, type ConnectorFacts } from '../mcp.ts';
+import { sensitiveWord } from './classify.ts';
 import { LIMITS, bare, parseWork, personUrls, type Gardener, type GardenRun, type Request, type Seen, type Step } from './records.ts';
 
 export type Effect = Step['effect'];
@@ -15,8 +17,8 @@ export interface Call { tool: string; args: Record<string, unknown>; url?: strin
 export interface Grant { gardenerId: string; tool: string; host: string; argsKey: string; at: number }
 /** A saved Collect recipe as policy sees it; `key` is `argsKey` of the whole recipe, so an edit needs a new yes. */
 export interface RecipeFacts { id: string; name: string; urls: string[]; scenario: Scenario | null; key: string }
-/** What the worker loaded for policy: the person's grants and saved recipes. */
-export interface Known { grants?: Grant[]; recipes?: RecipeFacts[] }
+/** What the worker loaded for policy: the person's grants, saved recipes and connected apps (never their tokens). */
+export interface Known { grants?: Grant[]; recipes?: RecipeFacts[]; connectors?: ConnectorFacts[] }
 
 /** A sensitive approval counts only when answered at least this long after it was shown. */
 export const SENSITIVE_WAIT = 8000;
@@ -26,10 +28,30 @@ const stable = (v: unknown): unknown =>
 /** Stable JSON of a call's args: an answer or a grant applies to exactly this call. */
 export const argsKey = (args: Record<string, unknown>): string => JSON.stringify(stable(args));
 
-/** An acting call: where it acts, its steps, what it says, and the key an answer binds to. null for a read. */
-export interface Act { host: string; hosts: string[]; steps: Instruction[]; key: string; text: string }
+/**
+ * An acting call: where it acts, its steps, what it says, and the key an answer binds to. null for a read. `why`: it is
+ * sensitive from the call alone (an app call whose tool or args hold a word such as pay, refund, delete or send).
+ */
+export interface Act { host: string; hosts: string[]; steps: Instruction[]; key: string; text: string; why?: string }
+
+/** An app call policy can take: a connected app's tool that isn't Off, with args that fit its schema. null otherwise. */
+export function appOf(call: Call, known: Known = {}): { c: ConnectorFacts; t: AppTool } | null {
+  if (call.tool !== 'app_call') return null;
+  const c = known.connectors?.find((x) => x.id === call.args.connector);
+  const t = c?.tools.find((x) => x.name === call.args.tool);
+  if (!c || !t || t.scope === 'off' || unusable(t.name, t.schema) || checkArgs(t.schema, call.args.args)) return null;
+  return { c, t };
+}
 
 export function actOf(call: Call, known: Known = {}): Act | null {
+  // Data leaves the device to an app the person connected: where is the server's host.
+  if (call.tool === 'app_call') {
+    const a = appOf(call, known);
+    if (!a) return null;
+    const host = hostOf(a.c.url), args = JSON.stringify(call.args.args);
+    const word = sensitiveWord(`${a.t.name} ${args}`);
+    return { host, hosts: [host], steps: [], key: argsKey(call.args), text: `send this to ${a.c.name} (${host}), tool ${a.t.name}:\n${args.slice(0, 1000)}`, ...(word && { why: `an app call that says “${word}”` }) };
+  }
   // In the person's own tab (a mention): where it acts is the URL the person named.
   if (call.tool === 'act_my_tab') {
     const url = bare(String(call.args.tab ?? '')), s = parseScenario(call.args.steps);
@@ -71,7 +93,7 @@ export function sensitiveSteps(run: GardenRun, steps: Instruction[], tool?: stri
 }
 
 const granted = (run: GardenRun, g: Gardener, tool: string, a: Act, known: Known): boolean =>
-  !sensitiveSteps(run, a.steps) && !!known.grants?.some((x) => x.gardenerId === g.id && x.tool === tool && x.host === a.host && x.argsKey === a.key);
+  !sensitiveSteps(run, a.steps) && !a.why && !!known.grants?.some((x) => x.gardenerId === g.id && x.tool === tool && x.host === a.host && x.argsKey === a.key);
 
 /**
  * Who may answer a request or change garden records: an extension page (`base` is the extension's own URL), never a
@@ -125,6 +147,13 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
       if (!a || a.steps.some((i) => 'evaluate' in i)) return 'deny';
       return decide(run, gardener, { tool: 'read_my_tab', args: { tab: call.args.tab } }) === 'allow' ? 'ask' : 'deny';
     }
+    // Carries data off the device (ADR-17): asked every time, unless the person marked the tool Read and granted this
+    // exact call, and never under taint, since its args could carry what was read.
+    case 'app_call': {
+      const a = appOf(call, known), act = actOf(call, known);
+      if (!a || !act) return 'deny';
+      return a.t.scope === 'read' && !run.tainted && granted(run, gardener, call.tool, act, known) ? 'allow' : 'ask';
+    }
     // Only a tab the person named; the read taints the run.
     case 'read_my_tab':
       return (run.work.kind === 'ask' || run.work.kind === 'plan') && (run.work.tabs ?? []).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
@@ -162,20 +191,20 @@ export const approveAllOk = (q: Request, run: GardenRun): boolean =>
 
 /**
  * A call that threw may still have shown signed-in page data (its error says where it ended, a DevTools log): the
- * person's own tab always, an `act` when it or its final page is on the gardener's sites.
+ * person's own tab and an app's reply always, an `act` when it or its final page is on the gardener's sites.
  */
 export function failTaints(tool: string, args: Record<string, unknown>, error: string, sites: string[]): boolean {
-  if (tool === 'act_my_tab') return true;
+  if (tool === 'act_my_tab' || tool === 'app_call') return true;
   if (tool !== 'act') return false;
   const final = /Now at (\S+?)\.?(\s|$)/.exec(error)?.[1];
   return [String(args.url ?? ''), final ?? ''].some((u) => onSites(hostOf(u), sites));
 }
 
-/** Whether a finished call taints the run: its result says so, or it read the person's private documents. */
-export const taintsAfter = (tool: string, r: { taint?: boolean | undefined }): boolean => !!r.taint || tool === 'doc_read';
+/** Whether a finished call taints the run: its result says so, or it read the person's private documents or an app. */
+export const taintsAfter = (tool: string, r: { taint?: boolean | undefined }): boolean => !!r.taint || tool === 'doc_read' || tool === 'app_call';
 
-/** "Always" may answer this request: a non-sensitive approve, never in the person's own tab (decision 6). */
-export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && q.tool !== 'act_my_tab';
+/** "Always" may answer this request: a non-sensitive approve, never in the person's own tab (decision 6), nor an app tool not marked Read. */
+export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && q.tool !== 'act_my_tab' && !q.noAlways;
 
 /** The tools a plan's yes may pre-approve (decision 2): acts in the gardener's own tabs, never the person's or an app's. */
 export const planCovers = (tool: string): boolean => tool === 'act' || tool === 'collect';

@@ -23,6 +23,8 @@ import { parseChat, type Chat } from '../domain/chat.ts';
 import { contextChars } from '../domain/text.ts';
 import { helping, mayStart, newRun, pruneIds, routineWork, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
+import { trimmed } from '../domain/garden/report.ts';
+import { factsOf as connectorFacts } from '../domain/mcp.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
 const ALARM = 'garden:';
@@ -46,7 +48,6 @@ const gardensModel = async () => (await modelFor('gardens')) || (await engine<{ 
 
 // ---- progress ----
 
-const trimmed = (r: GardenRun): GardenRun => ({ ...r, steps: r.steps.map((s) => (s.output && s.output.length > 300 ? { ...s, output: s.output.slice(0, 300) } : s)) });
 const broadcast = (run: GardenRun) => void chrome.runtime.sendMessage({ type: 'garden-run', run: trimmed(run) }).catch(() => {});
 
 async function saveRun(run: GardenRun): Promise<void> {
@@ -211,7 +212,7 @@ async function pin(run: GardenRun): Promise<string | null> {
 
 /** What policy needs from storage, read fresh: a grant revoked or a recipe edited counts at once. */
 const knownFor = async (gardenerId: string): Promise<Known> =>
-  ({ grants: (await trust.grants()).filter((x) => x.gardenerId === gardenerId), recipes: (await recipesList()).map(factsOf) });
+  ({ grants: (await trust.grants()).filter((x) => x.gardenerId === gardenerId), recipes: (await recipesList()).map(factsOf), connectors: (await trust.connectors()).map(connectorFacts) });
 
 /**
  * One run's turn in the queue: until it is done, failed, waiting or stopped (or queued again: a read waiting out its
@@ -287,7 +288,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
     for (;;) {
       if (stop.signal.aborted) return;
       const known = await knownFor(gardener.id);
-      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }),
+      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run, TOOLS, known.connectors), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }),
         ...(anchors.length && { anchors }), ...(forEntity && { forEntity }), ...(skill && { skill }) };
       const a = next(run, ctx);
       if ('think' in a) {
@@ -818,7 +819,7 @@ export const handlers = {
         throw new Error('Read it first: this one can be approved 8 seconds after it is shown.');
       }
       if (q.kind === 'plan') {
-        const why = g ? answerPlan(r, { gardener: g, tools: toolsFor(r), now, ...known }, q, value as 'yes' | 'no', calls, now) : 'That gardener no longer exists.';
+        const why = g ? answerPlan(r, { gardener: g, tools: toolsFor(r, TOOLS, known.connectors), now, ...known }, q, value as 'yes' | 'no', calls, now) : 'That gardener no longer exists.';
         if (why) throw new Error(why);
         return;
       }

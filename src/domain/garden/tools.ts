@@ -3,6 +3,7 @@ import type { Effect } from './policy.ts';
 import { parseScenario, type Scenario } from '../scrape/scenario.ts';
 import { ENTITY_TYPES, MEM } from '../memory.ts';
 import { LIMITS, bare, parseWhen, parseWork, type GardenRun, type Mention } from './records.ts';
+import { argsText, unusable, type ConnectorFacts } from '../mcp.ts';
 
 export type Arg =
   | { type: 'string'; max: number }
@@ -73,17 +74,42 @@ export const TOOLS: ToolSpec[] = [
   // The gardener's own Documents, kept in Homegrown only; a read taints the run (taintsAfter).
   { name: 'doc_read', describe: 'read one of your documents by its path, e.g. plan.md', args: { path: { type: 'string', max: MEM.path } }, effect: 'read' },
   { name: 'doc_write', describe: 'write (or replace) one of your documents, e.g. a plan file for a long task', args: { path: { type: 'string', max: MEM.path }, text: { type: 'string', max: MEM.doc } }, effect: 'read' },
+  // A connected app's tool (ADR-17); offered only when one is usable, with its lines in place of this describe (toolsFor).
+  { name: 'app_call', describe: 'call a tool of an app the person connected, after they approve', args: { connector: { type: 'string', max: 200 }, tool: { type: 'string', max: 41 }, args: { type: 'record', parse: (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null) } }, effect: 'act' },
 ];
 
-/** Tools whose approve card shows the args as fields the person may edit before Yes. */
-export const EDITABLE = ['act', 'draft', 'notify'];
+/** Tools whose approve card shows the args as fields the person may edit before Yes (draft and notify are never asked). */
+export const EDITABLE = ['act', 'app_call'];
 
 /** The tabs the person named for this run. */
 export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);
 
-/** The tools offered to this run: the person's tabs only when they named some, `propose_routine` and `remember` only with a loop or in a plan. */
-export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS): ToolSpec[] => tools.filter((t) =>
-  ((t.name !== 'read_my_tab' && t.name !== 'act_my_tab') || mentionsOf(run).length > 0) && ((t.name !== 'propose_routine' && t.name !== 'remember') || !!run.agent?.loop || run.work.kind === 'plan'));
+/**
+ * The tools offered to this run: the person's tabs only when they named some, `propose_routine` and `remember` only
+ * with a loop or in a plan, `app_call` only with a usable app tool, described by `appLines`.
+ */
+export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS, connectors: ConnectorFacts[] = []): ToolSpec[] => tools.flatMap((t) => {
+  if ((t.name === 'read_my_tab' || t.name === 'act_my_tab') && !mentionsOf(run).length) return [];
+  if ((t.name === 'propose_routine' || t.name === 'remember') && !run.agent?.loop && run.work.kind !== 'plan') return [];
+  if (t.name !== 'app_call') return [t];
+  const lines = appLines(connectors);
+  return lines ? [{ ...t, describe: `${t.describe}; args: that tool's arguments. Apps:\n${lines}` }] : [];
+});
+
+/**
+ * Each usable app tool as one line, then the app's guidelines: only what the person wrote or confirmed, and names and
+ * types that passed the name check. A tool set to Off never appears. '' when none is usable.
+ */
+export function appLines(connectors: ConnectorFacts[]): string {
+  return connectors.flatMap((c) => {
+    // A tool the person hasn't described yet isn't offered: its only text would be the server's.
+    const tools = c.tools.filter((t) => t.scope !== 'off' && t.describe.trim() && !unusable(t.name, t.schema));
+    if (!tools.length) return [];
+    const head = `- connector "${c.id.replace(/["\\\n]/g, '')}" (${c.name.replace(/\s+/g, ' ')}):`;
+    const guide = c.guidelines.trim() ? [`  Guidelines for ${c.name.replace(/\s+/g, ' ')}: ${c.guidelines.trim()}`] : [];
+    return [head, ...tools.map((t) => `  tool "${t.name}" ${argsText(t.schema)}: ${t.describe}`), ...guide];
+  }).join('\n');
+}
 
 /**
  * The open tab a mention points at now, or why there is none. Named by hand: that same tab, still on the URL it had.

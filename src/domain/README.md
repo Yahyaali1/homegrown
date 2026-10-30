@@ -76,6 +76,14 @@ runtime adapters and storage live outside `domain/`.
   `termReport` (a fixed instruction). The term, title and sentence go to the model as data, defanged; the query is the
   reply's first line without quotes or a "Query:" label, at most 100 characters. A query that doesn't name
   the term, or a failed call, falls back to the term plus up to 3 longer title words.
+- `mcp.ts` (plan T11, ADR-17): `Connector` (`v: 1`, `token?`), `ConnectorFacts` (without the token, what policy and
+  pages see), `factsOf`, `AppTool` (`describe` the person confirmed, `scope` `off` / `ask` / `read`), `Schema`,
+  `serverTools` (`tools/list` → `ServerTool` with `unusable`), `toolFrom` (the form's first choice: an empty line), `tokenFor`
+  (a kept token only to its origin), `parseConnector`,
+  `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `rpcBody`, `sseMessages`, `sseSplit`, `rpcReply`, `replyOf`, `MAX_REPLY`,
+  `callText`, `STDIO`.
+- `apps.ts` (plan T11): `APPS` (known remote MCP servers: name, URL, docs, hosts), `appNamed` ("connect <name>",
+  `fuzzy`), `appOpen(url, meta, connectors)` (a connected app, a known one, else the page's own name).
 - `zip.ts`: `Zip`, `unzip`, `zipWrite`, `crc32`. Reads the zip central directory and returns a lazy reader for each
   entry; `zipWrite(entries)` packs stored entries (CRC-32, UTF-8 names), which every unzip reads.
 - `outputs.ts` (plan T9): `Artifact` (`table`, `chart`, `deck`, `brief`, `onepager`, `brand`; `v: 1`), `Table`,
@@ -121,7 +129,11 @@ runtime adapters and storage live outside `domain/`.
     `propose_routine` is denied in a tainted run, and allowed only when its work names no URL off the
     gardener's sites (read pages or URLs in a request) and none of the person's tabs. Plan T7: `remember` and
     `doc_read` are allowed (`privateRead('doc_read')`: the worker taints the run after it); `doc_write` is allowed
-    up to 20 000 characters, denied for a `Meetings/` or `Documents/` path (`docRefused`).
+    up to 20 000 characters, denied for a `Meetings/` or `Documents/` path (`docRefused`). Plan T11: `appOf` (a
+    connector's tool that isn't Off, args passing `checkArgs`); `actOf` makes an `app_call` an act on the server's
+    host, sensitive (`Act.why`) when the tool name or args hold a `sensitiveWord`; `decide` asks every `app_call`
+    unless the tool is Read, the run untainted and the exact call granted; `alwaysOk` is false for `noAlways`;
+    `approveAllOk` and `planCovers` never cover it; `taintsAfter` and `failTaints` hold for it.
   - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
     and has the page left the call's hosts. `CHALLENGE_HOSTS`, `isChallenge({ frames, title, text })`: a page that
     stands between the run and its content: a title that says so, or a short page (< 600 characters) whose text says
@@ -155,11 +167,13 @@ runtime adapters and storage live outside `domain/`.
     skill's files ahead of the data, at most a third of what memory left. `Work` `plan`/`ask` and `Routine` have
     `skillId?` (`routineWork`); `GardenRun.approvePlans?`; `ChatTurn.skillId?`.
   - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
-    step outputs, turns and the answer only with `withText`.
+    step outputs, turns and the answer only with `withText`. `trimmed(run)`: a run as broadcast and listed (outputs
+    cut to 300).
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
-    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
+    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `EDITABLE` (`act`, `app_call`), `ToolSpec`, `Arg` (`record`: a value its parser takes),
     `parseArgs`, `toolsFor` (`read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
-    `agent.loop` or in a plan), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
+    `agent.loop` or in a plan; `app_call` only with a usable app tool, its describe built by `appLines` from the
+    person's lines and guidelines; a tool without a line isn't offered), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
     a borrowed tab), `devtoolsDigest` (≤ 20 console errors, ≤ 30 requests with status ≥ 400, no query strings, no
     bodies), `downloadRun` (a download's run by referrer; never one the person's tabs also have open, never a guess).
     `parseArgs` refuses unknown keys and `evaluate` steps.

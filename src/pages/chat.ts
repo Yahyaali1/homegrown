@@ -21,6 +21,8 @@ import { anchorsIn, reference, type Entity } from '../domain/memory.ts';
 import { NEEDS, skillParts, slashOf, unmet, type Skill } from '../domain/garden/skills.ts';
 import { fuzzy } from '../domain/reading.ts';
 import { MEETINGS_ASK } from '../domain/meeting.ts';
+import { appNamed } from '../domain/apps.ts';
+import { openConnect } from './garden.ts';
 
 interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
 interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
@@ -389,6 +391,12 @@ $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   if (!typed && !imageData) return;
   input.value = '';
   slashList.hidden = true;
+  // "connect <name>" naming a known app: the Connect form in Garden, filled in, for the person to confirm. No model.
+  const app = !tpl && !imageData ? appNamed(/^connect\s+(.{1,60})$/i.exec(typed)?.[1] ?? '') : null;
+  if (app) {
+    document.querySelector<HTMLElement>('.tabs [data-tab=garden]')?.click();
+    return openConnect(app);
+  }
   // `/name rest`: the skill's method is the instruction, its files ride in the data. Off, or needing what the chat's
   // model lacks, it is refused.
   const hit = !tpl && typed.startsWith('/') ? slashOf(typed, (skills = await bg<Skill[]>('skillList').catch(() => []))) : null;

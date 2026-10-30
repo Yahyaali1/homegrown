@@ -82,11 +82,16 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   `diffText` diff with Accept / Discard, History, Edit); the routine form's skill select ("Not tested yet" when no
   case passed). `chat.ts`: `/name rest` sends the skill's method as the instruction and its files in `selection`,
   with `skillId` on the turn; typing `/` lists the skills that are on (`fuzzy`) in `#slash`. `showRequests()` re-renders the trays when
-  the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen.
+  the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen. Plan T11: Garden →
+  Connectors lists connected apps (Edit, Check tools again, Delete) and the Connect form (name, URL, token, app hosts,
+  guidelines; List tools shows each tool with the server's description as a quote, an empty line the person
+  writes (a tool is offered only once it has one), and Off / Ask each time / Read); `openConnect(app)` fills it in. `#app-open`
+  says which app the active tab shows (`appOpen`). The gardener form's site notes (`host: note` lines) are
+  `Gardener.siteNotes`. `chat.ts`: `connect <name>` naming a known app (`appNamed`) opens that form filled in, with no model; any other message is chat.
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its
-  tab and window; Done, Skip) and question cards; an approve in the person's own tab (`alwaysOk` false) has no Always; an
-  approve for `act`, `draft` or `notify` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
+  tab and window; Done, Skip) and question cards; an approve in the person's own tab, or for an app tool not marked Read (`alwaysOk` false), has no Always; an
+  approve for `act` or `app_call` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
   (Always is hidden while they differ). With two or more requests that `approveAllOk` allows, "Approve all" sends
   them to `requestAnswerAll`. A question with `questions` uses `ui/questions.ts`.
 - `mission.ts` (`agent.html`): Mission control.

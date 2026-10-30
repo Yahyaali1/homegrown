@@ -3,6 +3,9 @@
 // model wrote (a note, draft, notify, search or goal): only digests whose first arg is a URL or recipe id stay.
 import type { GardenRun } from './records.ts';
 
+/** A run as broadcast and listed: step outputs cut to 300 chars. */
+export const trimmed = (r: GardenRun): GardenRun => ({ ...r, steps: r.steps.map((s) => (s.output && s.output.length > 300 ? { ...s, output: s.output.slice(0, 300) } : s)) });
+
 const URL_FIRST = ['read_page', 'read_my_tab', 'act', 'collect'];
 
 export function reportOf(run: GardenRun, withText: boolean, version = '') {

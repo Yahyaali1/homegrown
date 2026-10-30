@@ -156,15 +156,27 @@ test('a fromPlan answer whose call policy now denies fails the step', () => {
 });
 
 test('no fromPlan answer is made for act_my_tab or app_call', () => {
-  // act_my_tab is an act policy knows (actOf), click-only and not sensitive: only answerPlan's act/collect filter keeps it out.
+  // Both are acts policy knows (actOf), not sensitive here: only answerPlan's act/collect filter (planCovers) keeps them out.
   const tab = { url: 'https://mail.com/inbox', title: 'Inbox', tabId: 3 };
   const mine = { tab: tab.url, steps: pay.steps };
-  const tools = [...TOOLS, { name: 'app_call', describe: '', args: { url: { type: 'string' as const, max: 2000 }, steps: { type: 'scenario' as const } }, effect: 'act' as const }];
-  const c = { ...ctx, tools };
+  const app = { id: 'crm', name: 'CRM', url: 'https://mcp.crm.com/mcp', hosts: [], guidelines: '', createdAt: 0, v: 1 as const,
+    tools: [{ name: 'find_contact', describe: 'Find a contact', schema: { type: 'object', properties: { q: { type: 'string' } } }, scope: 'read' as const }] };
+  const call = { connector: 'crm', tool: 'find_contact', args: { q: 'Ann' } };
+  const c: Ctx = { ...ctx, connectors: [app] };
   const r = run({}, { kind: 'plan', request: 'compare tea prices', tabs: [tab] });
   assert.equal(approveRequest(r, c, 0, 'act_my_tab', mine)?.sensitive, false);
-  const p = approved([{ tool: 'act_my_tab', args: mine }, { tool: 'app_call', args: pay }, { tool: 'act', args: pay }], { work: r.work }, c);
+  assert.equal(approveRequest(r, c, 1, 'app_call', call)?.sensitive, false);
+  const p = approved([{ tool: 'act_my_tab', args: mine }, { tool: 'app_call', args: call }, { tool: 'act', args: pay }], { work: r.work }, c);
   assert.deepEqual(p.requests.filter((q) => q.fromPlan).map((q) => q.tool), ['act']);
+  // T8's automatic plan yes (a skill test) pre-approves nothing at all.
+  const auto = run({ turns: [turn('plan', JSON.stringify([{ tool: 'app_call', args: call }]))], work: r.work });
+  const a = next(auto, c);
+  assert.ok('request' in a);
+  const q: Request = { ...a.request, id: 'p' };
+  auto.requests.push(q);
+  assert.equal(answerPlan(auto, c, q, 'yes', undefined, 2000, true), null);
+  assert.equal(auto.requests.filter((x) => x.fromPlan).length, 0);
+  assert.ok('request' in next(auto, c), 'its call is asked');
 });
 
 test('a plan work\'s named tab is readable with read_my_tab, and its URLs are the person\'s', () => {
