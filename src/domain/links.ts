@@ -1,4 +1,5 @@
 // A local phishing check on a link itself, before anything is fetched.
+import { site } from './garden/records.ts';
 
 const BRANDS = ['paypal', 'google', 'microsoft', 'apple', 'amazon', 'facebook', 'netflix', 'instagram', 'whatsapp', 'linkedin', 'outlook', 'office', 'chase', 'wellsfargo', 'bankofamerica', 'coinbase', 'binance', 'github', 'dropbox', 'icloud'];
 const DIGITS: Record<string, string> = { 0: 'o', 1: 'l', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b' };
@@ -18,3 +19,13 @@ export function linkWarnings(href: string, text: string): string[] {
   if (url.protocol === 'http:') warn.push('The page is not encrypted (http).');
   return warn;
 }
+
+/**
+ * Is `host` the site `of`, or a subdomain of it? `example.com.evil.io` is not `example.com`, and a single label or
+ * a shared suffix (`github.io`, `co.uk`: `site()` refuses them) is never a site.
+ */
+export const sameSite = (host: string, of: string): boolean => {
+  const a = site(host);
+  const b = site(of);
+  return !!a && !!b && (a === b || a.endsWith(`.${b}`));
+};

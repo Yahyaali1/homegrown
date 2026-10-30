@@ -141,7 +141,8 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
     and only when `searchAnswers` is on and `ui.enabled()` is true.
 - `links.ts`
   - No actions. Press and hold a link for 500 ms (moving less than 6 px) for a preview card
-    (`bg('fetchText')`) with a local phishing check (`domain/links.ts`) and "Open link".
+    (`bg('fetchText')`) with a local phishing check (`domain/links.ts`) and "Open link". `KEY_POINTS` and
+    `readMinutes` come from `ui/linkcard.ts`, shared with the side panel's hover cards.
   - Gates: `linkPreview` and `ui.enabled()`.
 - `tabs.ts`
   - Page actions: "Compare tabs…", "Tidy tabs" and "Watch this page".

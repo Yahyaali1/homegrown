@@ -36,6 +36,11 @@ Done after the group agents report. Owner: the main session.
   emulation attaches through `devtools.ts` `attach` (one shared debugger attach per tab). `background/missions.ts`
   `readInTab` gains `hold` (a page it holds keeps its tab, `held`). `static/sidepanel.html` gains the gardener form's
   DevTools switch and Garden's "Keep downloads with runs" switch; `static/sidepanel.css` styles `img.live`. DONE.
+- T6 (plan T): `background/main.ts` adds the `chat:page` / `chat:link` menus and the `openLink` handler;
+  `domain/settings.ts` adds the `linksInActiveTab` switch (on), with a toggle in `sidepanel.html` and
+  `settings.html`; `static/sidepanel.html` gains the Chats list, `#long-chat`, `#chat-modes` and `#mode-note`;
+  `static/sidepanel.css` styles them and `.linkcard`; `content/features/links.ts` takes `KEY_POINTS` and
+  `readMinutes` from `ui/linkcard.ts`. DONE.
 
 ## Known issues
 

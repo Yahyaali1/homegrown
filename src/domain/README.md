@@ -19,7 +19,11 @@ runtime adapters and storage live outside `domain/`.
 - `html.ts`: `decode`, `htmlToText`, `parseDuckDuckGo`, `parseBing`, `jsonArray`. Regex HTML-to-text with no
   DOM, parsing of search result pages into `SearchResult[]`, and the first JSON array in a model reply.
   `parseDuckDuckGo` and `parseBing` return at most `n = 8` results by default.
-- `links.ts`: `linkWarnings`. Local phishing warnings for a link: link text that does not match the host,
+- `chat.ts` (plan T6): `Chat`, `ChatTurn`, `Mode`, `modeModel`, `isLong`, `parseChat`, `interrupted`,
+  `duplicate`, `upsertTurns`, `dropFrom`, `planFirst`, `titleOf`, `engineTurns`, `searchChats`, `highlightParts`, `questionBlock`, `splitThinking`,
+  `chatReport`. The saved-chat record and its pure rules.
+- `links.ts`: `linkWarnings`, `sameSite(host, of)` (both through `garden/records.ts` `site()`, so a single label or
+  a shared suffix is never a site). Local phishing warnings for a link: link text that does not match the host,
   punycode, brand names with digits in place of letters, and plain `http`.
 - `markdown.ts`: `escapeHtml`, `markdown`, `markdownWithTables`. Render a small markdown subset to HTML.
   The text is escaped before any tags are added.

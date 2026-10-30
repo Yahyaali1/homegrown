@@ -536,8 +536,9 @@ On the chain after T5: it edits `sidepanel.ts` and `sidepanel.html` (as T2 and T
   equals the link's host or a subdomain of it (`site()` from `records.ts`); otherwise a new tab opens beside it. Setting
   `linksInActiveTab` (on). Hover shows the full URL (`title`).
 - **Hover previews in answers.** `ui/linkcard.ts`: after 600 ms over a link in an answer (chat or Garden), a small
-  popover with the host, `linkWarnings`, and the title and read time from `fetchText`; "Key points" runs the X-ray
-  summary on click only. `content/features/links.ts` keeps its card; the shared parts move to `linkcard.ts`.
+  popover with the host and `linkWarnings` only; nothing is fetched on hover (the URL is model text and may carry
+  data). "Read the page" (a click) gets the title and read time from `fetchText`; "Key points" then runs the X-ray
+  summary. `content/features/links.ts` keeps its card; the shared parts move to `linkcard.ts`.
 
 **Files.** Create: `pages/chat.ts`, `ui/linkcard.ts`, `tests/unit/chat.test.ts`, `tests/chat.spec.mjs`. Modify:
 `pages/sidepanel.ts`, `static/sidepanel.html`, `background/main.ts` (menus, `openLink`), `domain/settings.ts`
@@ -955,7 +956,7 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T9 done (merged from t9-outputs).
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T9 done (merged from t9-outputs). T6 in progress.
 
 | Slice | State |
 |---|---|
@@ -964,8 +965,8 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T3 | Done (3e37fce), reviewed (0 Blockers, 1 Major fixed): 205 unit tests pass (9 new in `garden-runlog`); `tests/runlog.spec.mjs` 2/2 (real model); `approvals.spec` 2/2, `garden.spec` 4/4, `plan.spec` 1/1. Retry is allowed on any ended run with a failed step (a read run with one failed page ends `done`) |
 | T3b | Done (4517f73), reviewed (0 Blockers, 1 Major fixed): 217 unit tests pass; `tests/helpers.spec.mjs` 1/1, run twice on the real model (12 pages, at most 3 tabs, one `word` think); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2. Deviations: `LIMITS.readUrls` 25 (recipes keep `urls` 5); helpers keep the routine id; auto-retry waits as `queued` with `retryAt`; `WORD` prompt says what a first look holds |
 | T4 | Done (44a7268), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 230 unit tests pass before the merge (14 new in `garden-triggers`); `tests/triggers.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1. Deviations: event snapshot key `<routineId>\nevent <url>`; pure `eventCheck` and `checkFetch` in `schedule.ts`; the first check at save is the baseline; no check while a run works; a one-off doesn't wait behind Run now; a one-off in the past is refused; expiry says 'Needed you for too long.'; `GardenRun.deadline`; `Routine.missed` |
-| T5 | Built, review fixes in (3 Major, 2 Minor: Take over reaches a borrowed tab, a failed act taints by `failTaints`, `isChallenge` only for walls (short page or title; no Turnstile, no invisible hCaptcha), a help answer closes its held tab, help releases the lock bar, Take over leaves the person's own group): 252 unit tests pass (9 new in `garden-tabs2`; the `act_my_tab` plan test now hits `planCovers`); `tests/tabs.spec.mjs` 4/4 (no model; (a)–(c) plus a download kept by referrer); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1, `triggers.spec` 2/2. Deviations: no `content/pageread.ts` change (challenge facts come from `readInTab`'s frame URLs, title and text); a `help` no fails the step (`HELP_REFUSED`); an invisible reCAPTCHA is not a challenge; Watch follows the newest group tab (polled each second). Spike 3: `referrer` is set for a click download in a run tab (headless Chromium). Spike 2 (screencast of a minimized window) not checked |
-| T6 | Planned |
+| T5 | Done (c7852a7), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 252 unit tests pass; `tests/tabs.spec.mjs` 4/4 (no model, download by referrer included); every garden regression passes. Built: `act_my_tab` (always asked; never granted, never in Approve all or a plan; its fills are sensitive), `help` requests for challenge pages (a No fails with `HELP_REFUSED`; any answer closes the held tab), `background/devtools.ts` (one shared debugger attach, never on the person's tab), screencast Watch of the group's newest tab, the optional `downloads` permission as the setting, `GardenRun.files`, `Gardener.devtools`. No live-view e2e |
+| T6 | Built, review fixes in (3 Major, 4 Minor: plan text only on a chat's first message; saves read-modify-write in one transaction with a `BroadcastChannel` reload; hover fetches nothing, Read the page is a click; Plan gate checks the model the chat uses; `sameSite` refuses single labels and shared suffixes via `site()`; `openLink` extension pages only; the timed save doesn't redraw the list): 262 unit tests pass (10 in `chat`); `tests/chat.spec.mjs` 4/4 before and after the fixes (1 `@slow` on the real model); `extension.spec` chat tests 5/5 (chat streams, PDF translate, long selection, dark theme, link preview); `garden.spec` 4/4. Deviations: pure rules in new `domain/chat.ts` (`highlightParts` gives parts, the page builds text nodes and `<mark>`); chat Report is `chatReport` (no message text), not `reportOf`; no runtime returns thinking, so Reasoning reads a leading `<think>` part; `markdown()` has no links, so `ui/linkcard.ts` `linkify` makes them from text nodes (chat and Garden results); turns gain optional `label` and `selection`; a chat's model is Settings' chat model if set, else `modeModel`; Duplicate is on model answers only; no tab-list row "Open in chat" (the side panel has no tab list); the panel reopens the last chat, so two `extension.spec` tests click New chat first and its `answer()` reads `#messages > li` |
 | T7 | Planned |
 | T8 | Planned |
 | T9 | Done (eea5354, merged 5f61607), reviewed (0 Blockers, 2 Majors fixed): e2e 6/6 (2 `@slow`); merged suite 242 unit tests pass, build ok. `abilities.mjs` on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6, so no T9 ability is set, and decks are built by code. E4B not measured (no local copy; about 8 GB of disk free). Every research report is saved as a `brief`. Editing is on the output page |
@@ -978,6 +979,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T5 | code review | 0 / 3 | Fixed: Take over and Show tab go to the borrowed tab first (`workTab`); a call that throws taints through the pure `failTaints` (`act_my_tab` always, `act` when on the gardener's sites); `isChallenge` only on short pages (under 600 chars) or interstitial titles, with Turnstile and invisible hCaptcha left out. Minors fixed: the help path releases the lock; Take over ungroups a tab only from the run's own group |
 | T9 | code review | 0 / 2 | Fixed: table edits had no debounce; `fontStack` cleans non-ASCII and overlong font stacks. Minors fixed: `citeAnswer` is page-only and checks the ability before it sends text; XML strips U+FFFE and U+FFFF; "007" stays text |
 | T4 | code review | 0 / 3 | Fixed: the event fetch has a 30 s timeout and event checks don't block worker start (`started`); an error status (`!res.ok`) fails the check; signed-in checks use `redirect: 'manual'`, and a redirect fails the check. Minors fixed: the snapshot is saved only when nothing changed or a run was made; a missed one-off shows "Missed" |
 | T3b | code review | 0 / 1 | Fixed: a Stop race. `runStop` stops the parent first, and `turn` refuses a helper whose parent isn't waiting (pure `mayStart`). Minors fixed: `runDelete` refuses a helper of a waiting parent; `prune` (through `pruneIds`) ignores helpers; a routine slot no longer fails waiting helpers, only expiry does |
@@ -1114,3 +1116,17 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
   2. A `.pptx` hasn't been opened in PowerPoint or Keynote yet; only `unzip` checks it.
   3. The worktree `../gallery-ext-t9` holds a 2 GB `.profile-t9`. Delete it once T9 needs no rework; disk is short.
   4. E4B needs the `deck`, `cite` and `evidence` benches (and `plan`, after T2's prompt change) once disk allows.
+
+**2026-10-29: T5 landed (commit c7852a7).**
+- 252 unit tests pass; `tests/tabs.spec.mjs` 4/4 (no model, download by referrer included); every garden regression
+  passes.
+- Built as planned. The notable choices are in the T5 Status row: the debugger is never attached to the person's tab,
+  and any answer to a `help` request closes the held tab.
+- Review: 0 Blockers, 3 Majors and 2 Minors fixed (see Review history).
+- Open items:
+  1. Spike 2 (does the screencast send frames from a minimized window?) is still unchecked. There is no live-view e2e.
+  2. When the person closes their own tab during `act_my_tab`, the step fails. It doesn't ask "did this happen?" as a
+     gardener tab does, so a fill may have happened without a record. Fix before T12 presets use `act_my_tab`.
+  3. The `act_my_tab` approval card can't be edited.
+  4. Disk: 5.4 GB free. The old `.profile-*` folders (about 30 GB) belong to the user and were not deleted; ask before
+     T10.

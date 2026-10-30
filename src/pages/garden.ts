@@ -5,6 +5,7 @@ import { $, busyButton, button, emptyPot, errLine, fail, labelled, place, tryIt 
 import { tray, type Open } from './tray.ts';
 import { h } from '../ui/dom.ts';
 import { flower, runStage } from '../ui/flower.ts';
+import { linkify } from '../ui/linkcard.ts';
 import { can, modelById } from '../domain/model.ts';
 import { parseSettings } from '../domain/settings.ts';
 import { nextRuns } from '../domain/garden/schedule.ts';
@@ -471,6 +472,8 @@ function renderRequests(list: GardenRun[]): void {
 /** The tray just came on screen (the Chat tab): its requests count as shown from now. */
 export const showRequests = () => renderRequests([...runs.values()]);
 
+const linked = <T extends HTMLElement>(el: T) => (linkify(el), el);
+
 /** Refills a run's row; its flower changes only with its stage. */
 function fillRun(li: Row, run: GardenRun): void {
   setStage(li, runStage(run));
@@ -511,7 +514,7 @@ function fillRun(li: Row, run: GardenRun): void {
   if (steerForms.get(run.id)?.dataset.active !== String(active)) steerForms.delete(run.id);
   li.replaceChildren(flowerEl,
     h('span', { className: 't' }, h('b', { textContent: name }), h('span', { className: 'p', textContent: `${status} · ${at(run.endedAt ?? run.startedAt ?? run.queuedAt)}` }),
-      result && h('span', { className: run.status === 'failed' ? 'result why' : 'result', textContent: result }), watching?.el, view, active ? steerBox(run.id) : followUpBox(run), err),
+      result && linked(h('span', { className: run.status === 'failed' ? 'result why' : 'result', textContent: result })), watching?.el, view, active ? steerBox(run.id) : followUpBox(run), err),
     take || resume || watching ? h('div', { className: 'actions' }, watching?.button, take, resume, act) : act);
 }
 

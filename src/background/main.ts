@@ -16,6 +16,10 @@ import * as livecaptions from './livecaptions.ts';
 import * as scrape from './scrape.ts';
 import * as garden from './garden.ts';
 import * as outputs from './outputs.ts';
+import { tabText } from './tabs.ts';
+import { isExtensionPage } from './pagerequest.ts';
+import { sameSite } from '../domain/links.ts';
+import { parseSettings } from '../domain/settings.ts';
 
 type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
 /** A feature module: its handlers become bg commands; the hooks are optional. */
@@ -34,6 +38,20 @@ handlers.toPage = async ({ msg }: { msg: object }) => {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (tab?.id === undefined) throw new Error('No tab is open.');
   await toTab(tab.id, msg);
+  return true;
+};
+// A link in an answer: the active tab follows it when it's on the same site (settings.linksInActiveTab), else a new
+// tab opens beside it.
+handlers.openLink = async ({ url }: { url: string }, sender?: chrome.runtime.MessageSender) => {
+  if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
+  const u = new URL(String(url));
+  if (!/^https?:$/.test(u.protocol)) throw new Error('Only web links open.');
+  const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null);
+  const [tab] = win?.id === undefined ? [] : await chrome.tabs.query({ active: true, windowId: win.id });
+  const host = tab?.url && /^https?:/.test(tab.url) ? new URL(tab.url).hostname : '';
+  if (tab?.id !== undefined && host && sameSite(host, u.hostname) && parseSettings(await chrome.storage.sync.get('linksInActiveTab')).linksInActiveTab) {
+    await chrome.tabs.update(tab.id, { url: u.href });
+  } else await chrome.tabs.create({ url: u.href, ...(tab && { windowId: tab.windowId, index: tab.index + 1 }) });
   return true;
 };
 
@@ -128,6 +146,8 @@ async function rebuildMenus(): Promise<void> {
     for (const t of tasks.filter((x) => x.kind === kind)) chrome.contextMenus.create({ id: `task:${t.id}`, parentId: `root-${kind}`, title: t.title, contexts });
     chrome.contextMenus.create({ id: `ask:${kind}`, parentId: `root-${kind}`, title: 'Ask…', contexts });
   }
+  chrome.contextMenus.create({ id: 'chat:page', title: 'Open in chat', contexts: ['page'] });
+  chrome.contextMenus.create({ id: 'chat:link', title: 'Open in chat', contexts: ['link'] });
   for (const m of modules) m.menus?.(); // modules' own items (removeAll above dropped them)
 }
 
@@ -142,8 +162,23 @@ chrome.runtime.onInstalled.addListener(async () => {
   for (const tab of await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'], discarded: false })) injectInto(tab).catch(() => {});
 });
 
+const CHAT_TEXT = 15000;
+/** Open in chat: the page (read like `read_my_tab`, no debugger) or the link (fetched signed out) becomes the attachment. */
+async function chatAttach(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) {
+  const url = info.menuItemId === 'chat:link' ? info.linkUrl ?? '' : info.pageUrl ?? tab?.url ?? '';
+  if (!/^https?:/.test(url)) throw new Error('Only web pages open in chat.');
+  const read = info.menuItemId === 'chat:page' && tab?.id !== undefined
+    ? { title: tab.title ?? '', text: await tabText(tab.id, CHAT_TEXT).catch(() => '') } : { title: '', text: '' };
+  const page = read.text ? read : await web.handlers.fetchText({ url });
+  return { kind: 'text', title: 'Open in chat', selection: `${page.title}\n${url}\n\n${page.text.slice(0, CHAT_TEXT)}` };
+}
+
 async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): Promise<void> {
   const [type, id] = String(info.menuItemId).split(':');
+  if (type === 'chat') {
+    const pending = await chatAttach(info, tab).catch((e: Error) => ({ kind: 'text', title: 'Open in chat', error: e.message }));
+    return void (await chrome.storage.session.set({ pending: { ...pending, at: Date.now() } }));
+  }
   const task = type === 'task' ? (await getTasks()).find((t) => t.id === id) ?? null : null;
   if (inPage(info) && tab?.id !== undefined) {
     await toTab(tab.id, { type: 'menu', task, ask: type === 'ask' ? id : null, srcUrl: info.srcUrl }, { frameId: info.frameId ?? 0 });
@@ -157,8 +192,8 @@ async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab?: chro
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (!/^(task|ask):/.test(String(info.menuItemId))) return; // other modules' items (reader:…) handle themselves
-  if (!inPage(info) && tab?.windowId !== undefined) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+  if (!/^(task|ask|chat):/.test(String(info.menuItemId))) return; // other modules' items (reader:…) handle themselves
+  if ((!inPage(info) || String(info.menuItemId).startsWith('chat:')) && tab?.windowId !== undefined) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   handleMenuClick(info, tab).catch((e) => console.warn('menu action failed', e));
 });
 

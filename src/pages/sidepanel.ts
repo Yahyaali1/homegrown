@@ -1,40 +1,32 @@
-// The side panel, the home for everything: Chat (image attachments, Prompt Lab templates, settings changed by asking),
-// Missions, Garden, Library, Tasks, Settings with Models, the stats bar, and right-click actions on pages the in-page UI
-// can't reach. Library and Settings are their own modules, also used as standalone pages.
+// The side panel, the home for everything: Chat (pages/chat.ts), Missions, Garden, Library, Tasks, Settings with
+// Models, and the stats bar. Library and Settings are their own modules, also used as standalone pages.
 import { $, busyButton, button, emptyPot, row } from './shell.ts';
 import './settings.ts';
 import './library.ts';
 import { renderGarden, showRequests } from './garden.ts';
+import { addMessage, checkPending, startChat } from './chat.ts';
 import { h } from '../ui/dom.ts';
-import { flower, MISSION_STAGE, type FlowerState } from '../ui/flower.ts';
+import { flower, MISSION_STAGE } from '../ui/flower.ts';
+import { KEY_POINTS, previews } from '../ui/linkcard.ts';
 import { MODELS, modelById, supports, TASKS, type TaskId } from '../domain/model.ts';
-import { DEFAULT_TASKS, getTasks, PROMPT_LAB } from '../shared/actions.ts';
+import { DEFAULT_TASKS, getTasks } from '../shared/actions.ts';
 import { importTasks, KINDS, moveTask, type Task, type TaskKind } from '../domain/tasks.ts';
-import { changeFor, chatSettings, checkChoice, parseSettings } from '../domain/settings.ts';
-import { parseJsonObject } from '../domain/text.ts';
+import { parseSettings } from '../domain/settings.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
 
 interface ModelState { name: string; downloaded: boolean; partial: number; downloading: boolean }
 interface Loaded { name: string; loadMs: number }
-interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
-interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
 
 let state: { loaded: Loaded | null; models: ModelState[] } = { loaded: null, models: MODELS.map((m) => ({ name: m.id, downloaded: false, partial: 0, downloading: false })) };
-let turns: EngineTurn[] = []; // chat history sent with every request
-let attached: string | null = null; // a selection waiting for an instruction
-let imageData: string | null = null;
 const progress: Record<string, { done: number; total: number; complete?: boolean; error?: string }> = {};
-const streams = new Map<string, (t: string) => void>(); // generate id → token callback
 
 const sync = async () => parseSettings(await chrome.storage.sync.get(null));
-const excerpt = (t: string, n = 140) => (t.length > n ? `${t.slice(0, n)}…` : t);
 const when = (ms?: number) => (ms ? new Date(ms).toLocaleString() : 'never');
 
 // ---- engine ----
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.source !== 'engine') return;
-  if (msg.type === 'token') streams.get(msg.id)?.(msg.text);
   if (msg.type === 'loaded') setLoaded(msg.loaded);
   if (msg.type === 'progress') {
     progress[msg.name] = msg;
@@ -67,27 +59,6 @@ async function ensureModel(): Promise<Loaded> {
   return engineCall<Loaded>('load', { name: first.name });
 }
 
-async function generate(reqTurns: EngineTurn[], config: Record<string, number>, onToken: (t: string) => void) {
-  const id = crypto.randomUUID();
-  streams.set(id, onToken);
-  try {
-    const r = await engineCall<{ text: string; stats: Stats }>('generate', { id, turns: reqTurns, config, model: (await sync()).taskModels.chat ?? '' });
-    showStats(r.stats);
-    return r;
-  } finally {
-    streams.delete(id);
-  }
-}
-
-function showStats(s: Stats): void {
-  $('#stats').hidden = false;
-  $('#s-ttft').textContent = `${(s.ttftMs / 1000).toFixed(2)} s`;
-  $('#s-prefill').textContent = s.prefillTps.toFixed(0);
-  $('#s-decode').textContent = s.decodeTps.toFixed(1);
-  $('#s-latency').textContent = `${(s.latencyMs / 1000).toFixed(1)} s`;
-  $('#s-tokens').textContent = `${s.prefillTokens} in · ${s.outputTokens} out`;
-}
-
 // ---- tabs (the panel reopens on the last one used) ----
 
 function showTab(name: string): void {
@@ -103,198 +74,6 @@ try { if (localStorage.tab && document.getElementById(localStorage.tab)) showTab
 const fromHash = () => location.hash.length > 1 && document.querySelector(`main > [role=tabpanel]${location.hash}`) && showTab(location.hash.slice(1));
 fromHash();
 addEventListener('hashchange', fromHash);
-
-// ---- chat ----
-
-// Model replies carry the flower: it grows while the model works, blooms when done, wilts on an error.
-type Message = HTMLLIElement & { body: HTMLElement };
-function addMessage(role: 'user' | 'model' | 'error', text: string): Message {
-  const body = h('div', { className: 'text', textContent: text });
-  const li = Object.assign(h('li', { className: role }, role === 'model' && flower(22, 'thinking'), body), { body });
-  $('#messages').append(li);
-  $('#empty').hidden = true;
-  li.scrollIntoView({ block: 'end' });
-  return li;
-}
-const settle = (li: HTMLElement, s: FlowerState) => li.querySelector('.flower')?.setAttribute('class', `flower ${s}`);
-const setBusy = (busy: boolean) => (($<HTMLButtonElement>('#chat-send').disabled = busy), ($('#chat-stop').hidden = !busy));
-
-/** Sends `turn` after the history and streams the answer into the chat. */
-async function chat(turn: EngineTurn, label: string, config: Record<string, number> = {}): Promise<void> {
-  showTab('chat');
-  addMessage('user', label);
-  const li = addMessage('model', '');
-  setBusy(true);
-  try {
-    await ensureModel();
-    const r = await generate([...turns, turn], config, (t) => {
-      li.body.textContent += t;
-      li.scrollIntoView({ block: 'end' });
-    });
-    settle(li, 'bloom');
-    turns.push(turn, { role: 'model', text: r.text });
-    if (r.stats.truncated) li.append(h('span', { className: 'warn', textContent: "The selection was longer than the model's context window, so only the first part was used." }));
-  } catch (e) {
-    li.className = 'model error';
-    li.body.textContent = (e as Error).message;
-    settle(li, 'wilt');
-  } finally {
-    setBusy(false);
-  }
-}
-
-function attach(text: string | null): void {
-  attached = text;
-  $('#attached').hidden = !text;
-  $('#attached-text').textContent = text ?? '';
-}
-$('#attached-clear').onclick = () => attach(null);
-
-// Changing a setting by asking: the model reads the message against the list of settings; code accepts only a real
-// setting and an allowed value (domain/settings.ts); nothing changes until Apply.
-async function proposeSetting(text: string): Promise<boolean> {
-  const s = await sync();
-  const downloaded = state.models.filter((m) => m.downloaded).map((m) => m.name);
-  const choices = chatSettings(s, downloaded);
-  const list = choices.map((c) => `- ${c.id}: ${c.label} (${c.values ? c.values.join(', ') : 'any language'}; now ${c.current || 'not set'})`).join('\n');
-  const models = MODELS.map((m) => `${m.id}: ${m.note}`).join(' ');
-  let picked: ReturnType<typeof checkChoice> = null;
-  try {
-    const r = await engineCall<{ text: string }>('generate', { id: crypto.randomUUID(), config: { temperature: 0 }, turns: [{ role: 'user',
-      text: `You route messages for the Homegrown browser extension. If the message asks to change one of these settings, reply {"setting": "<id>", "value": "<one allowed value>"}. If it is anything else (a question, a request, chat), reply {"setting": null}. JSON only.\nSettings:\n${list}\nModels: ${models}\nMessage: "${text}"` }] });
-    picked = checkChoice(choices, parseJsonObject(r.text));
-  } catch {}
-  if (!picked) return false;
-  const { choice, value } = picked;
-  addMessage('user', text);
-  const li = addMessage('model', '');
-  settle(li, 'stage-3');
-  const done = (msg: string, st: FlowerState) => ((li.body.textContent = msg), settle(li, st));
-  li.body.replaceChildren(`Change ${choice.label.toLowerCase()} from ${choice.current || 'not set'} to ${value}?`, h('div', { className: 'confirm' },
-    button('Apply', async () => (await chrome.storage.sync.set(changeFor(await sync(), choice.id, value)), done(`Done: ${choice.label.toLowerCase()} is now ${value}.`, 'bloom')), 'primary'),
-    button('Not now', () => done('Left as it was.', 'stage-3'), 'ghost')));
-  return true;
-}
-
-// A Prompt Lab template (chosen in the composer) wraps the typed text; an attached image or selection rides along.
-const input = $<HTMLTextAreaElement>('#chat-input');
-const labTemplate = $<HTMLSelectElement>('#lab-template');
-const labOption = $<HTMLSelectElement>('#lab-option');
-const template = () => PROMPT_LAB.find((t) => t.id === labTemplate.value);
-$<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const typed = input.value.trim();
-  const tpl = template();
-  if (!typed && !imageData) return;
-  input.value = '';
-  // A short plain message may be a settings request ("use E4B for missions"): the model decides, you confirm.
-  if (!tpl && !imageData && attached === null && typed.length < 240 && (await proposeSetting(typed))) return;
-  const text = tpl ? tpl.build(typed, labOption.value) : typed || 'Describe this image.';
-  const turn: EngineTurn = { role: 'user', text, ...(attached !== null && { selection: attached }), ...(imageData && { image: imageData }) };
-  const label = [tpl ? `${tpl.title}: ${typed}` : typed || 'Describe this image.', attached !== null ? `“${excerpt(attached)}”` : '', imageData ? '(image)' : ''].filter(Boolean).join('\n');
-  attach(null);
-  setImage(null);
-  void chat(turn, label, { temperature: Number($<HTMLInputElement>('#lab-temp').value), topK: Number($<HTMLInputElement>('#lab-topk').value) });
-};
-input.onkeydown = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) ($<HTMLFormElement>('#chat-form').requestSubmit(), e.preventDefault());
-};
-$('#chat-stop').onclick = () => void engineCall('cancel');
-$('#chat-clear').onclick = () => {
-  turns = [];
-  $('#messages').replaceChildren();
-  $('#empty').hidden = false;
-};
-
-// ---- right-click actions on pages the in-page UI can't reach (queued by the worker in session storage) ----
-
-const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
-  const r = new FileReader();
-  r.onload = () => resolve(String(r.result));
-  r.onerror = () => reject(r.error);
-  r.readAsDataURL(blob);
-});
-
-// Host permissions let the panel fetch cross-origin images. Images behind a login or released blob: links still fail.
-async function fetchImage(srcUrl: string): Promise<string> {
-  try {
-    const res = await fetch(srcUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    if (!blob.type.startsWith('image/')) throw new Error(`not an image (${blob.type || 'unknown type'})`);
-    return blobToDataUrl(blob);
-  } catch (e) {
-    throw new Error(`Can't read this image (${(e as Error).message}). Images that need a login and blob: links the page has already released can't be read.`);
-  }
-}
-
-interface Pending { kind: TaskKind; title: string; prompt?: string; selection?: string; srcUrl?: string }
-async function runAction(a: Pending): Promise<void> {
-  turns = [];
-  $('#messages').replaceChildren();
-  $('#empty').hidden = true;
-  if (a.kind === 'text') {
-    if (!a.prompt) {
-      // A custom question: keep the selection and ask what to do with it.
-      showTab('chat');
-      attach(a.selection ?? '');
-      input.focus();
-      return;
-    }
-    return chat({ role: 'user', text: a.prompt, selection: a.selection ?? '' }, `${a.title}\n“${excerpt(a.selection ?? '')}”`);
-  }
-  showTab('chat');
-  const li = addMessage('user', a.title);
-  try {
-    const image = await fetchImage(a.srcUrl ?? '');
-    li.body.textContent += ` (${Math.round((image.length * 3) / 4 / 1024)} KB image)`;
-    await ensureModel();
-    if (!a.prompt) return void (setImage(image), input.focus());
-    await chat({ role: 'user', text: a.prompt, image }, a.title);
-  } catch (e) {
-    addMessage('error', (e as Error).message);
-  }
-}
-async function checkPending(): Promise<void> {
-  const { pending } = await chrome.storage.session.get('pending');
-  if (!pending) return;
-  await chrome.storage.session.remove('pending');
-  void runAction(pending as Pending);
-}
-chrome.storage.session.onChanged.addListener((c) => c.pending?.newValue && void checkPending());
-
-// ---- image attachment ----
-
-function setImage(dataUrl: string | null): void {
-  imageData = dataUrl;
-  $<HTMLImageElement>('#image-preview').src = dataUrl ?? '';
-  $('#attached-image').hidden = !dataUrl;
-  $<HTMLInputElement>('#image-file').value = '';
-}
-$<HTMLInputElement>('#image-file').onchange = async (e) => {
-  const f = (e.target as HTMLInputElement).files?.[0];
-  setImage(f ? await blobToDataUrl(f) : null);
-};
-$('#image-clear').onclick = () => setImage(null);
-
-// ---- Prompt Lab templates and sampling ----
-
-labTemplate.append(new Option('Chat', ''), ...PROMPT_LAB.map((t) => new Option(t.title, t.id)));
-function renderLabOptions(): void {
-  const t = template();
-  labOption.hidden = !t?.options;
-  labOption.replaceChildren(...(t?.options ?? []).map((o) => new Option(o)));
-  labOption.title = t?.option ?? '';
-  input.placeholder = !t ? 'Message the model…' : t.id === 'code' ? 'e.g. print the numbers from 1 to 5' : `${t.title}: enter text…`;
-}
-labTemplate.onchange = renderLabOptions;
-renderLabOptions();
-for (const id of ['lab-temp', 'lab-topk']) {
-  const range = $<HTMLInputElement>(`#${id}`);
-  const show = () => ($(`output[for=${id}]`).textContent = range.value);
-  range.oninput = show;
-  show();
-}
 
 // ---- Tasks (shown in the in-page toolbar and the right-click menu) ----
 
@@ -532,5 +311,8 @@ function renderModels(): void {
 
 // ---- start ----
 
+// Links in chat answers and Garden results open by the link rules, with a hover card (ui/linkcard.ts).
+previews($('main'), async (text) => (await engineCall<{ text: string }>('generate', { id: crypto.randomUUID(), turns: [{ role: 'user', text: KEY_POINTS, selection: text }] })).text);
 renderModels();
+void startChat({ ensureModel, downloaded: downloadedModels, showTab }).catch((e) => console.error(e));
 refresh().then(checkPending, (e: Error) => ($('#model-line').textContent = e.message));

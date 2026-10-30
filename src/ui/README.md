@@ -8,6 +8,7 @@ DOM helpers for the in-page UI and the extension pages:
 - `questions.ts`: a question block, asked one at a time.
 - `flower.ts`: the Homegrown SVG mark and its animation states.
 - `chart.ts`: SVG charts and KPI cards from a table (plan T9).
+- `linkcard.ts`: links in answers and their hover card (plan T6).
 - `theme.ts`: applies the light, dark or system theme.
 - `theme-early.ts`: applies the theme before the first paint.
 
@@ -37,6 +38,10 @@ DOM helpers for the in-page UI and the extension pages:
   - `scale(values)`: `{ lo, hi }`, always holding 0; a single value or a flat line still has height.
   - `numericColumns(table)`, `kpis(table)` (a card per numeric column, up to 4: the last value and ▲/▼ change
     since the first row in `--good`/`--danger`), `toPng(svg)` (twice the size, `{ png, width, height }`).
+- `linkcard.ts`: `linkify(root)` wraps web addresses in text nodes (not in `a`, `code`, `pre`) as
+  `a[data-preview]` with the full URL as `title`. `previews(root, keyPoints)`: a click opens it with
+  `bg('openLink')`; 600 ms over it shows a card with the host and `linkWarnings`, and fetches nothing. Read the
+  page (a click) gets the title and read time from `fetchText`; Key points then calls `keyPoints(text)`. `KEY_POINTS`, `readMinutes`.
 - `theme.ts`: `theme()` applies the stored theme and follows changes to it. It adds three buttons to each
   `.theme-switch`: system (◐), light (☀) and dark (☾). The switch gets `role="group"` and
   `aria-label="Theme"`, and each button's `aria-pressed` follows the current theme.

@@ -31,11 +31,16 @@ It also owns these parts:
     - The command `ensure` is not in the handler table. The listener handles it first: it calls
       `ensureEngine()` and replies `{ok:true, result:true}` or `{ok:false, error}`.
     - `toPage` forwards a message to the active tab through `toTab`. It is added to the table after the merge.
+    - `openLink({url})` (plan T6): extension pages only (`isExtensionPage`), `http(s)` only. The active tab of the last focused normal window follows the
+      link when its host is the link's site or a subdomain (`sameSite`) and `linksInActiveTab` is on; otherwise a
+      new tab opens beside it.
   - `BackgroundModule` (internal type, not exported): `{handlers?, init?(), menus?(), onAnswer?(req, result,
     sender)}`.
   - Context menus: the root items `root-text`, `root-page` and `root-image`, each with `task:<id>` items and
-    `ask:<kind>`. The `main.ts` click listener handles only `task:` and `ask:`. Other modules handle their
-    own items.
+    `ask:<kind>`, and `chat:page` / `chat:link` ("Open in chat"). The `main.ts` click listener handles only
+    `task:`, `ask:` and `chat:`. Other modules handle their own items. Open in chat opens the side panel in the
+    click, then queues `pending` with the page (`tabText`, no debugger; else `fetchText`) or the link
+    (`fetchText`, signed out) as the attachment, 15000 characters at most.
   - Keyboard commands: `launcher` sends `{type:'launcher'}` to the tab. `page-task` runs the first `page`
     task.
   - Test hooks on `self`: `ensureEngine`, `handleMenuClick`, `seedTasks`, `bgHandlers`, `missionScheduled`,

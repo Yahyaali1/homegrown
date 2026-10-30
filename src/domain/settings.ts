@@ -19,6 +19,7 @@ export const SWITCHES = {
   replyButtons: { label: 'Reply suggestions in mail and chat', default: true },
   priceChip: { label: 'Price memory on product pages', default: true },
   shoppingSense: { label: 'Look for the same product cheaper elsewhere', default: false },
+  linksInActiveTab: { label: 'Open answer links in the active tab when it is on the same site', default: true },
 } as const satisfies Record<string, { label: string; default: boolean }>;
 export type SwitchKey = keyof typeof SWITCHES;
 

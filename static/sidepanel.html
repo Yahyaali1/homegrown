@@ -31,6 +31,11 @@
         <div id="page-tasks" class="chips" aria-label="Run on this page"></div>
         <button id="page-actions" class="chip" type="button" title="Open every action in the page's ❀ menu">All actions…</button>
       </div>
+      <details id="chats" class="chats">
+        <summary>Chats</summary>
+        <input id="chat-search" type="search" placeholder="Search your chats" aria-label="Search chats">
+        <ul id="chat-list" class="list"></ul>
+      </details>
       <ol id="messages" aria-live="polite"></ol>
       <div id="empty" class="empty">
         <i class="hg-mark" data-size="56"></i>
@@ -38,6 +43,7 @@
       </div>
       <div class="dock">
         <ul id="chat-requests" class="list tray" aria-live="polite" aria-label="Requests from gardeners"></ul>
+        <div id="long-chat" class="attachment" role="status" hidden></div>
         <div id="attached" class="attachment" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" type="button" aria-label="Remove selected text">×</button></div>
         <div id="attached-image" class="attachment" hidden><img id="image-preview" alt="Attached image"><span class="muted">Image attached</span> <button id="image-clear" type="button" aria-label="Remove image">×</button></div>
         <form id="chat-form" class="composer">
@@ -53,12 +59,18 @@
                 <label>Top K <input id="lab-topk" type="range" min="1" max="100" step="1" value="64"><output for="lab-topk"></output></label>
               </div>
             </details>
+            <div id="chat-modes" class="modes" role="group" aria-label="Mode">
+              <button type="button" class="ghost" data-mode="plan" title="Writes a short plan first and waits for Go">Plan</button>
+              <button type="button" class="ghost" data-mode="smart" title="The largest downloaded model">Smart</button>
+              <button type="button" class="ghost" data-mode="fast" title="The smallest downloaded model">Fast</button>
+            </div>
             <span class="grow"></span>
             <button id="chat-clear" class="ghost" type="button">New chat</button>
             <button id="chat-stop" class="secondary" type="button" hidden>Stop</button>
             <button id="chat-send" class="primary">Send</button>
           </div>
         </form>
+        <span id="mode-note" class="muted small" hidden></span>
       </div>
     </section>
 
@@ -188,6 +200,7 @@
       <label class="toggle"><input type="checkbox" data-key="autoAltText" data-default="false"><span>Describe images that have no alt text</span></label>
       <label class="toggle"><input type="checkbox" data-key="searchAnswers" data-default="true"><span>Answer beside search results</span></label>
       <label class="toggle"><input type="checkbox" data-key="linkPreview" data-default="true"><span>Link preview when you hold a link</span></label>
+      <label class="toggle"><input type="checkbox" data-key="linksInActiveTab" data-default="true"><span>Links in answers open in the active tab when it is on the same site</span></label>
       <label class="toggle"><input type="checkbox" data-key="useVoice" data-default="true"><span>Voice: Speak… and Read aloud</span></label>
       <label class="toggle"><input type="checkbox" data-key="replyButtons" data-default="true"><span>Reply button in email and chat boxes</span></label>
       <label class="toggle"><input type="checkbox" data-key="priceChip" data-default="true"><span>Price memory on product pages: show the lowest price I've seen for the same item, with Find it cheaper and price-drop alerts</span></label>

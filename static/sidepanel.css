@@ -67,6 +67,25 @@ button.chip:hover { background: var(--chip-hover); }
 #messages li.model .text:empty::before { content: 'Thinking…'; background: linear-gradient(90deg, var(--faint) 35%, var(--fg) 50%, var(--faint) 65%) 0 0/300% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; animation: hg-shimmer 2s linear infinite; }
 #messages li.error, #messages li.model.error .text { color: var(--danger); }
+#messages li.model > .turn-actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: -6px; }
+#messages .turn-actions button { height: 24px; padding: 0 6px; font-size: var(--t-sm); color: var(--muted); }
+#messages .turn-actions button[aria-pressed=true] { color: var(--fg); background: var(--chip-active); }
+#messages .turn-actions .warn { margin: 0 6px 0 0; }
+#messages li.model .text p { margin: 0 0 6px; }
+#messages li.model .text ul, #messages li.model .text ol { margin: 0 0 6px; padding-left: 20px; white-space: normal; }
+#messages .reasoning summary { color: var(--muted); font-size: var(--t-sm); cursor: pointer; }
+#messages mark { background: var(--chip-active); color: var(--fg); border-radius: 2px; }
+#messages a[data-preview], #garden-runs a[data-preview] { color: var(--link); }
+.chats summary { color: var(--muted); font-size: var(--t-sm); cursor: pointer; }
+.chats #chat-list { max-height: 30vh; overflow-y: auto; margin-top: 4px; }
+.chats #chat-list li { display: flex; align-items: center; gap: 6px; }
+.chats #chat-list button.grow { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modes { display: flex; gap: 2px; }
+.modes button { height: 26px; padding: 0 8px; font-size: var(--t-sm); color: var(--muted); }
+.modes button[aria-pressed=true] { color: var(--fg); background: var(--chip-active); }
+.linkcard { position: fixed; z-index: 10; width: 280px; background: var(--panel); box-shadow: var(--shadow-float); border-radius: var(--r-md); padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); overflow-wrap: anywhere; }
+.linkcard p, .linkcard ul { margin: 0; }
 #messages .warn { display: block; color: var(--warn); font-size: var(--t-sm); margin-top: 6px; }
 .empty { flex: 1; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; color: var(--fg); }
 .empty p { margin: 0; }

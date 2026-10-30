@@ -33,10 +33,10 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   order without re-inserting the ones in place, so their motion doesn't restart).
 - `savings.ts`: `Savings`, `savingsLine(s, tokens?)`. The sentence for the savings meter.
 - `sidepanel.ts` (`sidepanel.html`): the side panel, and the home for everything. It imports `settings.ts`
-  and `library.ts` for their tabs. It contains:
-  - Chat, with images, Prompt Lab and sampling.
-  - `proposeSetting`, which changes a setting from chat.
-  - Right-click actions queued in `storage.session`.
+  and `library.ts` for their tabs, and `chat.ts` for Chat. It contains:
+  - `previews(main, keyPoints)` from `ui/linkcard.ts`: links in chat answers and Garden results open with
+    `bg('openLink')` and show a hover card (host and warnings; Read the page fetches on click); Key points is one
+    `generate` on click.
   - "This page" controls, sent to the active tab's in-page UI with `bg('toPage', {msg})`:
     - `#page-actions` ("All actions…") sends `{type: 'launcher'}`.
     - The task chips in `#page-tasks` send `{type: 'menu', task}` for each page task.
@@ -44,6 +44,25 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - Schedules, monitors and missions (`schedule`, `runScheduleNow`, `unschedule`, `checkNow`, `unwatch`,
     `agentOpen`, `missionsLive`, `missionOpen`, `missionsList`, `missionDelete`).
   - Model pickers for each task, and the model manager.
+- `chat.ts` (the side panel's Chat tab, plan T6): `startChat(deps)`, `checkPending()`, `addMessage(role, text)`.
+  - Saved chats in IndexedDB `hg-chat` v1, store `chats` (`domain/chat.ts` `Chat`), opened from the side panel
+    itself. Each save reads, edits and writes in one transaction (`upsertTurns`, `dropFrom`, or a field patch), so
+    another panel's turns stay; a `BroadcastChannel('hg-chat')` ping reloads the list and an idle open chat. The
+    timed save while streaming doesn't ping or redraw the list. The Chats list (newest first, with ×) has a search box: matches are `<mark>`s built from text nodes.
+  - A model answer is saved every 1 s with `partial: true`. A reload stops it (`pagehide` cancels its id); the
+    saved part shows "Interrupted" and Retry. Retry drops the answer and later turns and answers again.
+  - Model answers render through `markdown()` and `linkify`; a leading `<think>` part is a closed Reasoning
+    `<details>`; a ```` ```questions ```` block uses `ui/questions.ts`, and the answers go back as the next message.
+  - Under each answer: ↑ Helpful, ↓ Not helpful (`feedback`), Duplicate (a new chat up to it, `forkedFrom`). An
+    error turn keeps its words with Retry and Report (`chatReport`, no message text).
+  - `#long-chat` shows past 70 % of the pinned model's budget; Summarize is one background-lane `generate`
+    and opens a new chat from it.
+  - Plan mode adds its plan instruction to a chat's first message only (`planFirst`).
+  - Modes Plan / Smart / Fast (`#chat-modes`). A chat pins `model`: Settings' chat model if set, else
+    `modeModel`. Plan needs `can(model, 'plan')`, else "This needs a model measured for plans."; in Plan mode an
+    answer has Go and Run as a plan (`gardenRun` with `plan` work and a chosen gardener).
+  - Also images, Prompt Lab, sampling, `proposeSetting` and right-click actions queued in `storage.session`
+    (Open in chat's text arrives as the attachment).
 - `garden.ts` (the side panel's Garden tab): gardeners, routines (a paused routine with `by` other than `person`
   says "Proposed by <name>. Turn on?" and its button is Turn on), runs in groups (Needs you, Unread, each routine,
   by hand). A run's Open view reads top to bottom: the request, each step (Retry step where `retryStep` allows),
@@ -103,7 +122,7 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - `settings.ts` (`settings.html`, and the Settings tab of the side panel):
   - Switches: every `[data-key]` checkbox whose key is in `SWITCHES` (`domain/settings.ts`) is bound to
     `chrome.storage.sync`. Both `settings.html` and `sidepanel.html` have a checkbox for every switch:
-    `toolbar`, `fab`, `ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `linkPreview`,
+    `toolbar`, `fab`, `ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `linkPreview`, `linksInActiveTab`,
     `useVoice`, `replyButtons`, `priceChip` (on by default) and `shoppingSense`.
   - The `translateTo` language, sites that are turned off, and savings.
 - `reader.ts` (`reader.html`): shows a document as DOM in `#doc`, so the in-page UI works on it. Input
@@ -127,10 +146,11 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - Settings are always read through `parseSettings`. A setting changed from chat is written only after the
   user clicks Apply, and only if `checkChoice` accepts it.
 - A switch works in a page only if that page has a `[data-key]` checkbox for it.
-- Chat history in `sidepanel.ts`:
-  - The history is kept in memory. A chat message sends all of it, plus the new turn, with `generate`.
-  - `proposeSetting` sends `generate` with only one routing turn, not the history.
-  - `runAction` (a queued right-click action) clears the history before it runs.
+- Chat history in `chat.ts`:
+  - The history is the open chat's turns, without error and partial turns (`engineTurns`). An attached image
+    rides on the last turn and is not saved.
+  - `proposeSetting` sends `generate` with only one routing turn, not the history, and its messages aren't saved.
+  - `runAction` (a queued right-click action) starts a new chat.
   - Streams are keyed by a `crypto.randomUUID` id.
 - `ensureModel()` loads the first downloaded model when no model is loaded. It throws when no model is
   downloaded.
