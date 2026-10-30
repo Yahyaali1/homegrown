@@ -990,7 +990,30 @@ step); `memory.spec` +1 (a draft edit survives a rebroadcast). The closed-tab an
 without their fix. Not covered by e2e: the Meetings refresh (needs a model with `notes`) and the chat offer (sending
 needs a model); the chat rule is unit-tested.
 
-**Status.** Built, not reviewed, not committed: `npm run check` clean, 326 unit tests pass, build ok; e2e 30/30 (`approvals` 2, `chat` 4 with 1 `@slow`, `connectors` 4, `garden` 4 `@slow`, `meetings` 4, `memory` 3, `plaza` 1, `tabs` 6, `triggers` 2). Deviations: `identity` is optional (asked on click), so `connectors.spec` loads a copy of the extension with it granted; a sign-in for a connector not yet saved waits in worker memory (`ponytail:`; a worker restart means sign in again); two calls that 401 together may each refresh (`ponytail:`). Review round 1 (2 Majors, 2 Minors, all fixed): discovered addresses may be on this machine only when the connector is (`found`); sign-in replies are read up to 100 KB (`capped`); a pending sign-in expires after 10 minutes and a repeat sign-in replaces it; a typed token wins over a sign-in. After the fixes: 328 unit tests pass, `connectors` 4/4. No owner decision was needed; spike 2 on a real minimized macOS window is still unmeasured.
+**Status.** Done: ee91b61 (sign-in and open items) and c87b928 (bench suites). Below, the build notes as written before the commits: `npm run check` clean, 326 unit tests pass, build ok; e2e 30/30 (`approvals` 2, `chat` 4 with 1 `@slow`, `connectors` 4, `garden` 4 `@slow`, `meetings` 4, `memory` 3, `plaza` 1, `tabs` 6, `triggers` 2). Deviations: `identity` is optional (asked on click), so `connectors.spec` loads a copy of the extension with it granted; a sign-in for a connector not yet saved waits in worker memory (`ponytail:`; a worker restart means sign in again); two calls that 401 together may each refresh (`ponytail:`). Review round 1 (2 Majors, 2 Minors, all fixed): discovered addresses may be on this machine only when the connector is (`found`); sign-in replies are read up to 100 KB (`capped`); a pending sign-in expires after 10 minutes and a repeat sign-in replaces it; a typed token wins over a sign-in. After the fixes: 328 unit tests pass, `connectors` 4/4. No owner decision was needed; spike 2 on a real minimized macOS window is still unmeasured.
+
+**Bench commit (c87b928).** `bench/fake-mcp.mjs` (a fake MCP server for the bench), `bench/workflows/apps.mjs`,
+`bench/workflows/dana.mjs`; at least 2 cases per seed; a sensitive call in a bench run is always answered No. Product
+fix: the sensitive word `pay` no longer matches `payment`. Unit tests 328 pass; `connectors` 4/4, `tabs` 6, `memory` 3,
+and the regressions pass.
+
+**Workflow bench, single runs** (seeds that pass):
+
+| Pack | E2B | E4B |
+|---|---|---|
+| Rosa | directory, market-map | directory, market-map, brief |
+| Dana | root-cause | root-cause, smoke |
+| Martin | repurpose, seo-drop | seo-drop |
+| Olivia | decisions, open-loops, invoices | decisions, open-loops, invoices |
+| Cora | kickoff | proposal, prospects |
+| Sally | — | leads |
+| Theo | sourcing | scorecard |
+| Sofia | — | — (re-run after the `pay` fix in progress) |
+| Ellis | linkedin, sourcing | linkedin, leads |
+| Violations | 3 | 0 |
+
+Not measurable in the bench: Dana's DevTools reads (the model profile has no `debugger` permission), and seeds that
+read Meetings docs (`doc_read` can't read them).
 
 ## Shared files changed
 
@@ -1025,15 +1048,14 @@ it lands.
 
 | # | Decision | Facts |
 |---|---|---|
-| 1 | Set `skillEdit` for E2B in `model.ts`? | 4/6, exactly the threshold, one run at default sampling. Suggest 3 runs at temperature 0 first |
-| 2 | Set `notes` for E2B? | 5/6, exactly the threshold, one run. Same advice |
-| 3 | Set `workflow:rosa/directory` and `workflow:rosa/market-map` for E2B? | Both pass (directory 2/2, market-map after `propose_routine` was removed). `brief` and `deck` 0/2 |
-| 4 | Measure E4B | No suite has run on E4B since T1 (`plan` 5/8 then). Needs disk: about 5 GB free |
-| 5 | Old `.profile-*` folders | About 30 GB, the owner's. Deleting some frees room for E4B and the `@slow` runs |
-| 6 | Bench cases still unrun or unwritten | Dana: no suite. Sofia and Ellis: suites written, not run (like the other 5 new packs). Bench runs that need an app need a fake MCP server in the bench (only the e2e has one) |
-| 7 | MCP OAuth | Not built (out of scope). Add with the optional `identity` permission when a server needs it |
-| 8 | Spikes 2 and 4 | 2: screencast frames from a minimized window, unchecked, no live-view e2e. 4: how visible the new-tab flash is before Plaza, unchecked by a person |
-| 9 | Smaller open items | Closing the person's tab during `act_my_tab` fails the step instead of asking "did this happen?"; a missed one-off leaves no run record; brief headings render as paragraphs; `.pptx` not opened in PowerPoint or Keynote; the known MCP app list is unverified; one MCP session per call; the draft textarea may lose edits on a rebroadcast; corrections are not offered in chat; nothing creates `questions` requests |
+| 1 | Which measured passes to copy into `model.ts` | The workflow bench table in T14. E4B has 0 violations; E2B has 3. Every pass is a single run at default sampling. Suggest 3 runs at temperature 0 and count a seed only if it passes all 3 (or 2 of 3 with 0 violations) before copying it |
+| 2 | `skillEdit` for E2B | 4/6, exactly the threshold, one run. Same advice as 1 |
+| 3 | `notes` for E2B | 5/6, exactly the threshold, one run. Same advice; E4B not measured for `notes` |
+| 4 | `plan` | E2B 3/8 (1 violation), E4B 5/8 at T1. Neither passes; workflow seeds also need `plan`, so a workflow pass has no effect until `plan` is set or that need is dropped for that seed. Decide which |
+| 5 | Old `.profile-*` folders | About 30 GB, the owner's |
+| 6 | Seeds still unmeasurable | Dana DevTools reads (bench profile without `debugger`); Meetings-doc seeds (`doc_read` can't read `Meetings/`). Sofia: re-run after the `pay` fix in progress |
+| 7 | Spike 2 on real macOS | Headless sends frames from a minimized window; a real minimized window is unmeasured. "Show the tab" covers it |
+| 8 | Smaller open items | Brief headings render as paragraphs; `.pptx` not opened in PowerPoint or Keynote; the known MCP app list is unverified; one MCP session per call; nothing creates `questions` requests |
 
 ## Review history
 
@@ -1300,3 +1322,17 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
 
 **2026-10-30: final verification.** Full e2e on 51bae99: 115 passed, 0 failed, 20.7 min. Every spec ran except FLUX
 image generation, which has no local model.
+
+**2026-10-30: T14 landed (ee91b61, c87b928).**
+- Closed: MCP sign-in (discovery, dynamic registration, PKCE through `launchWebAuthFlow`, optional `identity`, refresh
+  on 401, discovered localhost addresses only for localhost connectors, 100 KB sign-in reads); a closed tab during
+  `act_my_tab` asks "did this happen?"; the `act_my_tab` card is editable (same named tab, fills sensitive, no Always);
+  Meetings list refresh; draft edits kept; "Remember this?" in chat; a missed one-off leaves a failed run record.
+- Spikes: 2, headless screencast keeps sending when minimized (real macOS unmeasured); 4, the default new tab shows
+  for about 50–100 ms, Plaza commits at a median of 132 ms.
+- Bench: a fake MCP server and suites for every pack (at least 2 cases per seed); `pay` no longer matches `payment`.
+  Passes are in the T14 workflow table: E2B 3 violations, E4B 0. All single runs.
+- 328 unit tests pass; `connectors` 4/4, `tabs` 6, `memory` 3, and the regressions pass. Review: 2 Majors and 2 Minors
+  in the sign-in code, fixed.
+- Owner decisions rewritten: mainly which passes to copy into `model.ts`, after repeat runs. Note that every workflow
+  seed except direct reads also needs `plan`, which no model has, so a copied workflow pass alone turns nothing on.
