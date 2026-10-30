@@ -20,6 +20,7 @@ import { bg, engineCall } from '../shared/protocol.ts';
 import { anchorsIn, reference, type Entity } from '../domain/memory.ts';
 import { NEEDS, skillParts, slashOf, unmet, type Skill } from '../domain/garden/skills.ts';
 import { fuzzy } from '../domain/reading.ts';
+import { MEETINGS_ASK } from '../domain/meeting.ts';
 
 interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
 interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
@@ -391,6 +392,14 @@ $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   // `/name rest`: the skill's method is the instruction, its files ride in the data. Off, or needing what the chat's
   // model lacks, it is refused.
   const hit = !tpl && typed.startsWith('/') ? slashOf(typed, (skills = await bg<Skill[]>('skillList').catch(() => []))) : null;
+  // `/meetings question` (no skill of that name): the closest transcript parts ride in the data, cited by meeting and time.
+  const meetQ = typeof hit === 'string' ? /^\/meetings\s+([\s\S]+)$/.exec(typed)?.[1] : undefined;
+  if (meetQ) {
+    const p = await bg<{ data: string; empty?: string; left?: number }>('meetPassages', { question: meetQ }).catch((e: Error) => ({ data: '', empty: e.message, left: 0 }));
+    if (!p.data) return void ((input.value = typed), addMessage('error', p.empty ?? ''));
+    const label = p.left ? `${typed}\n(Only the newest meetings were searched; ${p.left} older left out.)` : typed;
+    return void send({ role: 'user', text: `${MEETINGS_ASK}\nQuestion: ${meetQ}`, label, at: Date.now(), selection: p.data });
+  }
   if (hit) {
     const model = chat?.model || (await sync()).taskModels.chat || modeModel(nextMode, sizes());
     const why = typeof hit === 'string' ? hit : unmet(hit.skill, (a) => can(model, a)).length ? NEEDS : '';

@@ -130,6 +130,7 @@
         <button role="tab" data-tab="ask">Ask</button>
         <button role="tab" data-tab="cards">Flashcards</button>
         <button role="tab" data-tab="memory">Memory</button>
+        <button role="tab" data-tab="meetings">Meetings</button>
       </nav>
       <section id="history" class="lib-panel">
         <div class="row"><input id="history-q" type="search" placeholder="Search your questions and answers" aria-label="Search history"><button id="history-clear" class="secondary">Clear</button></div>
@@ -147,6 +148,17 @@
         <form id="memory-new" class="row"><select id="memory-type" aria-label="Type"></select><input id="memory-name" maxlength="80" placeholder="Name" aria-label="New file name"><input id="memory-aliases" placeholder="Also called, e.g. M." aria-label="New file aliases"><button class="secondary">New file</button></form>
         <span id="memory-err" class="err" hidden></span>
         <div id="memory-tree"></div>
+      </section>
+      <section id="meetings" class="lib-panel" hidden>
+        <p class="muted small">Calls you record and files you transcribe stay on this device. "You" is your microphone, "Them" is the call's tab. In chat, ask with /meetings and a question.</p>
+        <div class="row"><button id="meet-record" class="primary">● Record this tab</button><button id="meet-mic" class="secondary" hidden>Allow the microphone</button></div>
+        <p id="meet-state" class="muted small">Opens on the call's tab: Record here, Alt+Shift+M, or right-click the page → Record this meeting.</p>
+        <label class="row small">Transcribe a file <input id="meet-file" type="file" accept="audio/*,video/*" aria-label="Transcribe a file"></label>
+        <span id="meet-err" class="err" hidden></span>
+        <form id="meet-ask" class="row"><input id="meet-q" placeholder="Ask across meetings…" aria-label="Ask across meetings"><button class="secondary">Ask</button></form>
+        <div id="meet-answer" class="answer" hidden></div>
+        <ol id="meet-sources"></ol>
+        <div id="meet-list"></div>
       </section>
       <section id="cards" class="lib-panel" hidden>
         <p id="cards-count" class="muted"></p>
@@ -210,6 +222,7 @@
       <label class="toggle"><input type="checkbox" data-key="searchAnswers" data-default="true"><span>Answer beside search results</span></label>
       <label class="toggle"><input type="checkbox" data-key="linkPreview" data-default="true"><span>Link preview when you hold a link</span></label>
       <label class="toggle"><input type="checkbox" data-key="linksInActiveTab" data-default="true"><span>Links in answers open in the active tab when it is on the same site</span></label>
+      <label class="toggle"><input type="checkbox" data-key="meetingOffer" data-default="true"><span>Offer to record calls on Meet, Zoom and Teams (it never records by itself)</span></label>
       <label class="toggle"><input type="checkbox" data-key="useVoice" data-default="true"><span>Voice: Speak… and Read aloud</span></label>
       <label class="toggle"><input type="checkbox" data-key="replyButtons" data-default="true"><span>Reply button in email and chat boxes</span></label>
       <label class="toggle"><input type="checkbox" data-key="priceChip" data-default="true"><span>Price memory on product pages: show the lowest price I've seen for the same item, with Find it cheaper and price-drop alerts</span></label>

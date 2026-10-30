@@ -956,7 +956,7 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T7 done (commit 91c4816). T9 done (merged from t9-outputs). T8 in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T7 done (commit 91c4816). T8 done (commit bee6e5f). T9 done (merged from t9-outputs). T10 in progress; T11 in progress in worktree `../gallery-ext-t11`.
 
 | Slice | State |
 |---|---|
@@ -968,9 +968,9 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T5 | Done (c7852a7), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 252 unit tests pass; `tests/tabs.spec.mjs` 4/4 (no model, download by referrer included); every garden regression passes. Built: `act_my_tab` (always asked; never granted, never in Approve all or a plan; its fills are sensitive), `help` requests for challenge pages (a No fails with `HELP_REFUSED`; any answer closes the held tab), `background/devtools.ts` (one shared debugger attach, never on the person's tab), screencast Watch of the group's newest tab, the optional `downloads` permission as the setting, `GardenRun.files`, `Gardener.devtools`. No live-view e2e |
 | T6 | Done (d2d6e87), reviewed (0 Blockers, 3 Majors and 4 Minors fixed): 262 unit tests pass; `tests/chat.spec.mjs` 4/4 (1 `@slow` on the real model: reload during an answer → Interrupted → Retry); the `extension.spec` chat tests 5/5; `garden.spec` 4/4. New: `domain/chat.ts`, `pages/chat.ts` (moved out of `sidepanel.ts`), `ui/linkcard.ts`, the `hg-chat` store, the `chat:page` and `chat:link` menus, `openLink` (extension pages only), the `linksInActiveTab` setting, links in answers and Garden results, `chatReport` |
 | T7 | Done (91c4816), reviewed (0 Blockers, 1 Major and 4 Minors fixed): 270 unit tests pass; `tests/memory.spec.mjs` 2/2 (no model); the garden, plan, approvals, runlog and chat regressions pass. Built: `eg-memory` v4 (`entities`, `docs`); the `remember`, `doc_read` and `doc_write` tools with their `decide` cases; Library → Memory, editable; `@Name` anchors in the data part for garden and chat; the `Routine.for` template picker; doc and memory cards with Keep / Discard; `entityKeep` (keeps `by: 'model'`) |
-| T8 | Built, not yet reviewed: 279 unit tests pass (9 new in `garden-skills`); `tests/skills.spec.mjs` 2/2 (1 `@slow` on the real model, test runs and a routine run planted pinned with `plan`); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `chat.spec` 4/4, `memory.spec` 2/2. `hg-garden` v2. Deviations: `/name` in chat answers in the chat (method as instruction, files as `selection`, `ChatTurn.skillId`), so thumbs-down and corrections there are evidence; in Garden requests it becomes `{ kind: skill.work, request, skillId }`; the `improve` think lives in `skills.ts`, not `loop.ts`; `abilities.mjs skillEdit` (6 corrected skills, graded by `casePassed`): E2B 4/6, a pass at the threshold from one run, not yet copied into `model.ts`, so Suggest an edit stays off; `GardenRun.approvePlans` (an automatic plan yes pre-approves nothing; every reach and act is asked); a gardener's delete deletes its skills; extra handler `skillMark`; skill files take ≤ ⅓ of the data room memory leaves |
+| T8 | Done (bee6e5f), reviewed (0 Blockers, 1 Major and 3 Minors fixed): 279 unit tests pass; `tests/skills.spec.mjs` 2/2 (one `@slow` on the real model, planted with the `plan` ability: the routine's answer followed the method); every regression passes. Built: `hg-garden` v2 (`skills`), `domain/garden/skills.ts` (the `improve` think); a slash command in chat answers there with the chat model (method as instruction, files as the selection, the turn keeps `skillId`), and in Garden it makes the skill's work; evidence is thumbs-down, corrections typed after a skill's answer, and failed cases; `GardenRun.approvePlans`, `skillMark`, `Routine.skillId` → `routineWork`. `skillEdit` bench: E2B 4/6 (at the threshold; one run, default sampling), not set in `model.ts` (the owner's call) |
 | T9 | Done (eea5354, merged 5f61607), reviewed (0 Blockers, 2 Majors fixed): e2e 6/6 (2 `@slow`); merged suite 242 unit tests pass, build ok. `abilities.mjs` on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6, so no T9 ability is set, and decks are built by code. E4B not measured (no local copy; about 8 GB of disk free). Every research report is saved as a `brief`. Editing is on the output page |
-| T10 | Planned |
+| T10 | Built; review round 1 (2 Blockers, 3 Majors, 1 Minor) fixed, not re-reviewed: 287 unit tests pass (8 in `meeting`); `tests/meetings.spec.mjs` 4/4 (3 `@slow`; one checks the REC badge, the recording line after a reload and that closing the tab stops and saves); on real Whisper: fake mic "You" + audio file "Them" → both labels; Transcribe a file on an MP3); `extension.spec` live captions and voice 2/2, `chat` 4/4, `memory` 2/2, `garden` 4/4. Spike: a plain side panel click is refused by `tabCapture` ("Extension has not been invoked"), so the offer names only Alt+Shift+M and the `meet:record` menu; the panel's Record works when the toolbar opened the panel on that tab, else it says to use those. `abilities.mjs notes` on E2B: 5/6, a pass at the threshold from one run, not copied into `model.ts`, so meetings are transcript only. Deviations: the recorder keeps lines in the offscreen document until stop; notes reduce in code; meeting entity is the person's until model notes make it `by: 'model'`, unconfirmed; `Meetings/` docs are uncapped and split past 20 000 chars; Transcribe a file uses `transcribe` per 20 s window, not `liveStartFile` (faster than real time); ask across meetings embeds chunks per ask; chat's `/meetings <question>` puts the parts in the data |
 | T11 | Planned |
 | T12 | Planned |
 | T13 | Planned |
@@ -979,6 +979,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T8 | code review | 0 / 1 | Fixed: an automatic plan yes (the `auto` flag on `answerPlan`, from "Approve plans for this test") adds no approved URLs and no `fromPlan` acts. Minors fixed: `gardenerDelete` deletes its skills (and so pauses their routines); pruned test runs count as ended; `hg-chat` is opened without a version |
 | T7 | code review | 0 / 1 | Fixed: `doc_write` refuses to overwrite a person-written doc (`docWriteRefused`). Minors fixed: `anchorsIn` ignores email addresses; the template instruction is "How to do this:" without the entity's name; Remember after a draft edit keeps only the added lines (`addedLines`); `taintsAfter` replaces `privateRead`, so the worker decides taint |
 | T6 | code review | 0 / 3 | Fixed: the plan prefix goes only on a chat's first message; a save is one IndexedDB read-modify-write that merges turns, then `BroadcastChannel('hg-chat')` reloads other views; hover cards fetch nothing (host and warnings only), and "Read the page" fetches on click (the T6 plan text was rewritten to match). Minors fixed: the Plan gate checks the chat's own model; `sameSite` uses `site()`'s suffix list; `openLink` checks `isExtensionPage`; a streaming save doesn't redraw the list |
 | T5 | code review | 0 / 3 | Fixed: Take over and Show tab go to the borrowed tab first (`workTab`); a call that throws taints through the pure `failTaints` (`act_my_tab` always, `act` when on the gardener's sites); `isChallenge` only on short pages (under 600 chars) or interstitial titles, with Turnstile and invisible hCaptcha left out. Minors fixed: the help path releases the lock; Take over ungroups a tab only from the run's own group |
@@ -1163,3 +1164,20 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
   1. The draft textarea may lose the person's edits when the run is broadcast again.
   2. Corrections are offered only in a garden follow-up or Steer, not in chat. T8's thumbs-down evidence partly covers
      chat.
+
+**2026-10-30: T8 landed (commit bee6e5f).**
+- 279 unit tests pass; `tests/skills.spec.mjs` 2/2; every regression passes.
+- Regression found and fixed in the slice: the worker held `hg-chat` open, which blocked `deleteDatabase`. It now opens
+  and closes the database for each read, without a version.
+- Deviation, accepted: a slash command in chat answers in chat with the chat model instead of starting a gardener
+  run. In Garden it makes the skill's `plan` or `ask` work, as planned.
+- Review: 0 Blockers, 1 Major and 3 Minors fixed (see Review history). After the fix, "Approve plans for this test"
+  approves only the calls themselves: no URL joins `seen` as approved and no act is pre-approved.
+- `skillEdit` on E2B is 4/6, exactly the threshold, from one run with default sampling. Not set in `model.ts`; the
+  owner decides. Suggest 3 runs at temperature 0 before setting it.
+- From now on T10 builds in the main checkout and T11 builds in parallel in worktree `../gallery-ext-t11` (branch
+  `t11-connectors`). Both register a new module in `background/main.ts` (T10 `meetings`, T11 `mcp`), so expect a merge
+  there. `static/manifest.json` changes only in T10.
+- For T12: T8 already ships `Skill.on: boolean`, `Skill.needs?: Ability[]` and `by: 'person' | 'model' | 'preset'`
+  (skills.ts 31–32). T12 adds only `Routine.needs` and the `pin()` and turn-on checks. (My first T12 note in the reply
+  for T8 said these fields were missing; that was wrong.)

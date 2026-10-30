@@ -88,6 +88,12 @@
         "default": "Alt+Shift+L"
       },
       "description": "Live captions & translation for audio in this tab"
+    },
+    "record-meeting": {
+      "suggested_key": {
+        "default": "Alt+Shift+M"
+      },
+      "description": "Record the call in this tab with your microphone (press again to stop)"
     }
   },
   "options_page": "settings.html",

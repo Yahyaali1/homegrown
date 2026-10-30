@@ -11,7 +11,7 @@ runtime adapters and storage live outside `domain/`.
 
 - `audio.ts`: `resample`, `samplesOf`, `audible`, `isCaption`. Resample PCM to 16 kHz, decode samples from a
   `number[]` or base64 Float32, detect silence, and filter Whisper non-speech markers.
-- `captions.ts`: `Cue`, `jsonAfter`, `fromJson3`, `transcript`. Extract the JSON after a key (aware of
+- `captions.ts`: `Cue`, `jsonAfter`, `fromJson3`, `transcript`, `clock`. Extract the JSON after a key (aware of
   strings and brackets), parse YouTube json3 captions, and build a transcript with a `[m:ss]` mark about
   every 30 seconds.
 - `compare.ts`: `cosine`, `keywordScore`, `diffLines`, `diffText`. Embedding similarity, a keyword-overlap
@@ -22,6 +22,12 @@ runtime adapters and storage live outside `domain/`.
 - `chat.ts` (plan T6): `Chat`, `ChatTurn`, `Mode`, `modeModel`, `isLong`, `parseChat`, `interrupted`,
   `duplicate`, `upsertTurns`, `dropFrom`, `planFirst`, `titleOf`, `engineTurns`, `searchChats`, `highlightParts`, `questionBlock`, `splitThinking`,
   `chatReport`. The saved-chat record and its pure rules.
+- `meeting.ts` (plan T10): `Line` (`who?: 'You' | 'Them'`, `at`, `end`, `text`), `MEETING_HOSTS`, `isMeetingHost`
+  (a host or a `zoom.us` subdomain), `mergeLines` (time order; one speaker's lines within 2 s joined), `transcriptOf`
+  (`[m:ss] You: …`), `pieces` (≤ 20 000 chars at line ends), `meetingName`, `meetingPath`, `isMeetingPath`, `timeParts`
+  (20 minutes), `NOTES_PROMPT`, `parseNotes` (drops an owner the transcript doesn't name; "You" is the mic; "Them"
+  is no owner), `mergeNotes`, `notesBody` (action items as `- [ ]`), `itemsOf`, `checkItem`, `NO_NOTES`, `MEETINGS_ASK`, `meetingText` (failed windows counted), `leftCall`,
+  `newestChunks` (newest meetings first, the rest counted), `fileRefused` (over 100 MB or 2 hours).
 - `memory.ts` (plan T7): `Entity`, `Doc`, `ENTITY_TYPES`, `MEM` (limits), `parseEntity`, `parseDoc`, `pathOk`,
   `docRefused` (`Meetings/` and `Documents/` paths), `anchorsIn` (`@Name` or alias, confirmed only, ≤ 3), `reference`,
   `memoryParts` (anchors as data; a routine entity's template is instruction only when the person wrote it),

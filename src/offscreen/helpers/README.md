@@ -31,6 +31,14 @@ a `handlers` object, and `../engine.ts` adds these handlers to its command table
       `'transcribe'`. `audioUrl` plays an audio file instead of a captured tab (test path).
     - `handlers.liveStop()` returns `true`, or `false` when no session exists.
     - `handlers.livePause({paused})` returns `true`, or `false` when no session exists.
+  - Meetings (plan T10):
+    - `handlers.meetStart({streamId?, audioUrl?, mic?})` resolves `{mic}`. The tab (or `audioUrl`, the test path)
+      is "Them"; the mic (when granted to the extension) is "You". Each side goes through Whisper in 20 s windows,
+      one call at a time, with its start time (resampled to 16 kHz before it waits). The speech model loads before
+      it resolves, so a missing model fails the start. The tab track's `ended` broadcasts `meeting-ended`. One
+      recording at a time.
+    - `handlers.meetStop()` sends what is left of each window, waits for Whisper and resolves `{lines, failed}` (unmerged; `failed` counts windows Whisper failed on),
+      or `null`. `handlers.meetState()`.
 - `vision.ts` (Florence-2)
   - `IMAGE_READER`: the label `Florence-2`.
   - `readImage(blob, onProgress?)` returns `{description, text}`. `onProgress` receives model download

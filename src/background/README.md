@@ -14,6 +14,7 @@ It also owns these parts:
   and live captions,
 - gardeners (`garden.ts`): routines on alarms and a one-run queue.
 - outputs (`outputs.ts`, plan T9): the artifacts store, decks and cited answers across files.
+- meetings (`meetings.ts`, plan T10): record a call's tab and the mic, save the transcript under `Meetings/`.
 
 ## Interface
 
@@ -220,7 +221,11 @@ It also owns these parts:
   It also has the `onAnswer` hook. Plan T7 (extension pages only): `entityList`, `entitySave` (the person's save:
   `by: 'person'`, confirmed), `entityKeep` (confirms a gardener's file as it is, so its template stays data),
   `entityDelete`, `docList`, `docGet`, `docSave`, `docDelete`. Exports `confirmedEntities`, `rememberEntity`,
-  `docAt`, `writeDoc` (≤ 50 per gardener) and `deleteDocs` for the garden worker.
+  `docAt`, `writeDoc` (≤ 50 per gardener; `Meetings/` docs uncapped) and `deleteDocs` for the garden worker.
+  Plan T10: `memAsk({ question, scope: 'meetings' })` (extension pages only) answers from the `Meetings/` docs: chunks
+  embedded at ask time, ranked with `rank`, the question in the instruction and the parts in the data, cited by
+  meeting and time; `meetPassages({ question })` gives the same parts to chat's `/meetings`. Exports `meetingDocs`,
+  `entityById`, `putEntity` (keeps `by` and `confirmed`) and `deleteRecord` for `meetings.ts`.
 - `monitors.ts` handlers: `watchPage`, `unwatch`, `listMonitors`, `checkNow`, `schedule`, `unschedule`,
   `runScheduleNow`.
 - `tabs.ts` handlers: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`. Exports `tabText(tabId, cap)` and `tabPage` (text and the URL read at; `read_my_tab` refuses a moved tab).
@@ -240,6 +245,21 @@ It also owns these parts:
     `parseSettings`. An English target uses Whisper `translate`. Other targets use `transcribe`, then the
     LLM translates each line.
   - Starts from the menu item `live:start` or the keyboard command `live-captions`.
+- `meetings.ts` (plan T10). Handlers, extension pages only: `meetStart({ tabId, streamId? })`, `meetStop`,
+  `meetSave({ title, lines })` (Transcribe a file; lines checked here), `meetRename`, `meetDelete`, `meetCheck` (ticks an
+  action item, keeping who wrote the notes); `meetState` (the recording in `chrome.storage.session` `meeting`).
+  - A recording starts only from an extension invocation: the menu item `meet:record` or the command
+    `record-meeting` (Alt+Shift+M; a second press stops), or the side panel's Record when the toolbar opened the
+    panel on that tab (a plain side panel click is refused by `tabCapture`, measured in `tests/meetings.spec.mjs`).
+  - On stop the offscreen recorder hands back its lines; they are merged (`mergeLines`) and saved as
+    `Meetings/<name>.md` (in parts past 20 000 chars) with an `event` entity (`fields.meeting`, `started`,
+    `length`, `doc`). With a model that `can('notes')`, the notes (map per 20 minutes, reduce in code) replace its
+    body, and it becomes `by: 'model'`, unconfirmed until kept. Without, the body says why.
+  - Every stop path runs `end` once: Stop, a second command or menu press, the tab closing (`tabs.onRemoved`), the
+    tab going to another host (`leftCall`), or the recorder's `meeting-ended` (the tab's track ended). The toolbar
+    badge says `REC` while recording. Windows Whisper failed on are counted at the top of the saved transcript.
+  - `meetState` gives a content script only `{ recording, mic }` for its own tab.
+  - Tells the tab `{ type: 'meeting', recording, mic?, error? }`. `self.meetStartFile` is the test path.
 - `reader.ts` handler: `openReader({url, replace})`. Opens a URL in `reader.html`. With `replace`, it opens
   the reader in the sender's tab. It adds the menu items `reader:link` and `reader:page` for PDF URLs, and
   its `init` handles their clicks.
@@ -247,7 +267,7 @@ It also owns these parts:
 ## Invariants
 
 - The handlers of all modules are merged into one namespace with `Object.assign`. The order is reader,
-  web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden. A duplicate command name silently replaces
+  web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs, meetings. A duplicate command name silently replaces
   the earlier one.
 - Routing: `target:'bg'` goes to the worker and `target:'engine'` to the offscreen document. Engine
   broadcasts have `source:'engine'`.

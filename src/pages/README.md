@@ -116,7 +116,11 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     mission keeps its id through a run, so Save updates it.
 - `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
   library", flashcard spaced repetition, Memory (plan T7: folders by type, then Documents/<gardener>; each file
-  edits in place; a gardener's proposed file shows Keep / Discard) and the savings meter. Both pages link to
+  edits in place; a gardener's proposed file shows Keep / Discard; `Meetings/` docs in their own folder), Meetings
+  (plan T10: Record / Stop for the active tab, Allow the microphone, Transcribe a file decoded here and sent in 20 s
+  windows through `transcribe`, Ask across meetings, and each meeting with its notes, checklist, transcript, Rename,
+  Keep and Delete) and the savings meter. Chat's `/meetings <question>` (no skill of that name) puts the closest
+  transcript parts in the data. Both pages link to
   Outputs. `openMemory(id)` opens a file or document (a run's `doc` or `memory` card).
 - `outputs.ts` (`outputs.html`, plan T9): with `?id=`, one artifact from `bg('artifactGet')`; without, the list
   (`artifactList`, Delete), "Brand kit from a site" (`brandRead`) and "Write a brief".
@@ -132,7 +136,7 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - `settings.ts` (`settings.html`, and the Settings tab of the side panel):
   - Switches: every `[data-key]` checkbox whose key is in `SWITCHES` (`domain/settings.ts`) is bound to
     `chrome.storage.sync`. Both `settings.html` and `sidepanel.html` have a checkbox for every switch:
-    `toolbar`, `fab`, `ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `linkPreview`, `linksInActiveTab`,
+    `toolbar`, `fab`, `ghostText`, `gistMargins`, `autoAltText`, `searchAnswers`, `linkPreview`, `linksInActiveTab`, `meetingOffer`,
     `useVoice`, `replyButtons`, `priceChip` (on by default) and `shoppingSense`.
   - The `translateTo` language, sites that are turned off, and savings.
 - `reader.ts` (`reader.html`): shows a document as DOM in `#doc`, so the in-page UI works on it. Input

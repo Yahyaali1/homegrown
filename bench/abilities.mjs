@@ -20,6 +20,11 @@
 // product's `improveThink` and `proposalOf` write the edit; the edited method then answers both cases. A case passes
 // when the edit parses, the corrected case's answer holds its expected words and the passing case's still does
 // (`casePassed`, code). Pass: ≥ 4/6.
+//
+// notes (T10): 6 meeting transcripts ("You" and "Them" lines, as a recording saves them) with known decisions and
+// owners. The product's NOTES_PROMPT and parseNotes. A case passes when the reply parses, every known decision is
+// found (by its words, in a decision) and no action item names an owner the transcript doesn't (an owner parseNotes
+// had to drop). Pass: ≥ 5/6.
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, engine, ROOT } from '../tests/harness.mjs';
@@ -28,11 +33,12 @@ import { CITES, DECKS, EVIDENCE } from './output-fixtures.mjs';
 import { DECK_MAX, tableText, writeDeck } from '../src/domain/outputs.ts';
 import { citeFiles } from '../src/domain/reading.ts';
 import { reportPrompt } from '../src/domain/research.ts';
-import { contextChars, defang, grounded } from '../src/domain/text.ts';
+import { contextChars, defang, grounded, parseJsonObject } from '../src/domain/text.ts';
 import { casePassed, improveThink, proposalOf } from '../src/domain/garden/skills.ts';
+import { NOTES_PROMPT, parseNotes } from '../src/domain/meeting.ts';
 
 const ABILITY = process.argv[2];
-const SUITES = { plan, deck, cite, evidence, skillEdit };
+const SUITES = { plan, deck, cite, evidence, skillEdit, notes };
 if (!SUITES[ABILITY]) {
   console.log(`Usage: node bench/abilities.mjs <${Object.keys(SUITES).join('|')}>`);
   process.exit(1);
@@ -239,4 +245,30 @@ async function skillEdit() {
       ...(casePassed(kept, c.pass.expect) ? [] : [`passing case lost "${c.pass.expect}"`]),
     ] };
   }, 4, '≥ 4/6 edits that fix the failing case and keep the passing ones');
+}
+
+// ---- T10 notes: each transcript's decisions by their key words; any owner the transcript doesn't name is invented ----
+function meetings() {
+  return [
+    { id: 'launch', t: '[0:00] You: Morning. We need to settle the launch date.\n[0:20] Them: Marketing says the page is ready. Priya can finish the press kit by Monday.\n[0:41] You: Then we launch on March 3. Priya, you own the press kit.\n[1:02] Them: Agreed. Leo will book the venue.', decisions: [['march', '3']], owners: ['Priya', 'Leo'] },
+    { id: 'budget', t: '[0:00] Them: The cloud bill doubled last month.\n[0:20] You: Let us cap spending at 5,000 a month from now on.\n[0:40] Them: Fine by me. Omar will set the alert.\n[1:00] You: I will tell finance.', decisions: [['5,000', '5000', 'cap']], owners: ['Omar', 'You'] },
+    { id: 'hire', t: '[0:00] You: We saw three designers this week.\n[0:20] Them: Ana was the strongest by far.\n[0:40] You: Then we offer Ana the role. Kim, please send the offer today.\n[1:00] Them: Will do.', decisions: [['ana']], owners: ['Kim'] },
+    { id: 'vendor', t: '[0:00] Them: Two quotes came back for the printers.\n[0:20] You: Inkly is cheaper and ships faster.\n[0:40] Them: Then we go with Inkly and drop the old vendor.\n[1:00] You: Sam, cancel the old contract this week.', decisions: [['inkly']], owners: ['Sam'] },
+    { id: 'standup', t: '[0:00] You: Quick standup. The login bug is fixed.\n[0:20] Them: The release can go out Thursday then.\n[0:40] You: Yes, we ship on Thursday. Dev will write the release notes.\n[1:00] Them: And we move the retro to Friday.', decisions: [['thursday'], ['friday', 'retro']], owners: ['Dev'] },
+    { id: 'office', t: '[0:00] Them: The lease ends in June.\n[0:20] You: We stay remote for now and do not renew the lease.\n[0:40] Them: Then we need a monthly meetup. Rosa can organise it.\n[1:00] You: Good. Rosa owns the meetup.', decisions: [['lease', 'renew', 'remote']], owners: ['Rosa'] },
+  ];
+}
+
+async function notes() {
+  return suite(meetings(), async (c) => {
+    const raw = parseJsonObject(await ask(NOTES_PROMPT, c.t));
+    const n = parseNotes(raw, c.t);
+    if (!n) return { fails: ['did not parse'] };
+    const decisions = n.decisions.join('\n').toLowerCase();
+    const missed = c.decisions.filter((words) => !words.some((w) => decisions.includes(w.toLowerCase())));
+    const asked = (Array.isArray(raw.actions) ? raw.actions : []).map((a) => (typeof a?.owner === 'string' ? a.owner.trim() : '')).filter(Boolean);
+    const kept = n.actions.filter((a) => a.owner).length;
+    const invented = asked.filter((o) => !/^them$/i.test(o)).length - kept;
+    return { notes: n, fails: [...missed.map((w) => `missed the decision about ${w[0]}`), ...(invented > 0 ? [`${invented} invented owner(s): ${asked.join(', ')}`] : [])] };
+  }, 5, '≥ 5/6 with every decision found and no invented owner');
 }

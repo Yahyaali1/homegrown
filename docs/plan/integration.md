@@ -47,6 +47,12 @@ Done after the group agents report. Owner: the main session.
 - T8 (plan T): `static/sidepanel.html` gains `#slash` (skill completion above the chat input) and Garden's Skills card
   (`#skills`, `#garden-skills`). `hg-garden` is v2 (`skills`); every test and bench that plants runs now opens
   `hg-garden` without a version. `domain/chat.ts` `ChatTurn` gains `skillId?`. DONE.
+- T10 (plan T): `background/main.ts` registers `meetings.ts` (one import, one `modules` entry; its `menus()` adds
+  `meet:record` and its `init` routes the `record-meeting` command). `static/manifest.json` adds the 4th command
+  `record-meeting` (Alt+Shift+M). `content/main.ts` adds the `meetoffer` feature. `domain/settings.ts` adds the
+  `meetingOffer` switch (on), with a toggle in `sidepanel.html` and `settings.html`. `static/sidepanel.html` and
+  `static/library.html` gain Library → Meetings (`#meetings`, `#meet-*`). `domain/captions.ts` exports `clock`.
+  No new store (T7's `docs` and `entities`). DONE.
 
 ## Known issues
 

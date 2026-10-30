@@ -12,7 +12,7 @@ The 19 on-page feature modules of the content script. Each one exports `install(
 
 [`../main.ts`](../main.ts) installs the modules in this order: writing, ghost, replies, jargon, forms,
 youtube, reading, translate, scrollscrape, images, search, links, tabs, memory, voice, livecaptions, missions,
-palette, gardenlock.
+palette, gardenlock, meetoffer.
 
 ## Interface
 
@@ -170,6 +170,13 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
     text size, Transcript, Copy, Download and Stop (`liveStop`).
   - Gates: `captionLang` selects the caption language.
   - Guard: top frame only.
+- `meetoffer.ts` (plan T10)
+  - On Meet, Zoom (`*.zoom.us`) and Teams pages (`isMeetingHost`), a small bar: "Record this call? Press
+    Alt+Shift+M, or right-click the page → Record this meeting." Text only; it never records.
+  - The worker's `{type:'meeting'}` messages turn it into the recording line, the saved line or an error, on any page.
+    On install it asks `meetState`: a page reloaded mid-call shows the recording line, not the offer. While recording,
+    × folds the line to a ● that opens it again.
+  - Gates: `meetingOffer` (on). Guard: top frame only. Sends no commands.
 - `missions.ts`
   - Exports: `productOf(doc, url)` and `PageProduct` (JSON-LD product data).
   - Page action: "Mission…", added at the front of the list. It asks for a goal with `window.prompt`.

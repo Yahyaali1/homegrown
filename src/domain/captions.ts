@@ -32,7 +32,7 @@ export function fromJson3(body: string): Cue[] {
     .filter((c) => c.text);
 }
 
-const clock = (ms: number) => {
+export const clock = (ms: number) => {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };

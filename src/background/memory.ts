@@ -3,9 +3,12 @@
 // chrome.storage.local 'savings').
 import { engine, ask } from './engine.ts';
 import { cosine, diffLines, keywordScore } from '../domain/compare.ts';
+import { defang } from '../domain/text.ts';
 import { forGardener, MEMORY_VERSION, NOTE_CHARS, parseNote, upgradeMemory, type Note } from '../domain/garden/notes.ts';
 import { docWriteRefused, ENTITY_TYPES, MEM, parseDoc, parseEntity, pathOk, type Doc, type Entity } from '../domain/memory.ts';
 import { isExtensionPage } from './pagerequest.ts';
+import { isMeetingPath, MEETINGS_ASK, newestChunks } from '../domain/meeting.ts';
+import { chunks } from '../domain/reading.ts';
 
 const HISTORY_CAP = 2000;
 const NOTES_CAP = 200; // per gardener; over it, its oldest model notes go (the person's never do)
@@ -131,13 +134,24 @@ export async function writeDoc(gardenerId: string | undefined, path: string, tex
   const old = id ? all.find((d) => d.id === id) : all.find((d) => d.gardenerId === gardenerId && d.path === path);
   const refused = docWriteRefused(old, by);
   if (refused) throw new Error(refused);
-  if (!old && all.filter((d) => d.gardenerId === gardenerId).length >= MEM.docs) throw new Error(`A gardener keeps at most ${MEM.docs} documents.`);
+  // ponytail: meetings aren't capped; add a cap (or archive) if a library of hundreds of calls gets slow.
+  if (!old && !isMeetingPath(path) && all.filter((d) => d.gardenerId === gardenerId && !isMeetingPath(d.path)).length >= MEM.docs) throw new Error(`A gardener keeps at most ${MEM.docs} documents.`);
   if (all.some((d) => d.gardenerId === gardenerId && d.path === path && d.id !== old?.id)) throw new Error('Another document has that path.');
   const doc = parseDoc({ v: 1, id: old?.id ?? crypto.randomUUID(), path, text, by, at: Date.now(), ...((old?.gardenerId ?? gardenerId) && { gardenerId: old?.gardenerId ?? gardenerId }) });
   if (!doc) throw new Error(`A document has a path of up to ${MEM.path} characters and up to ${MEM.doc} characters of text.`);
   await put('docs', doc);
   return doc;
 }
+
+/** Every document whose path is under Meetings/ (plan T10). */
+export const meetingDocs = async (): Promise<Doc[]> => (await docs()).filter((d) => !d.gardenerId && isMeetingPath(d.path));
+export const entityById = async (id: string): Promise<Entity | null> => parseEntity(await done((await store('entities')).get(id)));
+/** Stores a checked entity as it is (its `by` and `confirmed` kept). */
+export async function putEntity(e: Entity): Promise<void> {
+  if (!parseEntity(e)) throw new Error('That memory file isn’t valid.');
+  await put('entities', e);
+}
+export const deleteRecord = async (name: 'entities' | 'docs', id: string) => void (await done((await store(name, 'readwrite')).delete(id)));
 
 /** Every document of a deleted gardener. */
 export async function deleteDocs(gardenerId: string): Promise<void> {
@@ -228,6 +242,29 @@ export async function onAnswer(raw: unknown, r: { text: string; userText?: strin
   }
 }
 
+// ---- ask across meetings (plan T10) ----
+
+const MEETING_CHUNKS = 400; // ponytail: transcripts are embedded per ask; store vectors on docs if this gets slow
+
+/** "Meetings/2026-10-30 14:05 Sync (part 2).md" → "2026-10-30 14:05 Sync". */
+const meetingOf = (path: string) => path.replace(/^Meetings\//, '').replace(/( \(part \d+\))?\.md$/, '');
+
+/** The transcript parts closest to a question, numbered for citing by meeting and time; '' when there are none. */
+async function meetingPassages(question: string): Promise<{ data: string; sources: { n: number; title: string; at: string; id: string }[]; left: number }> {
+  const { items, left } = newestChunks(await meetingDocs(), MEETING_CHUNKS,
+    (d) => chunks(d.text, 800).map((text) => ({ id: d.id, title: meetingOf(d.path), at: /\[(\d+:\d\d)\]/.exec(text)?.[1] ?? '', text, vec: null as number[] | null })));
+  if (!items.length) return { data: '', sources: [], left };
+  const vecs = await embed(items.map((i) => i.text)).catch(() => []);
+  items.forEach((i, k) => (i.vec = vecs[k] ? Array.from(vecs[k]) : null));
+  const scored = (await rank(question, items, (i) => i.text)).slice(0, 5);
+  return {
+    data: scored.map(({ i }, n) => `[${n + 1}] ${i.title}${i.at ? ` at ${i.at}` : ''}\n${defang(i.text)}`).join('\n\n'),
+    sources: scored.map(({ i }, n) => ({ n: n + 1, title: i.title, at: i.at, id: i.id })),
+    left,
+  };
+}
+const NO_MEETINGS = 'No meetings yet. Record a call or transcribe a file first.';
+
 export const handlers = {
   // Typed memory and Documents: private, so extension pages only. A person's save makes the file theirs and confirmed.
   async entityList(_: unknown, sender?: chrome.runtime.MessageSender) {
@@ -275,6 +312,12 @@ export const handlers = {
     await done((await store('docs', 'readwrite')).delete(String(id)));
     return true;
   },
+  /** Chat's `/meetings question`: the closest transcript parts as data, for the chat's own model. */
+  async meetPassages({ question }: { question: string }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    const p = await meetingPassages(String(question));
+    return p.data ? p : { ...p, empty: NO_MEETINGS };
+  },
   async memHistory({ q = '', limit = 200 }: { q?: string; limit?: number }) {
     const ql = q.toLowerCase();
     return (await all('history')).reverse().filter((h) => !ql || `${h.title} ${h.ask} ${h.answer} ${h.url}`.toLowerCase().includes(ql)).slice(0, limit);
@@ -307,8 +350,15 @@ export const handlers = {
     const best = items.map((i) => ({ url: i.url, title: i.title, score: cosine(q, i.vec!) })).sort((a, b) => b.score - a.score)[0];
     return best && best.score > SIMILAR ? best : null;
   },
-  /** Ask your library: an answer from saved pages and highlights, citing them. */
-  async memAsk({ question }: { question: string }) {
+  /** Ask your library: an answer from saved pages and highlights, citing them. `scope: 'meetings'` asks the transcripts. */
+  async memAsk({ question, scope }: { question: string; scope?: 'meetings' }, sender?: chrome.runtime.MessageSender) {
+    if (scope === 'meetings') {
+      mine(sender); // transcripts are private; they go in the data part only
+      const p = await meetingPassages(question);
+      if (!p.data) return { answer: NO_MEETINGS, sources: [] };
+      const answer = await ask(`${MEETINGS_ASK}\nQuestion: ${question}`, p.data);
+      return { answer: p.left ? `${answer}\n\n(Only the newest meetings were searched; ${p.left} older ${p.left === 1 ? 'one was' : 'ones were'} left out.)` : answer, sources: p.sources };
+    }
     const items: (KbEntry | Highlight)[] = [...(await withVectors('kb')), ...(await withVectors('highlights'))];
     if (!items.length) return { answer: 'Your library is empty. Run a task on a page or save a highlight first.', sources: [] };
     const scored = (await rank(question, items, (i) => i.embedText)).slice(0, 5);
