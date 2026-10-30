@@ -46,6 +46,7 @@
         <div id="long-chat" class="attachment" role="status" hidden></div>
         <div id="attached" class="attachment" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" type="button" aria-label="Remove selected text">×</button></div>
         <div id="attached-image" class="attachment" hidden><img id="image-preview" alt="Attached image"><span class="muted">Image attached</span> <button id="image-clear" type="button" aria-label="Remove image">×</button></div>
+        <ul id="slash" class="list" aria-label="Skills" hidden></ul>
         <form id="chat-form" class="composer">
           <textarea id="chat-input" rows="2" placeholder="Message the model…" aria-label="Message"></textarea>
           <div class="composer-bar">
@@ -103,6 +104,7 @@
       <ul id="garden-requests" class="list tray" aria-live="polite"></ul>
       <h3>Gardeners</h3>
       <ul id="gardener-list" class="list"></ul>
+      <details id="skills" class="card"><summary>Skills</summary><div id="garden-skills" class="stack"></div></details>
       <details id="gardener-add" class="card">
         <summary>Add a gardener</summary>
         <form id="gardener-form" class="stack">

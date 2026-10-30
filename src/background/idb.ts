@@ -1,7 +1,7 @@
 // A small IndexedDB helper for the worker's own databases (out of content scripts' reach, unlike chrome.storage).
 
 /** Opens `name` at `version`; `upgrade` gets the old version, so each step runs once. */
-export function open(name: string, version: number, upgrade: (db: IDBDatabase, oldVersion: number) => void): Promise<IDBDatabase> {
+export function open(name: string, version: number | undefined, upgrade: (db: IDBDatabase, oldVersion: number) => void): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const r = indexedDB.open(name, version);
     r.onupgradeneeded = (e) => upgrade(r.result, e.oldVersion);

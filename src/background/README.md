@@ -78,6 +78,16 @@ It also owns these parts:
   requestId }[] }`), `runMessage` (`{ id, text, steer }`), `runSeen` (`{ id }`), `runRetry` (`{ id, step }`; refused on a helper), `runResumeAll` (`{ id }`: a parent's failed and stopped
   helpers queued again; an ended parent waits on them again), `grantList` (`{ gardenerId? }`),
   `grantRevoke` (`{ gardenerId, tool, host, argsKey }`).
+  - Skills (plan T8): `skillList` (a test case whose run ended gets code's `verdict`), `skillSave` (new skills are the
+    person's and on; a changed method is a new version; `by`, `needs`, history and `proposed` stay the worker's; on
+    with needs the gardens model lacks is refused), `skillDelete` (pauses the routines that follow it),
+    `skillEvidence`, `skillPropose` (one `improve` think, only with `can(model, 'skillEdit')`; stored as `proposed`),
+    `skillAccept` (`{ id, accept }`), `skillTest` (`{ id, gardenerId?, approvePlans? }`: one queued hand run per case;
+    refused when off, needs unmet, or the model can't take the skill's work), `skillMark` (`{ id, k, pass }`).
+    `gardenRun` turns a request `/name rest` into the skill's work; `routineSave` takes `skillId` (plan or ask work
+    only). `turn` reads the run's skill at each start: `skillRefusal` fails a run whose skill is gone, off, another
+    gardener's or needs what the pin lacks; a test run with `approvePlans` answers its plan yes with `answerPlan`.
+    The worker also opens `hg-chat` v1 to read chat evidence.
   - Edited approvals (`parseEdit`): only an `approve` for `act`, `draft` or `notify` without `noEdit`, only with
     `yes` (`always` would grant the original call), args parsed again with `parseArgs` and stored as `answer.args`.
     The loop checks the edited call as a new call; the `call` action names its answer (`answered`), which `call`
@@ -327,7 +337,7 @@ It also owns these parts:
     (each `{v: 1, …}`, checked by `parseRecipe` on every read, at most 50).
   - `session`: the pending side-panel request (`pending`), `notifUrls`, `liveMissions`, `liveGroups`
     (`Record<groupId, { runId, windowId? }>`: tab groups of live runs, closed at worker start).
-- IndexedDB `hg-garden` v1: `gardeners`, `routines`, `runs` (indexes `gardenerId`, `routineId`, `status`; the newest
+- IndexedDB `hg-garden` v2 (`upgradeGarden`): v2 adds `skills` (keyed by `id`, `parseSkill`); v1: `gardeners`, `routines`, `runs` (indexes `gardenerId`, `routineId`, `status`; the newest
   30 per gardener kept), `snapshots` (`<routineId>\n<url>` → `{ text, prev, runId }`; an event routine's page check
   `<routineId>\nevent <url>` → `{ text }`).
 - IndexedDB `hg-outputs` v1 (store `artifacts`, keyed by `id`: `{ v: 1, id, kind, title, data, runId?, chatId?, at }`,

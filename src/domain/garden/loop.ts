@@ -11,14 +11,16 @@ import { describe } from '../scrape/scenario.ts';
 import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
 import { notesBlock, type Note } from './notes.ts';
 import { memoryParts, type Entity } from '../memory.ts';
+import { skillParts, type Skill } from './skills.ts';
 
 /**
  * `notes`: the gardener's notes the worker retrieved, best first; as many as fit go into the data, never the prompt.
  * `earlier`: a follow-up's earlier run (`earlierOf`), which starts its data; `earlierTainted`: that run is tainted
  * now (read fresh: a retry may have tainted it since), so a think that reads it taints this run first.
  * `anchors`: the confirmed entities the request names with `@`; `forEntity`: the routine's entity (`Routine.for`).
+ * `skill`: the skill the work names (`work.skillId`), read at think time.
  */
-export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[]; earlier?: string; earlierTainted?: boolean; anchors?: Entity[]; forEntity?: Entity }
+export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[]; earlier?: string; earlierTainted?: boolean; anchors?: Entity[]; forEntity?: Entity; skill?: Skill }
 
 export type Action =
   /**
@@ -276,17 +278,23 @@ const budget = (run: GardenRun) => contextChars(run.maxTokens!);
 /**
  * A think whose fixed part fits; the data is cut to the rest, so the engine never cuts. The person's unused Steer
  * messages are their own words, so they end the instruction part. With `ctx`, memory joins: anchors (and a template
- * a gardener wrote) start the data, a template the person wrote ends the instruction; either taints the run.
+ * a gardener wrote) start the data, a template the person wrote ends the instruction; either taints the run. A skill's
+ * method follows the gardener's instructions; its files are data.
  */
 function think(run: GardenRun, purpose: Turn['purpose'], prompt: string, data: string, taint = false, ctx?: Ctx): Action {
   const mem = ctx ? memoryParts(ctx.anchors, ctx.forEntity) : { instruction: '', data: '' };
+  const skill = ctx?.skill ? skillParts(ctx.skill) : { instruction: '', data: '' };
+  if (skill.instruction) prompt += `\n\n${skill.instruction}`;
   if (mem.instruction) prompt += `\n\n${mem.instruction}`;
   const steer = (run.inbox ?? []).filter((m) => m.steer && !m.usedAt);
   if (steer.length) prompt += `\n\n${steer.map((m) => `The person adds: ${m.text}`).join('\n')}`;
   const room = budget(run) - prompt.length;
   if (room < 0) return { fail: TOO_LONG };
   // ponytail: memory takes up to a third of the room ahead of the rest, so the data's tail is what gets cut.
-  if (mem.data) data = `${mem.data.slice(0, Math.floor(room / 3))}\n\n${data}`;
+  const memData = mem.data.slice(0, Math.floor(room / 3));
+  // ponytail: skill files get a third of what memory left, ahead of the rest; a long file is cut at its tail.
+  const files = skill.data.slice(0, Math.floor((room - memData.length) / 3));
+  data = [memData, files, data].filter(Boolean).join('\n\n');
   taint ||= !!(mem.instruction || mem.data);
   return { think: { purpose, prompt, data: data.slice(0, room), ...(purpose === 'word' ? {} : { sampling: GREEDY }), ...(taint && { taint: true as const }),
     ...(steer.length && { steer: steer.map((m) => m.id) }) } };
@@ -446,9 +454,11 @@ function planned(run: GardenRun, ctx: Ctx, request: string): Action {
 /**
  * The person's answer to plan request `q`. No: the run stops. Yes, with the calls as edited (or as proposed): each is
  * parsed again; planned reads join `seen` as approved; each planned act or acting collect that isn't sensitive now
- * gets a yes bound to its step, tool and key (`fromPlan`). Nothing else is pre-approved. Returns why it can't be taken.
+ * gets a yes bound to its step, tool and key (`fromPlan`). Nothing else is pre-approved. `auto`: a yes nobody read (a
+ * skill test's "Approve plans"): nothing is pre-approved, so every reach and act is asked as usual. Returns why it
+ * can't be taken.
  */
-export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 'no', edited: unknown, now: number): string | null {
+export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 'no', edited: unknown, now: number, auto = false): string | null {
   if (value === 'no') {
     q.answer = { value, at: now };
     Object.assign(run, { status: 'stopped', endedAt: now });
@@ -459,12 +469,13 @@ export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 
   if (!calls) return `A plan is 1 to ${max} calls to the listed tools, each with valid arguments.`;
   q.answer = { value, at: now };
   run.plan = calls;
+  run.status = 'queued';
+  if (auto) return null;
   run.seen = addSeen(run.seen, calls.filter((c) => c.tool === 'read_page').map((c) => String(c.args.url)), 'approved');
   calls.forEach((c, j) => {
     const a = planCovers(c.tool) && approveRequest(run, ctx, j, c.tool, c.args);
     if (a && !a.sensitive) run.requests.push({ ...a, id: `${q.id}.${j}`, shownAt: now, answer: { value: 'yes', at: now }, fromPlan: true });
   });
-  run.status = 'queued';
   return null;
 }
 

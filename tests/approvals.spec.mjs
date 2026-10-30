@@ -45,7 +45,7 @@ async function bg(cmd, args = {}) {
 /** Puts queued, pinned plan runs straight into the worker's store, then wakes the queue. */
 async function plant(...runs) {
   await panel.evaluate(async (runs) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
     const t = d.transaction('runs', 'readwrite');
     for (const run of runs) t.objectStore('runs').put(run);
     await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));

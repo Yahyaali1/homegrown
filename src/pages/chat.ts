@@ -18,6 +18,8 @@ import { chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, h
 import * as idb from '../background/idb.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
 import { anchorsIn, reference, type Entity } from '../domain/memory.ts';
+import { NEEDS, skillParts, slashOf, unmet, type Skill } from '../domain/garden/skills.ts';
+import { fuzzy } from '../domain/reading.ts';
 
 interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
 interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
@@ -385,18 +387,39 @@ $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   const tpl = template();
   if (!typed && !imageData) return;
   input.value = '';
+  slashList.hidden = true;
+  // `/name rest`: the skill's method is the instruction, its files ride in the data. Off, or needing what the chat's
+  // model lacks, it is refused.
+  const hit = !tpl && typed.startsWith('/') ? slashOf(typed, (skills = await bg<Skill[]>('skillList').catch(() => []))) : null;
+  if (hit) {
+    const model = chat?.model || (await sync()).taskModels.chat || modeModel(nextMode, sizes());
+    const why = typeof hit === 'string' ? hit : unmet(hit.skill, (a) => can(model, a)).length ? NEEDS : '';
+    if (why) return void ((input.value = typed), addMessage('error', why));
+  }
+  const skill = hit && typeof hit === 'object' ? { ...skillParts(hit.skill), id: hit.skill.id, rest: hit.rest || hit.skill.title } : null;
   // A short plain message may be a settings request ("use E4B for missions"): the model decides, you confirm.
-  if (!tpl && !imageData && attached === null && typed.length < 240 && (await proposeSetting(typed))) return;
-  const text = tpl ? tpl.build(typed, labOption.value) : typed || 'Describe this image.';
+  if (!skill && !tpl && !imageData && attached === null && typed.length < 240 && (await proposeSetting(typed))) return;
+  const text = skill ? [skill.instruction, skill.rest].filter(Boolean).join('\n\n') : tpl ? tpl.build(typed, labOption.value) : typed || 'Describe this image.';
   const label = [tpl ? `${tpl.title}: ${typed}` : typed || 'Describe this image.', attached !== null ? `“${excerpt(attached)}”` : '', imageData ? '(image)' : ''].filter(Boolean).join('\n');
   // `@Name` memory files ride in the data part (the selection), never in the typed instruction.
   const refs = typed.includes('@') ? anchorsIn(typed, await bg<Entity[]>('entityList').catch(() => [])).map(reference).join('\n\n') : '';
-  const data = [attached ?? '', refs].filter(Boolean).join('\n\n');
-  const turn: ChatTurn = { role: 'user', text, label, at: Date.now(), ...((attached !== null || refs) && { selection: data }) };
+  const data = [attached ?? '', refs, skill?.data ?? ''].filter(Boolean).join('\n\n');
+  const turn: ChatTurn = { role: 'user', text, label, at: Date.now(), ...((attached !== null || data) && { selection: data }), ...(skill && { skillId: skill.id }) };
   const image = imageData ?? undefined;
   attach(null);
   setImage(null);
   void send(turn, { temperature: Number($<HTMLInputElement>('#lab-temp').value), topK: Number($<HTMLInputElement>('#lab-topk').value) }, image);
+};
+// Slash completion: typing `/` lists the skills that are on, best match first; a click fills in `/name `.
+let skills: Skill[] = [];
+const slashList = $('#slash');
+input.oninput = async () => {
+  const m = /^\/([a-z0-9-]*)$/.exec(input.value);
+  if (m && input.value === '/') skills = await bg<Skill[]>('skillList').catch(() => []);
+  const found = m ? skills.filter((x) => x.on).map((x) => ({ x, f: fuzzy(x.name, m[1]!) })).filter((y) => y.f).sort((a, b) => b.f!.score - a.f!.score).slice(0, 6) : [];
+  slashList.hidden = !found.length;
+  slashList.replaceChildren(...found.map(({ x }) => h('li', {}, h('button', { type: 'button', className: 'ghost grow', textContent: `/${x.name}`, title: x.title,
+    onclick: () => ((input.value = `/${x.name} `), (slashList.hidden = true), input.focus()) }), h('span', { className: 'muted small', textContent: x.title }))));
 };
 input.onkeydown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) ($<HTMLFormElement>('#chat-form').requestSubmit(), e.preventDefault());

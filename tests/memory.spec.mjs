@@ -69,7 +69,7 @@ test('a planned doc_write ends with plan.md under Documents/Scribe and a doc car
     turns: [], steps: [], requests: [], seen: [], tainted: false,
   };
   await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
     const t = d.transaction('runs', 'readwrite');
     t.objectStore('runs').put(run);
     await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));

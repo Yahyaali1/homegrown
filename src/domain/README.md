@@ -140,6 +140,14 @@ runtime adapters and storage live outside `domain/`.
     timeout or network error, not yet retried. A follow-up's data starts with `ctx.earlier` (`earlierOf`: the
     earlier answer and step digests, no page text); a follow-up of a tainted run starts tainted. Queued messages
     (`steer: false`) are in no think; `queuedFollowUp` turns the oldest into a follow-up run when the run ends.
+  - `skills.ts` (plan T8): `Skill` (`work: 'plan' | 'ask'`, `on`, `needs?`, `cases`, `history` of the last 10
+    versions, `proposed?`), `SKILL` (limits), `parseSkill`, `slashOf`, `skillWork`, `unmet`, `skillRefusal` (pin:
+    deleted, off, another gardener's, or needs missing from `run.abilities`), `skillParts` (the method is the
+    instruction unless a model wrote it; files are data), `revise`, `accept`, `casePassed` (case-insensitive
+    contains), `verdict`, `tested`, `evidenceOf` (chat answers marked down, a correction after one by
+    `correctionOf`, failed cases), `improveThink`, `proposalOf`, `unlinked`, `upgradeGarden`. `loop.ts` `think` puts a
+    skill's files ahead of the data, at most a third of what memory left. `Work` `plan`/`ask` and `Routine` have
+    `skillId?` (`routineWork`); `GardenRun.approvePlans?`; `ChatTurn.skillId?`.
   - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
     step outputs, turns and the answer only with `withText`.
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,

@@ -77,7 +77,11 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   off; a draft is editable before Copy, and an edit, or a follow-up or Steer starting no / don't / never /
   always, offers "Remember this?" (a `preference` with `correction: true`, the person's words). The routine form
   has "Works for" (`Routine.for`, confirmed entities). `chat.ts` puts `@Name` files in the turn's `selection`
-  (the data part). `showRequests()` re-renders the trays when
+  (the data part). Plan T8: Garden → Skills lists skills (on/off, Test on cases with "Approve plans for this test",
+  cases with Pass / Fail marks where there is no `expect`, Improve with the evidence and a proposed edit as a
+  `diffText` diff with Accept / Discard, History, Edit); the routine form's skill select ("Not tested yet" when no
+  case passed). `chat.ts`: `/name rest` sends the skill's method as the instruction and its files in `selection`,
+  with `skillId` on the turn; typing `/` lists the skills that are on (`fuzzy`) in `#slash`. `showRequests()` re-renders the trays when
   the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen.
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its

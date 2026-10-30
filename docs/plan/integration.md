@@ -44,6 +44,9 @@ Done after the group agents report. Owner: the main session.
 - T7 (plan T): `static/sidepanel.html` and `static/library.html` gain the Library → Memory tab (`#memory`,
   `#memory-new`, `#memory-tree`); `static/sidepanel.css` and `static/library.css` style the folders, files and the
   "Remember this?" row. `eg-memory` is v4 (`entities`, `docs`). No other shared file changed. DONE.
+- T8 (plan T): `static/sidepanel.html` gains `#slash` (skill completion above the chat input) and Garden's Skills card
+  (`#skills`, `#garden-skills`). `hg-garden` is v2 (`skills`); every test and bench that plants runs now opens
+  `hg-garden` without a version. `domain/chat.ts` `ChatTurn` gains `skillId?`. DONE.
 
 ## Known issues
 

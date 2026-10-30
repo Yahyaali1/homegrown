@@ -44,7 +44,7 @@ test('plan first @slow: a plan card over two pages; one call deleted, yes, and o
   const m = await engine(sw, 'resolve', {});
   const runId = `plan-${Date.now()}`;
   await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
     const t = d.transaction('runs', 'readwrite');
     t.objectStore('runs').put(run);
     await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));

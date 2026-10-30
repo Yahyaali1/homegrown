@@ -956,7 +956,7 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T9 done (merged from t9-outputs). T7 in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T7 done (commit 91c4816). T9 done (merged from t9-outputs). T8 in progress.
 
 | Slice | State |
 |---|---|
@@ -967,8 +967,8 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T4 | Done (44a7268), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 230 unit tests pass before the merge (14 new in `garden-triggers`); `tests/triggers.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1. Deviations: event snapshot key `<routineId>\nevent <url>`; pure `eventCheck` and `checkFetch` in `schedule.ts`; the first check at save is the baseline; no check while a run works; a one-off doesn't wait behind Run now; a one-off in the past is refused; expiry says 'Needed you for too long.'; `GardenRun.deadline`; `Routine.missed` |
 | T5 | Done (c7852a7), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 252 unit tests pass; `tests/tabs.spec.mjs` 4/4 (no model, download by referrer included); every garden regression passes. Built: `act_my_tab` (always asked; never granted, never in Approve all or a plan; its fills are sensitive), `help` requests for challenge pages (a No fails with `HELP_REFUSED`; any answer closes the held tab), `background/devtools.ts` (one shared debugger attach, never on the person's tab), screencast Watch of the group's newest tab, the optional `downloads` permission as the setting, `GardenRun.files`, `Gardener.devtools`. No live-view e2e |
 | T6 | Done (d2d6e87), reviewed (0 Blockers, 3 Majors and 4 Minors fixed): 262 unit tests pass; `tests/chat.spec.mjs` 4/4 (1 `@slow` on the real model: reload during an answer → Interrupted → Retry); the `extension.spec` chat tests 5/5; `garden.spec` 4/4. New: `domain/chat.ts`, `pages/chat.ts` (moved out of `sidepanel.ts`), `ui/linkcard.ts`, the `hg-chat` store, the `chat:page` and `chat:link` menus, `openLink` (extension pages only), the `linksInActiveTab` setting, links in answers and Garden results, `chatReport` |
-| T7 | Built, not yet reviewed: 269 unit tests pass (7 new in `memory`); `tests/memory.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `chat.spec` 4/4. Deviations: extra handler `entityKeep` (Keep confirms a model's file without making it the person's, so its template stays data); `remember` args are `type`, `name`, `body`; `doc_write` is also denied for `Documents/` paths; doc paths are per gardener; the `facts` rewording of corrections is not built (no model has `facts`); a draft edit's correction text is its `diffText`; chat resolves `@` anchors into the turn's `selection`; choose data caps each step's args at 500 chars; no Meetings folder until T10 |
-| T8 | Planned |
+| T7 | Done (91c4816), reviewed (0 Blockers, 1 Major and 4 Minors fixed): 270 unit tests pass; `tests/memory.spec.mjs` 2/2 (no model); the garden, plan, approvals, runlog and chat regressions pass. Built: `eg-memory` v4 (`entities`, `docs`); the `remember`, `doc_read` and `doc_write` tools with their `decide` cases; Library → Memory, editable; `@Name` anchors in the data part for garden and chat; the `Routine.for` template picker; doc and memory cards with Keep / Discard; `entityKeep` (keeps `by: 'model'`) |
+| T8 | Built, not yet reviewed: 279 unit tests pass (9 new in `garden-skills`); `tests/skills.spec.mjs` 2/2 (1 `@slow` on the real model, test runs and a routine run planted pinned with `plan`); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `chat.spec` 4/4, `memory.spec` 2/2. `hg-garden` v2. Deviations: `/name` in chat answers in the chat (method as instruction, files as `selection`, `ChatTurn.skillId`), so thumbs-down and corrections there are evidence; in Garden requests it becomes `{ kind: skill.work, request, skillId }`; the `improve` think lives in `skills.ts`, not `loop.ts`; `abilities.mjs skillEdit` (6 corrected skills, graded by `casePassed`): E2B 4/6, a pass at the threshold from one run, not yet copied into `model.ts`, so Suggest an edit stays off; `GardenRun.approvePlans` (an automatic plan yes pre-approves nothing; every reach and act is asked); a gardener's delete deletes its skills; extra handler `skillMark`; skill files take ≤ ⅓ of the data room memory leaves |
 | T9 | Done (eea5354, merged 5f61607), reviewed (0 Blockers, 2 Majors fixed): e2e 6/6 (2 `@slow`); merged suite 242 unit tests pass, build ok. `abilities.mjs` on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6, so no T9 ability is set, and decks are built by code. E4B not measured (no local copy; about 8 GB of disk free). Every research report is saved as a `brief`. Editing is on the output page |
 | T10 | Planned |
 | T11 | Planned |
@@ -979,6 +979,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T7 | code review | 0 / 1 | Fixed: `doc_write` refuses to overwrite a person-written doc (`docWriteRefused`). Minors fixed: `anchorsIn` ignores email addresses; the template instruction is "How to do this:" without the entity's name; Remember after a draft edit keeps only the added lines (`addedLines`); `taintsAfter` replaces `privateRead`, so the worker decides taint |
 | T6 | code review | 0 / 3 | Fixed: the plan prefix goes only on a chat's first message; a save is one IndexedDB read-modify-write that merges turns, then `BroadcastChannel('hg-chat')` reloads other views; hover cards fetch nothing (host and warnings only), and "Read the page" fetches on click (the T6 plan text was rewritten to match). Minors fixed: the Plan gate checks the chat's own model; `sameSite` uses `site()`'s suffix list; `openLink` checks `isExtensionPage`; a streaming save doesn't redraw the list |
 | T5 | code review | 0 / 3 | Fixed: Take over and Show tab go to the borrowed tab first (`workTab`); a call that throws taints through the pure `failTaints` (`act_my_tab` always, `act` when on the gardener's sites); `isChallenge` only on short pages (under 600 chars) or interstitial titles, with Turnstile and invisible hCaptcha left out. Minors fixed: the help path releases the lock; Take over ungroups a tab only from the run's own group |
 | T9 | code review | 0 / 2 | Fixed: table edits had no debounce; `fontStack` cleans non-ASCII and overlong font stacks. Minors fixed: `citeAnswer` is page-only and checks the ability before it sends text; XML strips U+FFFE and U+FFFF; "007" stays text |
@@ -1145,3 +1146,20 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
 - Open items:
   1. A thumbs-down is stored but nothing uses it yet. T8 evidence reads it.
   2. That a chat survives a worker restart is untested. The panel itself stores chats, so the risk is low.
+
+**2026-10-30: T7 landed (commit 91c4816).**
+- 270 unit tests pass; `tests/memory.spec.mjs` 2/2 (no model); the garden, plan, approvals, runlog and chat regressions
+  pass.
+- Deviations, accepted:
+  - `remember` takes `type`, `name` and `body` only.
+  - `doc_write` is denied for paths under `Documents/`.
+  - `Created.kind` gains `memory`.
+  - The model does not reword corrections, because no model has `facts`.
+  - In the choose data, step args are cut to 500 chars.
+  - Memory gets at most a third of a think's data room (`ponytail:`).
+  - There is no Meetings folder until T10, and Library can't create docs.
+- Review: 0 Blockers, 1 Major and 4 Minors fixed (see Review history).
+- Open items:
+  1. The draft textarea may lose the person's edits when the run is broadcast again.
+  2. Corrections are offered only in a garden follow-up or Steer, not in chat. T8's thumbs-down evidence partly covers
+     chat.

@@ -37,7 +37,7 @@ async function bg(cmd, args = {}) {
 }
 
 const idbPut = (store, change, key) => panel.evaluate(async ([store, change, key]) => {
-  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
   const t = d.transaction(store, 'readwrite');
   const os = t.objectStore(store);
   const old = await new Promise((ok) => (os.get(key).onsuccess = (e) => ok(e.target.result)));

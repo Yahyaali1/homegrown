@@ -55,8 +55,8 @@ export interface Trigger { url: string; diff: string /* ≤ 4000 */; signedIn: b
 export type Work =
   | { kind: 'read'; urls: string[] } // direct
   | { kind: 'mission'; goal: string } // direct
-  | { kind: 'ask'; request: string; tabs?: Mention[] } // open: needs a model with `agent.loop`
-  | { kind: 'plan'; request: string; tabs?: Mention[] }; // a plan the person approves, then direct work: needs `plan`
+  | { kind: 'ask'; request: string; tabs?: Mention[]; skillId?: string } // open: needs a model with `agent.loop`
+  | { kind: 'plan'; request: string; tabs?: Mention[]; skillId?: string }; // a plan the person approves, then direct work: needs `plan`
 
 /** One call of a plan: a tool and its parsed args. */
 export interface PlannedCall { tool: string; args: Record<string, unknown> }
@@ -87,7 +87,12 @@ export interface Routine {
   missed?: true;
   /** The memory entity this routine works for: its template joins each run (plan T7). */
   for?: string;
+  /** The skill each run follows (plan T8): set on each run's work; only for `plan` and `ask` work. */
+  skillId?: string;
 }
+
+/** The work a routine's run does: with its skill, read at run time. */
+export const routineWork = (r: Routine): Work => (r.skillId && (r.work.kind === 'ask' || r.work.kind === 'plan') ? { ...r.work, skillId: r.skillId } : r.work);
 
 export type Status = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
 
@@ -150,6 +155,8 @@ export interface GardenRun {
   deadline?: number;
   /** Downloads its tabs started (matched by referrer), each also a `file` card. */
   files?: RunFile[];
+  /** A skill's batch test with "Approve plans for this test": its plan gets the person's yes (non-sensitive calls only). */
+  approvePlans?: true;
 }
 
 /** A download kept with a run: Chrome's download id, its file name and URL. */
@@ -350,10 +357,11 @@ export function parseWork(raw: unknown): Work | null {
   if (raw.kind === 'mission') return str(raw.goal, 300) ? { kind: 'mission', goal: raw.goal } : null;
   if (raw.kind === 'ask' || raw.kind === 'plan') {
     const kind = raw.kind;
-    if (!str(raw.request, 1000)) return null;
-    if (raw.tabs === undefined) return { kind, request: raw.request };
+    if (!str(raw.request, 1000) || (raw.skillId !== undefined && !str(raw.skillId, 200))) return null;
+    const skill = raw.skillId !== undefined ? { skillId: raw.skillId as string } : {};
+    if (raw.tabs === undefined) return { kind, request: raw.request, ...skill };
     const tabs = Array.isArray(raw.tabs) && raw.tabs.length <= LIMITS.tabs ? raw.tabs.map(parseMention) : [null];
-    return tabs.every((t) => t) ? { kind, request: raw.request, tabs: tabs as Mention[] } : null;
+    return tabs.every((t) => t) ? { kind, request: raw.request, tabs: tabs as Mention[], ...skill } : null;
   }
   if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.readUrls)) return null;
   const urls = raw.urls.map((u) => (typeof u === 'string' ? bare(u) : null));
@@ -380,6 +388,10 @@ export function parseRoutine(raw: unknown): Routine | null {
   if (raw.by === 'person' || raw.by === 'model' || raw.by === 'preset') r.by = raw.by;
   if (raw.missed === true) r.missed = true;
   if (str(raw.for, 200)) r.for = raw.for;
+  if (raw.skillId !== undefined) {
+    if (!str(raw.skillId, 200) || (work.kind !== 'ask' && work.kind !== 'plan')) return null;
+    r.skillId = raw.skillId;
+  }
   return r;
 }
 

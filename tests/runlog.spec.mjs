@@ -102,7 +102,7 @@ test('Ask a follow-up: refused in words with no plan model; a planted follow-up 
     requests: [{ id: 'p', kind: 'plan', calls: [{ tool: 'read_page', args: { url: `${SHOP}/moss` } }], text: 'plan', sensitive: false, answer: { value: 'yes', at: Date.now() } }],
     seen: [{ url: `${SHOP}/moss`, from: 'approved' }] };
   await panel.evaluate(async (runs) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
     const t = d.transaction('runs', 'readwrite');
     for (const run of runs) t.objectStore('runs').put(run);
     await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
@@ -118,7 +118,7 @@ test('Ask a follow-up: refused in words with no plan model; a planted follow-up 
   await expect(row.locator('.err', { hasText: /plans|open requests/ })).toBeVisible();
 
   await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
     const t = d.transaction('runs', 'readwrite');
     t.objectStore('runs').put(run);
     await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));

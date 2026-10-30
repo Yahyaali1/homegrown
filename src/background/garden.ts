@@ -18,7 +18,10 @@ import { actOf, addSeen, alwaysOk, approveAllOk, callKey, failTaints, decide, on
 import { checkFetch, claim, DEADLINE, eventCheck, expired, nextAfter, nextBatch, overdue } from '../domain/garden/schedule.ts';
 import { downloadRun, ownsTab, TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
-import { helping, mayStart, newRun, pruneIds, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
+import { accept, EDIT_OFF, evidenceOf, improveThink, NEEDS, parseSkill, proposalOf, revise, SKILL, skillRefusal, skillWork, slashOf, unlinked, unmet, upgradeGarden, verdict, type Skill } from '../domain/garden/skills.ts';
+import { parseChat, type Chat } from '../domain/chat.ts';
+import { contextChars } from '../domain/text.ts';
+import { helping, mayStart, newRun, pruneIds, routineWork, randomLook, parseGardener, parseLook, parseRoutine, parseRun, parseWork, sitesOf, type Gardener, type GardenRun, type Routine, type Request, type Status, type Step, type Trigger, type Work } from '../domain/garden/records.ts';
 import type { Grant } from '../domain/garden/policy.ts';
 
 type Sender = chrome.runtime.MessageSender | null | undefined;
@@ -28,14 +31,7 @@ const KEEP_RUNS = 30;
 const NEEDED_YOU = 'Needed you for too long.';
 const DAY = 24 * 3_600_000;
 
-const db = idb.open('hg-garden', 1, (d, old) => {
-  if (old >= 1) return;
-  d.createObjectStore('gardeners', { keyPath: 'id' });
-  d.createObjectStore('routines', { keyPath: 'id' });
-  const runs = d.createObjectStore('runs', { keyPath: 'id' });
-  for (const k of ['gardenerId', 'routineId', 'status']) runs.createIndex(k, k);
-  d.createObjectStore('snapshots'); // `${routineId}\n${url}` → { text, prev, runId }
-});
+const db = idb.open('hg-garden', 2, upgradeGarden);
 
 // Records a newer build wrote (or broken ones) parse to null: ignored, never deleted.
 const parsed = <T>(xs: unknown[], parse: (x: unknown) => T | null) => xs.map(parse).filter((x): x is T => x !== null);
@@ -43,6 +39,10 @@ const gardeners = async () => parsed(await idb.all(await db, 'gardeners'), parse
 const routines = async () => parsed(await idb.all(await db, 'routines'), parseRoutine);
 const allRuns = async () => parsed(await idb.all(await db, 'runs'), parseRun);
 const getRun = async (id: string) => parseRun(await idb.get(await db, 'runs', id));
+const skills = async () => parsed(await idb.all(await db, 'skills'), parseSkill);
+const getSkill = async (id: string) => parseSkill(await idb.get(await db, 'skills', id));
+/** The model gardeners use now: the chosen one, else the one loaded. */
+const gardensModel = async () => (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
 
 // ---- progress ----
 
@@ -235,7 +235,9 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
   const d = await db;
   const gardener = parseGardener(await idb.get(d, 'gardeners', run.gardenerId));
   const routine = run.routineId ? parseRoutine(await idb.get(d, 'routines', run.routineId)) ?? undefined : undefined;
-  const why = gardener ? await pin(run) : 'Its gardener was deleted.';
+  const skillId = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.skillId : undefined;
+  const skill = skillId ? await getSkill(skillId) : null;
+  const why = gardener ? (await pin(run)) ?? skillRefusal(run, skill) : 'Its gardener was deleted.';
   if (why || !gardener) {
     live.delete(run.id);
     return await finish('failed', why ?? '');
@@ -286,7 +288,7 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
       if (stop.signal.aborted) return;
       const known = await knownFor(gardener.id);
       const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }),
-        ...(anchors.length && { anchors }), ...(forEntity && { forEntity }) };
+        ...(anchors.length && { anchors }), ...(forEntity && { forEntity }), ...(skill && { skill }) };
       const a = next(run, ctx);
       if ('think' in a) {
         // Notes are private: from the moment the model reads them, the run is tainted (stored first).
@@ -322,9 +324,16 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
         setStep(run, a.record);
       } else if ('request' in a) {
         if (a.request.kind === 'helpers') return void (stop.signal.aborted || (await split(run, a.request)));
-        run.requests.push({ id: crypto.randomUUID().slice(0, 8), ...a.request });
-        run.status = 'waiting';
-        return await save();
+        const q: Request = { id: crypto.randomUUID().slice(0, 8), ...a.request };
+        run.requests.push(q);
+        // A skill test the person ticked "Approve plans" for: the plan's yes, which pre-approves nothing (no one read it).
+        if (q.kind !== 'plan' || !run.approvePlans) {
+          run.status = 'waiting';
+          return await save();
+        }
+        const no = answerPlan(run, ctx, q, 'yes', undefined, Date.now(), true);
+        if (no) return await finish('failed', no);
+        run.status = 'running';
       } else if ('done' in a) {
         Object.assign(run, { answer: a.done.answer }, a.done.best ? { best: true } : {});
         return await finish('done');
@@ -539,6 +548,35 @@ function answersOk(questions: { q: string }[], value: string): boolean {
 const open = (r: GardenRun, q: Request | undefined, now: number): q is Request =>
   r.status === 'waiting' && !!q && !q.answer && !expired(r, now) && (q.expiresAt === undefined || q.expiresAt > now);
 
+/** Early words for what pin() refuses: a skill that is gone, off, another gardener's, or needs what the model lacks. */
+async function skillReady(w: Work, gardenerId: string, model: string): Promise<void> {
+  if ((w.kind !== 'ask' && w.kind !== 'plan') || !w.skillId) return;
+  const s = await getSkill(w.skillId);
+  const why = skillRefusal({ ...newRun({ id: '', gardenerId, work: w, now: 0 }), abilities: modelById(model)?.abilities ?? [] }, s);
+  if (why) throw new Error(why);
+}
+
+/** A skill's read-modify-write in one transaction. */
+async function updateSkill(id: string, change: (s: Skill) => void): Promise<Skill> {
+  return idb.tx(await db, 'skills', 'readwrite', async (t) => {
+    const s = parseSkill(await idb.req(t.objectStore('skills').get(String(id))));
+    if (!s) throw new Error('That skill no longer exists.');
+    change(s);
+    t.objectStore('skills').put(s);
+    return s;
+  });
+}
+
+/** The side panel's chats, for a skill's evidence. Opened per read and closed, so the worker never blocks a version change or delete. */
+async function allChats(): Promise<Chat[]> {
+  const d = await idb.open('hg-chat', undefined, (x, old) => void (old < 1 && x.createObjectStore('chats', { keyPath: 'id' })));
+  try {
+    return (await idb.all<unknown>(d, 'chats')).map(parseChat).filter((c): c is Chat => !!c);
+  } finally {
+    d.close();
+  }
+}
+
 async function updateRun(id: string, change: (r: GardenRun) => void): Promise<GardenRun> {
   const run = await idb.tx(await db, 'runs', 'readwrite', async (t) => {
     const r = parseRun(await idb.req(t.objectStore('runs').get(id)));
@@ -574,6 +612,7 @@ export const handlers = {
     for (const r of (await allRuns()).filter((x) => x.gardenerId === id && (x.status === 'queued' || x.status === 'running' || x.status === 'waiting'))) await handlers.runStop({ id: r.id }, sender);
     await deleteNotes(id);
     await deleteDocs(id);
+    for (const s of (await skills()).filter((x) => x.gardenerId === id)) await handlers.skillDelete({ id: s.id }, sender);
     await idb.del(await db, 'gardeners', id);
     return true;
   },
@@ -590,6 +629,12 @@ export const handlers = {
     const w = checkWork(routine.work, g);
     // A routine finds its named tabs by URL on each run; a tab id means nothing by then.
     const work: Work = (w.kind === 'ask' || w.kind === 'plan') && w.tabs ? { ...w, tabs: w.tabs.map(({ url, title }) => ({ url, title })) } : w;
+    if (routine.skillId) {
+      const s = await getSkill(String(routine.skillId));
+      if (!s) throw new Error('That skill no longer exists.');
+      if (s.gardenerId && s.gardenerId !== g.id) throw new Error(`/${s.name} belongs to another gardener.`);
+      if (w.kind !== 'ask' && w.kind !== 'plan') throw new Error('A routine with a skill asks or plans.');
+    }
     const tz = routine.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const r = await idb.tx(await db, 'routines', 'readwrite', async (t) => {
       const old = routine.id ? parseRoutine(await idb.req(t.objectStore('routines').get(routine.id))) : null;
@@ -618,10 +663,15 @@ export const handlers = {
     if (followUp && !earlier) throw new Error('That run no longer exists.');
     if (earlier && ['queued', 'running', 'waiting'].includes(earlier.status)) throw new Error('It’s still working: queue the message instead.');
     const g = await mustGardener(earlier?.gardenerId ?? routine?.gardenerId ?? String(gardenerId ?? ''));
-    const w = checkWork(routine?.work ?? work, g);
+    let w = checkWork(routine ? routineWork(routine) : work, g);
     if (earlier && w.kind !== 'ask' && w.kind !== 'plan') throw new Error('A follow-up is a request.');
     if (w.kind === 'ask' || w.kind === 'plan') {
-      const name = (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
+      // `/name rest`: the skill's own work kind, with its id.
+      const hit = !routine && !earlier ? slashOf(w.request, await skills()) : null;
+      if (typeof hit === 'string') throw new Error(hit);
+      if (hit) w = skillWork(hit.skill, hit.rest, w.tabs);
+      const name = await gardensModel();
+      await skillReady(w, g.id, name);
       if (!modelById(name)?.agent?.loop && (w.kind === 'ask' || !can(name, 'plan'))) throw new Error(w.kind === 'ask' ? OPEN_REFUSED : PLAN_REFUSED);
     }
     const run = earlier ? followUpRun(earlier, w, crypto.randomUUID(), Date.now())
@@ -862,6 +912,134 @@ export const handlers = {
   noteDelete: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await deleteNote(String(id)), true),
   grantList: async ({ gardenerId }: { gardenerId?: string } = {}, sender?: Sender) => (page(sender), (await trust.grants()).filter((g) => !gardenerId || g.gardenerId === gardenerId)),
   grantRevoke: async ({ gardenerId, tool, host, argsKey }: Omit<Grant, 'at'>, sender?: Sender) => (page(sender), await trust.revoke({ gardenerId, tool, host, argsKey }), true),
+  // ---- skills (plan T8): extension pages only; a model never writes a method, it only proposes ----
+  /** Every skill; a test case whose run ended gets code's verdict here. */
+  skillList: async (_: unknown, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const runs = new Map((await allRuns()).map((r) => [r.id, r]));
+    const out: Skill[] = [];
+    for (const s of await skills()) {
+      const settle = s.cases.some((c) => c.runId && c.pass === undefined && verdict(c, runs.get(c.runId)) !== undefined);
+      out.push(settle ? await updateSkill(s.id, (x) => x.cases.forEach((c) => {
+        const v = c.runId && c.pass === undefined ? verdict(c, runs.get(c.runId)) : undefined;
+        if (v !== undefined) c.pass = v;
+      })) : s);
+    }
+    return out;
+  },
+  /**
+   * The person's skill: new ones are theirs and on. A changed method is a new version. Who wrote it, its needs, history
+   * and proposal stay the worker's; a case keeps its result while its input and expect are unchanged.
+   */
+  skillSave: async ({ skill }: { skill: Partial<Skill> }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    if (skill.gardenerId) await mustGardener(String(skill.gardenerId));
+    const all = await skills();
+    const old = skill.id ? all.find((x) => x.id === skill.id) : undefined;
+    if (skill.id && !old) throw new Error('That skill no longer exists.');
+    if (all.some((x) => x.name === skill.name && x.id !== skill.id)) throw new Error(`There is already a /${skill.name}.`);
+    const now = Date.now();
+    const cases = (Array.isArray(skill.cases) ? skill.cases : []).map(({ input, expect }) => {
+      const was = old?.cases.find((c) => c.input === input && c.expect === expect);
+      return { ...was, input, ...(expect?.trim() && { expect: expect.trim() }) };
+    });
+    const method = String(skill.method ?? '');
+    const s = parseSkill({
+      v: 1, version: 1, history: [{ version: 1, method, at: now, why: 'Written by you' }], by: 'person', createdAt: now, ...old,
+      id: old?.id ?? crypto.randomUUID(), name: skill.name, title: skill.title, method: old?.method ?? method, files: skill.files ?? old?.files ?? [], work: skill.work ?? old?.work ?? 'plan',
+      cases, on: skill.on ?? old?.on ?? true, ...(skill.gardenerId ? { gardenerId: skill.gardenerId } : { gardenerId: undefined }),
+    });
+    if (!s) throw new Error(`A skill needs a name (2–30 of a–z, 0–9, -), a title, a method up to ${SKILL.method} characters, at most ${SKILL.files} files of ${SKILL.file} and ${SKILL.cases} cases.`);
+    if (old && method !== old.method) {
+      if (!method.trim() || method.length > SKILL.method) throw new Error(`A method is 1 to ${SKILL.method} characters.`);
+      revise(s, method, 'Edited by you', now);
+      if (s.by === 'model') s.by = 'person'; // the person's words now
+    }
+    const model = s.on && s.needs?.length ? await gardensModel() : '';
+    if (s.on && unmet(s, (a) => can(model, a)).length) throw new Error(NEEDS);
+    await idb.put(await db, 'skills', s);
+    return s;
+  },
+  /** Deleting a skill pauses the routines that link it. */
+  skillDelete: async ({ id }: { id: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    for (const r of unlinked(await routines(), String(id))) {
+      await idb.put(await db, 'routines', r);
+      await arm(r);
+    }
+    await idb.del(await db, 'skills', String(id));
+    return true;
+  },
+  skillEvidence: async ({ id }: { id: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const s = await getSkill(String(id));
+    if (!s) throw new Error('That skill no longer exists.');
+    return evidenceOf(s, await allChats().catch(() => []), await allRuns());
+  },
+  /** Suggest an edit: one `improve` think, only with a model measured for skill edits. The reply is a proposal, off until accepted. */
+  skillPropose: async ({ id }: { id: string }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const s = await getSkill(String(id));
+    if (!s) throw new Error('That skill no longer exists.');
+    const model = await gardensModel();
+    if (!can(model, 'skillEdit')) throw new Error(EDIT_OFF);
+    const ev = evidenceOf(s, await allChats().catch(() => []), await allRuns());
+    if (!ev.length) throw new Error('Nothing went wrong with this skill yet: there is no evidence to learn from.');
+    const m = await engine<{ name: string; maxTokens: number }>('resolve', { name: model });
+    const t = improveThink(s, ev, contextChars(m.maxTokens));
+    const method = proposalOf((await askAs(t.prompt, t.data, { task: 'gardens', model: m.name, owner: 'garden', sampling: { temperature: 0 } })).text);
+    if (!method) throw new Error('The model’s edit couldn’t be used.');
+    return updateSkill(s.id, (x) => void (x.proposed = { method, why: `From ${ev.length} case${ev.length === 1 ? '' : 's'} that went wrong`, at: Date.now() }));
+  },
+  /** `{ id, accept }`: yes moves the proposal into the method (a new version); no drops it. */
+  skillAccept: async ({ id, accept: yes }: { id: string; accept: boolean }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    return updateSkill(String(id), (s) => {
+      if (!s.proposed) throw new Error('There is no proposed edit.');
+      if (yes) accept(s, Date.now());
+      else delete s.proposed;
+    });
+  },
+  /**
+   * Test on cases: one hand run per case, queued in order (the queue runs one at a time). `approvePlans`: each plan
+   * gets a yes, which covers only non-sensitive calls. Refused for a skill that is off or whose needs the model lacks.
+   */
+  skillTest: async ({ id, gardenerId, approvePlans }: { id: string; gardenerId?: string; approvePlans?: boolean }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    const s = await getSkill(String(id));
+    if (!s) throw new Error('That skill no longer exists.');
+    if (!s.cases.length) throw new Error('Add a case to test first.');
+    const g = await mustGardener(s.gardenerId ?? String(gardenerId ?? ''));
+    const name = await gardensModel();
+    await skillReady(skillWork(s, ''), g.id, name);
+    if (!modelById(name)?.agent?.loop && (s.work === 'ask' || !can(name, 'plan'))) throw new Error(s.work === 'ask' ? OPEN_REFUSED : PLAN_REFUSED);
+    const now = Date.now();
+    const made = s.cases.map((c, k) => ({ ...newRun({ id: crypto.randomUUID(), gardenerId: g.id, work: skillWork(s, c.input), now: now + k }), ...(approvePlans && { approvePlans: true as const }) }));
+    for (const r of made) await saveRun(r);
+    await updateSkill(s.id, (x) => x.cases.forEach((c, k) => {
+      delete c.pass;
+      if (made[k]) c.runId = made[k]!.id;
+    }));
+    drain();
+    return made.map((r) => r.id);
+  },
+  /** The person's pass or fail on a tested case without `expect`. */
+  skillMark: async ({ id, k, pass }: { id: string; k: number; pass: boolean }, sender?: Sender) => {
+    page(sender);
+    await ready();
+    return updateSkill(String(id), (s) => {
+      const c = s.cases[Number(k)];
+      if (!c?.runId) throw new Error('That case hasn’t run yet.');
+      c.pass = !!pass;
+    });
+  },
 };
 
 /**

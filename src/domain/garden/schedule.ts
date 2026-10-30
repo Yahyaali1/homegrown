@@ -3,7 +3,7 @@
 import { diffText } from '../compare.ts';
 import { hostOf } from '../text.ts';
 import { onSites } from './policy.ts';
-import { dateOf, helping, LIMITS, newRun, type GardenRun, type Routine, type Trigger, type When, type Work } from './records.ts';
+import { dateOf, helping, LIMITS, newRun, routineWork, type GardenRun, type Routine, type Trigger, type When, type Work } from './records.ts';
 
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 
@@ -144,7 +144,7 @@ export function claim(routine: Routine, runs: GardenRun[], now: number, trigger?
     next.skipped = [...(routine.skipped ?? []), routine.nextDue].slice(-LIMITS.skipped);
     return { routine: next, fail };
   }
-  const run = newRun({ id: `${routine.id}@${routine.nextDue}`, gardenerId: routine.gardenerId, routineId: routine.id, work: routine.work, now,
+  const run = newRun({ id: `${routine.id}@${routine.nextDue}`, gardenerId: routine.gardenerId, routineId: routine.id, work: routineWork(routine), now,
     ...(routine.skipped && { skipped: routine.skipped }), ...(trigger && { trigger }), ...(deadline !== undefined && { deadline }) });
   delete next.skipped;
   next.lastRunId = run.id;

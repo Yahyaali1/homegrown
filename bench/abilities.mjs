@@ -15,6 +15,11 @@
 // sentence of 4+ words cites a file and page; pass ≥ 3/4. evidence: 6 source sets with the report prompt and its two
 // sections; a case passes when there is an Evidence and an Assumptions section, every Evidence bullet cites a listed
 // source and no Assumptions line cites one (before `moveCited`); pass ≥ 5/6.
+//
+// skillEdit (T8): 6 skills, each with one corrected answer (evidence) and one case its method already passes. The
+// product's `improveThink` and `proposalOf` write the edit; the edited method then answers both cases. A case passes
+// when the edit parses, the corrected case's answer holds its expected words and the passing case's still does
+// (`casePassed`, code). Pass: ≥ 4/6.
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, engine, ROOT } from '../tests/harness.mjs';
@@ -24,9 +29,10 @@ import { DECK_MAX, tableText, writeDeck } from '../src/domain/outputs.ts';
 import { citeFiles } from '../src/domain/reading.ts';
 import { reportPrompt } from '../src/domain/research.ts';
 import { contextChars, defang, grounded } from '../src/domain/text.ts';
+import { casePassed, improveThink, proposalOf } from '../src/domain/garden/skills.ts';
 
 const ABILITY = process.argv[2];
-const SUITES = { plan, deck, cite, evidence };
+const SUITES = { plan, deck, cite, evidence, skillEdit };
 if (!SUITES[ABILITY]) {
   console.log(`Usage: node bench/abilities.mjs <${Object.keys(SUITES).join('|')}>`);
   process.exit(1);
@@ -49,7 +55,7 @@ async function bg(cmd, args = {}) {
   return r.result;
 }
 const putRun = (run) => panel.evaluate(async (run) => {
-  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden', 1), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
   const t = d.transaction('runs', 'readwrite');
   t.objectStore('runs').put(run);
   await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
@@ -204,4 +210,33 @@ async function evidence() {
       ...(as ?? []).filter((l) => cites(l).length).map((l) => `cited under Assumptions: ${l.trim()}`),
     ] };
   }, 5, '≥ 5/6 where every evidence line has a source and no sourced claim sits under assumptions');
+}
+
+// ---- T8 skillEdit: the product's improve prompt; each edited method is tried on the corrected and a passing case ----
+// A function, hoisted: the suite runs (top-level await above) before this part of the module is evaluated.
+function skillEdits() {
+  return [
+  { id: 'tldr', method: 'Summarize the text in one sentence.', fail: { input: 'Text: The council voted to close the old bridge for repairs from May to July.', answer: 'The bridge will be closed for repairs.', note: 'always start the summary with "TL;DR:"', expect: 'tl;dr' }, pass: { input: 'Text: Bees pollinate most fruit crops in the valley.', expect: 'bees' } },
+  { id: 'currency', method: 'Give the price of the item asked about, as a number.', fail: { input: 'Menu: tea £3, cake £4. What does cake cost?', answer: '4', note: 'always write the currency code GBP after the number', expect: 'gbp' }, pass: { input: 'Menu: tea £3, cake £4. What does tea cost?', expect: '3' } },
+  { id: 'done', method: 'List the items in the text, one per line.', fail: { input: 'Text: buy milk, eggs and bread.', answer: 'milk\neggs\nbread', note: 'always end the list with a line that says DONE', expect: 'done' }, pass: { input: 'Text: pack socks and a hat.', expect: 'socks' } },
+  { id: 'salut', method: 'Translate the text to French.', fail: { input: 'Text: hello friend', answer: 'bonjour ami', note: 'never use "bonjour"; greet with "salut"', expect: 'salut' }, pass: { input: 'Text: thank you', expect: 'merci' } },
+  { id: 'iso', method: 'Answer the question about the date.', fail: { input: 'What is the date of Christmas Day 2026?', answer: 'December 25, 2026', note: 'always write dates as YYYY-MM-DD', expect: '2026-12-25' }, pass: { input: 'What year comes after 2026?', expect: '2027' } },
+  { id: 'because', method: 'Answer the question with yes or no.', fail: { input: 'Is ice colder than steam?', answer: 'Yes.', note: 'always give the reason, starting with the word "because"', expect: 'because' }, pass: { input: 'Is fire cold?', expect: 'no' } },
+];
+}
+
+async function skillEdit() {
+  const room = contextChars(m.maxTokens);
+  return suite(skillEdits(), async (c) => {
+    const skill = { method: c.method };
+    const t = improveThink(skill, [{ kind: 'correction', input: c.fail.input, answer: c.fail.answer, note: c.fail.note }], room);
+    const method = proposalOf(await ask(t.prompt, t.data));
+    if (!method) return { fails: ['the edit did not parse'] };
+    const run = (input) => ask(`How to do this:\n${method}`, input);
+    const [fixed, kept] = [await run(c.fail.input), await run(c.pass.input)];
+    return { method, fixed, kept, fails: [
+      ...(casePassed(fixed, c.fail.expect) ? [] : [`corrected case lacks "${c.fail.expect}"`]),
+      ...(casePassed(kept, c.pass.expect) ? [] : [`passing case lost "${c.pass.expect}"`]),
+    ] };
+  }, 4, '≥ 4/6 edits that fix the failing case and keep the passing ones');
 }

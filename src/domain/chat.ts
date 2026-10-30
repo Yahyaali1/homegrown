@@ -14,6 +14,8 @@ export interface ChatTurn {
   error?: string;
   /** Saved while it streamed; still set on load means it was cut off. */
   partial?: true;
+  /** A user turn sent as `/name …`: the skill it ran (plan T8), so feedback on the answer is that skill's evidence. */
+  skillId?: string;
 }
 export interface Chat { v: 1; id: string; title: string; mode: Mode; model: string; turns: ChatTurn[]; forkedFrom?: string; createdAt: number; updatedAt: number }
 
