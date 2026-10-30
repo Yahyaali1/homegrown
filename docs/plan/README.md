@@ -27,7 +27,7 @@ local-first plan" (https://claude.ai/artifact/7Z3nNCupfcGVTm2vUyDqVh).
 | O Research this (highlight a term) | [O-research-this.md](O-research-this.md) | Done: unit + real-model browser test |
 | R Scrape as you scroll | [R-scrape-as-you-scroll.md](R-scrape-as-you-scroll.md) | Done: unit, browser and real-model tests |
 | S Gardeners (agents that tend your work) | [S-gardeners.md](S-gardeners.md) | V1–V4 done, V5 measured: 174 unit, e2e 4/4 on the real model; open requests off until a model passes `bench/garden-eval.mjs` (E2B 6/8 with violations, E4B 5/8) |
-| T Strawberry parity (every FEATURES.md feature still missing: plan first, approvals, triggers, tabs, chat, memory, skills, outputs, meetings, MCP, 9 companions) | [T-strawberry-parity.md](T-strawberry-parity.md) | 14 slices (T1–T13 plus T3b); T1 done (c4cbc5e), no model has `plan` yet |
+| T Strawberry parity (every FEATURES.md feature still missing: plan first, approvals, triggers, tabs, chat, memory, skills, outputs, meetings, MCP, 9 companions) | [T-strawberry-parity.md](T-strawberry-parity.md) | Done: 14 slices (T1–T13 plus T3b), 316 unit tests; features that need a measured model ability stay off until a model passes (none yet); see Owner decisions |
 | Integration (launcher grouping, shared-file changes, one combined check) | [integration.md](integration.md) | Done: launcher grouped, shared fixes applied, suite 10/10 |
 
 Update the State column and each plan's "Status" section as work lands.
