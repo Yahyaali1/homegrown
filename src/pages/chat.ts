@@ -17,6 +17,7 @@ import { chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, h
   type Chat, type ChatTurn, type Mode } from '../domain/chat.ts';
 import * as idb from '../background/idb.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
+import { anchorsIn, reference, type Entity } from '../domain/memory.ts';
 
 interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
 interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
@@ -388,7 +389,10 @@ $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   if (!tpl && !imageData && attached === null && typed.length < 240 && (await proposeSetting(typed))) return;
   const text = tpl ? tpl.build(typed, labOption.value) : typed || 'Describe this image.';
   const label = [tpl ? `${tpl.title}: ${typed}` : typed || 'Describe this image.', attached !== null ? `“${excerpt(attached)}”` : '', imageData ? '(image)' : ''].filter(Boolean).join('\n');
-  const turn: ChatTurn = { role: 'user', text, label, at: Date.now(), ...(attached !== null && { selection: attached }) };
+  // `@Name` memory files ride in the data part (the selection), never in the typed instruction.
+  const refs = typed.includes('@') ? anchorsIn(typed, await bg<Entity[]>('entityList').catch(() => [])).map(reference).join('\n\n') : '';
+  const data = [attached ?? '', refs].filter(Boolean).join('\n\n');
+  const turn: ChatTurn = { role: 'user', text, label, at: Date.now(), ...((attached !== null || refs) && { selection: data }) };
   const image = imageData ?? undefined;
   attach(null);
   setImage(null);

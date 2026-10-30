@@ -41,6 +41,9 @@ Done after the group agents report. Owner: the main session.
   `settings.html`; `static/sidepanel.html` gains the Chats list, `#long-chat`, `#chat-modes` and `#mode-note`;
   `static/sidepanel.css` styles them and `.linkcard`; `content/features/links.ts` takes `KEY_POINTS` and
   `readMinutes` from `ui/linkcard.ts`. DONE.
+- T7 (plan T): `static/sidepanel.html` and `static/library.html` gain the Library → Memory tab (`#memory`,
+  `#memory-new`, `#memory-tree`); `static/sidepanel.css` and `static/library.css` style the folders, files and the
+  "Remember this?" row. `eg-memory` is v4 (`entities`, `docs`). No other shared file changed. DONE.
 
 ## Known issues
 

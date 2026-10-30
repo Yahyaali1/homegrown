@@ -6,7 +6,7 @@ import { cookieRule, play, type Guard } from './pagerequest.ts';
 import { logFor } from './devtools.ts';
 import { recipesList, scrapeRecipe } from './scrape.ts';
 import { tabPage } from './tabs.ts';
-import { addNote } from './memory.ts';
+import { addNote, docAt, rememberEntity, writeDoc } from './memory.ts';
 import { search as webSearch } from './web.ts';
 import * as idb from './idb.ts';
 import { diffText } from '../domain/compare.ts';
@@ -19,6 +19,7 @@ import { isChallenge, type Check } from '../domain/garden/classify.ts';
 import type { Recipe } from '../domain/scrape/recipe.ts';
 import { mentionedTab, mentionsOf, pageLinks } from '../domain/garden/tools.ts';
 import { proposedRoutine } from '../domain/garden/schedule.ts';
+import { docRefused, type EntityType } from '../domain/memory.ts';
 import { LIMITS, type Created, type Gardener, type GardenRun, type Seen, type When, type Work } from '../domain/garden/records.ts';
 
 export const MODEL_CHANGED = 'The model changed during the run.';
@@ -285,5 +286,25 @@ async function proposeRoutine({ name, when, work }: { name: string; when: When; 
   return { output: `Proposed “${r.name}”. It stays off until the person turns it on.`, n: 1, unit: 'results', created: { kind: 'routine', title: r.name, ref: id } };
 }
 
+/** A memory file the model proposes: stored unconfirmed, shown with Keep / Discard. */
+async function remember({ type, name, body }: { type: EntityType; name: string; body: string }, c: ToolCtx): Promise<ToolResult> {
+  const e = await rememberEntity({ id: `${c.run.id}.${c.i}`, type, name, body, gardenerId: c.gardener.id });
+  return { output: `Proposed “${e.name}”. It stays out of your work until the person keeps it.`, n: 1, unit: 'results', created: { kind: 'memory', title: e.name, ref: e.id } };
+}
+
+/** One of this gardener's documents; the worker taints the run after it (taintsAfter). */
+async function docRead({ path }: { path: string }, c: ToolCtx): Promise<ToolResult> {
+  const d = await docAt(c.gardener.id, path);
+  if (!d) throw new Error(`No document at ${path}.`);
+  return { output: d.text.slice(0, LIMITS.output), n: d.text.length, unit: 'chars' };
+}
+
+async function docWrite({ path, text }: { path: string; text: string }, c: ToolCtx): Promise<ToolResult> {
+  const why = docRefused(path);
+  if (why) throw new Error(why);
+  const d = await writeDoc(c.gardener.id, path, text, 'model');
+  return { output: `Saved ${path}.`, n: text.length, unit: 'chars', created: { kind: 'doc', title: path, ref: d.id } };
+}
+
 // Args are already checked against their specs (parseArgs, or the routine's own work).
-export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, act_my_tab: actMyTab, propose_routine: proposeRoutine };
+export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, act_my_tab: actMyTab, propose_routine: proposeRoutine, remember, doc_read: docRead, doc_write: docWrite };

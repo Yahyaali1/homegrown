@@ -17,6 +17,8 @@ import { hostOf } from '../domain/text.ts';
 import type { Grant } from '../domain/garden/policy.ts';
 import { describe, parseScenario } from '../domain/scrape/scenario.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
+import { addedLines, correctionOf, type Entity } from '../domain/memory.ts';
+import { openMemory } from './library.ts';
 
 type Listed = Routine & { next: number };
 type Row = HTMLLIElement & { stage?: string; look?: string };
@@ -34,6 +36,7 @@ const opened = new Set<string>(); // runs whose view is open
 const shown = new Set<string>(); // requests already reported shown
 let editing: Gardener | null = null;
 let abilities: Can = { ask: false, plan: false }; // what the gardens model can take, for follow-ups
+let memory = new Map<string, Omit<Entity, 'vec'>>(); // memory files by id: a proposed one's card shows Keep / Discard
 let formLook: Look = randomLook();
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -99,8 +102,9 @@ async function canDo(): Promise<Can> {
 
 export async function renderGarden(): Promise<void> {
   try {
-    const [g, r, list, ask] = await Promise.all([bg<Gardener[]>('gardenerList'), bg<Listed[]>('routineList'), bg<GardenRun[]>('runList'), canDo()]);
+    const [g, r, list, ask, mem] = await Promise.all([bg<Gardener[]>('gardenerList'), bg<Listed[]>('routineList'), bg<GardenRun[]>('runList'), canDo(), bg<Omit<Entity, 'vec'>[]>('entityList').catch(() => [])]);
     [gardeners, routines, abilities] = [g, r, ask];
+    memory = new Map(mem.map((e) => [e.id, e]));
     runs.clear();
     for (const run of list) runs.set(run.id, run);
     loadError.hidden = true;
@@ -275,6 +279,8 @@ function routineForm(g: Gardener, ask: Can): HTMLFormElement {
   const goal = h('textarea', { rows: 2, maxLength: 300, placeholder: 'Goal, e.g. Find this week’s cheapest flight to Lisbon', attrs: { 'aria-label': 'Goal' } });
   const request = h('textarea', { rows: 2, maxLength: 1000, placeholder: 'What should it do?', attrs: { 'aria-label': 'Request' } });
   const picker = mentionPicker();
+  // A routine may work for one memory file: its template joins each run (instruction only when you wrote it).
+  const forSel = select('Works for', [['', 'For no one in memory'], ...[...memory.values()].filter((e) => e.confirmed).map((e): [string, string] => [e.id, `For ${e.name}`])]);
   const err = errLine();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const words = () => [...new Set(onlyIf.value.split(/[\s,]+/).filter(Boolean))];
@@ -308,7 +314,7 @@ function routineForm(g: Gardener, ask: Can): HTMLFormElement {
     picker.clear();
   }), 'secondary');
   askNow.type = 'button';
-  const form = h('form', { className: 'stack', oninput: update }, name, h('div', { className: 'row' }, kind, hours, time), dayRow, monthRow, onceRow, eventRow, nextLine, work, urls, goal, request, picker.el, err,
+  const form = h('form', { className: 'stack', oninput: update }, name, h('div', { className: 'row' }, kind, hours, time), dayRow, monthRow, onceRow, eventRow, nextLine, work, urls, goal, request, picker.el, forSel, err,
     h('div', { className: 'row' }, h('button', { className: 'primary', textContent: 'Add routine' }), askNow));
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -317,7 +323,7 @@ function routineForm(g: Gardener, ask: Can): HTMLFormElement {
     const w: Work = work.value === 'read' ? { kind: 'read', urls: lines(urls.value) } : work.value === 'mission' ? { kind: 'mission', goal: goal.value.trim() }
       : { kind: work.value === 'plan' ? 'plan' : 'ask', request: request.value.trim(), tabs: picker.picked() };
     try {
-      await bg('routineSave', { routine: { gardenerId: g.id, name: name.value.trim(), when: when(), work: w } });
+      await bg('routineSave', { routine: { gardenerId: g.id, name: name.value.trim(), when: when(), work: w, ...(forSel.value && { for: forSel.value }) } });
       form.reset();
       picker.clear();
       update();
@@ -580,13 +586,43 @@ function runView(run: GardenRun, li: HTMLElement, err: HTMLElement): HTMLElement
     // Queued messages not yet asked (a stopped run keeps them here).
     ...(run.inbox ?? []).filter((m) => !m.steer && !m.usedAt).map((m) => h('div', { className: 'muted small', textContent: `Queued: ${m.text}` })),
     ...(run.created ?? []).map((c) => h('div', { className: 'created' }, h('span', { textContent: `${CREATED[c.kind]} ${c.title}` }),
-      labelled(button('Open', () => openCreated(run, c, li), 'ghost'), `Open ${c.title}`))),
+      ...(c.kind === 'memory' ? memoryActions(c, err) : [labelled(button('Open', () => openCreated(run, c, li), 'ghost'), `Open ${c.title}`)]))),
     howItWorked(run),
     reportBox(run, err),
   ];
 }
 
-const CREATED: Record<Created['kind'], string> = { draft: 'Draft:', note: 'Note:', routine: 'Routine:', file: 'File:', doc: 'Document:', artifact: 'Output:' };
+const CREATED: Record<Created['kind'], string> = { draft: 'Draft:', note: 'Note:', routine: 'Routine:', file: 'File:', doc: 'Document:', artifact: 'Output:', memory: 'Memory:' };
+
+/** A memory file a gardener proposed: Keep or Discard while it is off; once kept, it opens in Library → Memory. */
+function memoryActions(c: Created, err: HTMLElement): HTMLElement[] {
+  const e = memory.get(c.ref);
+  if (!e) return [h('span', { className: 'muted small', textContent: 'Discarded' })];
+  const open = labelled(button('Open', () => void openMemory(c.ref), 'ghost'), `Open ${c.title}`);
+  if (e.confirmed) return [open];
+  const done = async () => (memory = new Map((await bg<Omit<Entity, 'vec'>[]>('entityList')).map((x) => [x.id, x])), renderRuns());
+  return [labelled(busyButton('Keep', tryIt(err, async () => (await bg('entityKeep', { id: c.ref }), await done())), 'secondary'), `Keep ${c.title}`),
+    labelled(busyButton('Discard', tryIt(err, async () => (await bg('entityDelete', { id: c.ref }), await done())), 'ghost'), `Discard ${c.title}`), open];
+}
+
+/**
+ * "Remember this?": the person's own words as a preference they confirm by saving (no model). Shown after a follow-up
+ * or Steer that reads as a correction, or a draft they edited before copying.
+ */
+function rememberOffer(text: string): HTMLElement {
+  const err = errLine();
+  const box: HTMLElement = h('div', { className: 'remember' }, h('span', { className: 'small', textContent: 'Remember this? ' }), h('span', { className: 'muted small result', textContent: text }),
+    labelled(busyButton('Remember', tryIt(err, async () => {
+      await bg('entitySave', { entity: { type: 'preference', name: text.replace(/\s+/g, ' ').slice(0, 80).trim(), body: text, correction: true } });
+      box.replaceChildren(h('span', { className: 'muted small', textContent: 'Kept in Library → Memory → Preferences.' }));
+    }), 'secondary'), 'Remember this'),
+    labelled(button('Not now', () => box.remove(), 'ghost'), 'Don’t remember this'), err);
+  return box;
+}
+const offerAfter = (form: HTMLElement, text: string) => {
+  const c = correctionOf(text);
+  if (c) form.after(rememberOffer(c));
+};
 
 /** Open a made item where it lives: a draft in this run, a note in the notebook, a routine under its gardener. */
 function openCreated(run: GardenRun, c: Created, li: HTMLElement): void {
@@ -595,6 +631,7 @@ function openCreated(run: GardenRun, c: Created, li: HTMLElement): void {
     : c.kind === 'routine' ? nextLines.get(c.ref)?.closest('li') ?? null : null;
   // A download kept with the run: shown in its folder (needs the downloads permission, which kept it).
   if (c.kind === 'file') return void chrome.downloads?.show(Number(c.ref));
+  if (c.kind === 'doc') return void openMemory(c.ref);
   if (el instanceof HTMLDetailsElement) el.open = true;
   el?.scrollIntoView({ block: 'nearest' });
 }
@@ -630,6 +667,7 @@ function followUpBox(run: GardenRun): HTMLFormElement {
     if (!text.value.trim()) return;
     void tryIt(err, async () => {
       await bg('gardenRun', { followUp: run.id, work: { kind: abilities.ask ? 'ask' : 'plan', request: text.value.trim() } });
+      offerAfter(form!, text.value);
       text.value = '';
     })();
   };
@@ -648,6 +686,7 @@ function steerBox(runId: string): HTMLFormElement {
     if (!text.value.trim()) return;
     void tryIt(err, async () => {
       await bg('runMessage', { id: runId, text: text.value, steer });
+      offerAfter(form!, text.value);
       text.value = '';
       text.placeholder = steer ? 'Sent. It reads it at its next think.' : 'Queued. It is asked when this run ends.';
     })();
@@ -676,12 +715,17 @@ function stepLines(run: GardenRun, err: HTMLElement): HTMLElement[] {
     }
     const text = String(s.args.text ?? '');
     const title = String(s.args.title ?? 'Draft');
-    out.push(h('div', { className: 'draft', dataset: { step: String(s.i) } }, h('b', { textContent: title }), h('div', { className: 'text', textContent: text }),
+    // Editable before Copy; an edit is offered as a correction, in the person's own words (the change).
+    const area = h('textarea', { className: 'text', rows: 4, value: text, attrs: { 'aria-label': `Edit ${title}` } });
+    const draft = h('div', { className: 'draft', dataset: { step: String(s.i) } }, h('b', { textContent: title }), area,
       labelled(button('Copy', async (e) => {
         const b = e.currentTarget as HTMLButtonElement;
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(area.value);
         b.textContent = 'Copied';
-      }, 'ghost'), `Copy ${title}`)));
+        const mine = addedLines(text, area.value).slice(0, 8000);
+        if (mine && !draft.nextElementSibling?.classList.contains('remember')) draft.after(rememberOffer(mine));
+      }, 'ghost'), `Copy ${title}`));
+    out.push(draft);
   }
   return out;
 }
@@ -695,6 +739,8 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (run.routineId && (isNew || !working(run.status))) void refreshNext();
   // A note it took shows in its notebook once the step is done.
   if (run.steps.at(-1)?.tool === 'note' && run.steps.at(-1)?.state === 'done') void loadNotes(run.gardenerId);
+  // A memory file it proposed: its card needs the file's state.
+  if (run.steps.at(-1)?.tool === 'remember' && run.steps.at(-1)?.state === 'done') void bg<Omit<Entity, 'vec'>[]>('entityList').then((l) => ((memory = new Map(l.map((e) => [e.id, e]))), renderRuns()), () => {});
   // A routine it proposed shows under it, off.
   if (run.steps.at(-1)?.tool === 'propose_routine' && run.steps.at(-1)?.state === 'done') void renderGarden();
 });

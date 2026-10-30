@@ -85,6 +85,8 @@ export interface Routine {
   by?: 'person' | 'model' | 'preset';
   /** A one-off whose slot passed its deadline: it never ran. */
   missed?: true;
+  /** The memory entity this routine works for: its template joins each run (plan T7). */
+  for?: string;
 }
 
 export type Status = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
@@ -153,7 +155,7 @@ export interface GardenRun {
 /** A download kept with a run: Chrome's download id, its file name and URL. */
 export interface RunFile { id: number; name: string; url: string; at: number }
 
-export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact'; title: string; ref: string }
+export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact' | 'memory'; title: string; ref: string }
 
 /** Where a run sits in the history: Needs you, Unread (ended after it was last opened), then by routine, then by hand. */
 export function historyGroup(r: GardenRun): 'needs' | 'unread' | 'routine' | 'hand' {
@@ -377,6 +379,7 @@ export function parseRoutine(raw: unknown): Routine | null {
   if (Array.isArray(raw.skipped)) r.skipped = raw.skipped.filter(time).slice(-LIMITS.skipped);
   if (raw.by === 'person' || raw.by === 'model' || raw.by === 'preset') r.by = raw.by;
   if (raw.missed === true) r.missed = true;
+  if (str(raw.for, 200)) r.for = raw.for;
   return r;
 }
 

@@ -1,6 +1,7 @@
 // The tools a gardener's model may call: names, arguments and limits. Implementations live in background/gardentools.ts.
 import type { Effect } from './policy.ts';
 import { parseScenario, type Scenario } from '../scrape/scenario.ts';
+import { ENTITY_TYPES, MEM } from '../memory.ts';
 import { LIMITS, bare, parseWhen, parseWork, type GardenRun, type Mention } from './records.ts';
 
 export type Arg =
@@ -67,6 +68,11 @@ export const TOOLS: ToolSpec[] = [
   { name: 'act_my_tab', describe: 'click or type in one of the person\'s open tabs they named, after they approve; tab: its URL exactly as listed; steps as for act', args: { tab: { type: 'string', max: 2000 }, steps: { type: 'scenario' } }, effect: 'act' },
   // Stored paused (by: 'model') until the person turns it on. Offered only with a loop or in a plan (toolsFor).
   { name: 'propose_routine', describe: 'propose a routine the person may turn on; when: {"kind": "daily", "at": "08:00"}, {"kind": "every", "hours": 6} or {"kind": "weekly", "days": [1], "at": "08:00"}; work: {"kind": "read", "urls": ["…"]}', args: { name: { type: 'string', max: 80 }, when: { type: 'record', parse: parseWhen }, work: { type: 'record', parse: parseWork } }, effect: 'read' },
+  // Stored unconfirmed: never an anchor or in a prompt until the person keeps it. Offered like propose_routine.
+  { name: 'remember', describe: 'propose a memory file the person may keep; type: person, project, event, research or preference', args: { type: { type: 'enum', values: [...ENTITY_TYPES] }, name: { type: 'string', max: MEM.name }, body: { type: 'string', max: MEM.body } }, effect: 'read' },
+  // The gardener's own Documents, kept in Homegrown only; a read taints the run (taintsAfter).
+  { name: 'doc_read', describe: 'read one of your documents by its path, e.g. plan.md', args: { path: { type: 'string', max: MEM.path } }, effect: 'read' },
+  { name: 'doc_write', describe: 'write (or replace) one of your documents, e.g. a plan file for a long task', args: { path: { type: 'string', max: MEM.path }, text: { type: 'string', max: MEM.doc } }, effect: 'read' },
 ];
 
 /** Tools whose approve card shows the args as fields the person may edit before Yes. */
@@ -75,9 +81,9 @@ export const EDITABLE = ['act', 'draft', 'notify'];
 /** The tabs the person named for this run. */
 export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);
 
-/** The tools offered to this run: the person's tabs only when they named some, `propose_routine` only with a loop or in a plan. */
+/** The tools offered to this run: the person's tabs only when they named some, `propose_routine` and `remember` only with a loop or in a plan. */
 export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS): ToolSpec[] => tools.filter((t) =>
-  ((t.name !== 'read_my_tab' && t.name !== 'act_my_tab') || mentionsOf(run).length > 0) && (t.name !== 'propose_routine' || !!run.agent?.loop || run.work.kind === 'plan'));
+  ((t.name !== 'read_my_tab' && t.name !== 'act_my_tab') || mentionsOf(run).length > 0) && ((t.name !== 'propose_routine' && t.name !== 'remember') || !!run.agent?.loop || run.work.kind === 'plan'));
 
 /**
  * The open tab a mention points at now, or why there is none. Named by hand: that same tab, still on the URL it had.

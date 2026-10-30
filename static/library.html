@@ -16,6 +16,7 @@
     <button role="tab" data-tab="highlights">Highlights</button>
     <button role="tab" data-tab="ask">Ask your library</button>
     <button role="tab" data-tab="cards">Flashcards</button>
+    <button role="tab" data-tab="memory">Memory</button>
   </nav>
 
   <section id="history" class="lib-panel">
@@ -34,6 +35,12 @@
     <ol id="ask-sources"></ol>
   </section>
 
+  <section id="memory" class="lib-panel" hidden>
+    <p class="muted small">Memory stays on this device. A gardener reads a file only when you name it with @, or when a routine works for it.</p>
+    <form id="memory-new" class="row"><select id="memory-type" aria-label="Type"></select><input id="memory-name" maxlength="80" placeholder="Name" aria-label="New file name"><input id="memory-aliases" placeholder="Also called, e.g. M." aria-label="New file aliases"><button class="secondary">New file</button></form>
+    <span id="memory-err" class="err" hidden></span>
+    <div id="memory-tree"></div>
+  </section>
   <section id="cards" class="lib-panel" hidden>
     <p id="cards-count" class="muted"></p>
     <div id="card" class="card" hidden>

@@ -4,6 +4,7 @@
 import { hostOf } from '../text.ts';
 import { describe, parseScenario, type Instruction, type Scenario } from '../scrape/scenario.ts';
 import { riskOf } from '../scrape/tools.ts';
+import { docRefused, MEM } from '../memory.ts';
 import { LIMITS, bare, parseWork, personUrls, type Gardener, type GardenRun, type Request, type Seen, type Step } from './records.ts';
 
 export type Effect = Step['effect'];
@@ -138,6 +139,14 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
       if (!w || ((w.kind === 'ask' || w.kind === 'plan') && w.tabs?.length)) return 'deny';
       return personUrls(w).every((u) => onSites(hostOf(u), gardener.sites)) ? 'allow' : 'deny';
     }
+    // Stores an unconfirmed entry only: it reaches no prompt until the person keeps it.
+    case 'remember':
+      return 'allow';
+    // The run's own gardener's documents (the worker scopes them); the read taints the run (taintsAfter).
+    case 'doc_read':
+      return 'allow';
+    case 'doc_write':
+      return typeof call.args.text === 'string' && call.args.text.length <= MEM.doc && !docRefused(String(call.args.path ?? '')) ? 'allow' : 'deny';
     default:
       return 'deny'; // evaluate, and any tool policy doesn't know
   }
@@ -161,6 +170,9 @@ export function failTaints(tool: string, args: Record<string, unknown>, error: s
   const final = /Now at (\S+?)\.?(\s|$)/.exec(error)?.[1];
   return [String(args.url ?? ''), final ?? ''].some((u) => onSites(hostOf(u), sites));
 }
+
+/** Whether a finished call taints the run: its result says so, or it read the person's private documents. */
+export const taintsAfter = (tool: string, r: { taint?: boolean | undefined }): boolean => !!r.taint || tool === 'doc_read';
 
 /** "Always" may answer this request: a non-sensitive approve, never in the person's own tab (decision 6). */
 export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && q.tool !== 'act_my_tab';

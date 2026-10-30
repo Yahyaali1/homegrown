@@ -35,7 +35,7 @@ export function parseNote(raw: unknown): Note | null {
 export const forGardener = <T extends Pick<Note, 'gardenerId'>>(notes: T[], gardenerId: string): T[] => notes.filter((n) => !n.gardenerId || n.gardenerId === gardenerId);
 
 /** eg-memory's schema, one step per version: each runs once, so the stores already there keep their data. */
-export const MEMORY_VERSION = 3;
+export const MEMORY_VERSION = 4;
 export function upgradeMemory(d: Pick<IDBDatabase, 'createObjectStore'>, oldVersion: number): void {
   if (oldVersion < 1) {
     d.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
@@ -44,6 +44,10 @@ export function upgradeMemory(d: Pick<IDBDatabase, 'createObjectStore'>, oldVers
   }
   if (oldVersion < 2) d.createObjectStore('snapshots', { keyPath: 'url' });
   if (oldVersion < 3) d.createObjectStore('notes', { keyPath: 'id' });
+  if (oldVersion < 4) {
+    d.createObjectStore('entities', { keyPath: 'id' });
+    d.createObjectStore('docs', { keyPath: 'id' });
+  }
 }
 
 const PERSON = 'Notes (written by you):';

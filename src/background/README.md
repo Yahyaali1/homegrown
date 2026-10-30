@@ -91,7 +91,9 @@ It also owns these parts:
   - `runMessage` with `steer: false` queues the text; when the run ends done or failed (not stopped), the oldest
     queued message becomes a follow-up run. `runRetry` refuses what `retryStep` refuses. A failed `read_page` or
     `search` with a timeout or network error is tried once more after 30 s (`Step.tries`; the wait holds the queue).
-    `draft`, `note` and `propose_routine` add a `created` card to the run.
+    `draft`, `note` and `propose_routine` add a `created` card to the run; `doc_write` a `doc` card, `remember` a
+    `memory` card. A turn passes `@` anchors (`anchorsIn` over confirmed entities) and the routine's `for` entity
+    into `Ctx`; a think that carries them taints the run first, as notes do.
   - `runMessage` refuses a 4th unused Steer message (or queued message). `propose_routine`'s id is `<runId>.<step>`, so a re-run after a
     restart stores nothing new.
   - `requestAnswer` (V2): `approve` takes `yes`, `no` or `always` (`always` stores a grant; not offered for a sensitive
@@ -145,7 +147,8 @@ It also owns these parts:
     every routine's claim and alarm. A turn that throws fails its run in words.
   - Sends `{type:'garden-run', run}` (outputs cut to 300) to extension pages on every save.
 - `gardentools.ts`: `GARDEN_TOOLS` (`search`, `read_page`, `mission`, `draft`, `notify`, `act`, `collect`, `read_my_tab`,
-  `propose_routine`: stores `proposedRoutine`, paused and `by: 'model'`, in `routines`),
+  `propose_routine`: stores `proposedRoutine`, paused and `by: 'model'`, in `routines`; `remember`: an unconfirmed
+  entity with id `<runId>.<step>`; `doc_read` / `doc_write`: the run's gardener's documents by path),
   `gardenAsk`, `gardenNotice`, `factsOf` (a recipe as policy sees it), `NeedsYou`.
   - `act` plays the approved steps in a run tab and returns the final URL, the step report and short page text.
     `collect` runs a saved recipe (`scrapeRecipe`) in the run's tabs with its pinned model; a closed tab (`TabClosed`) is rethrown, not a row, so an acting collect asks did-it-happen.
@@ -204,7 +207,10 @@ It also owns these parts:
     `contextChars`; null without it.
 - `memory.ts` handlers: `memHistory`, `memClearHistory`, `memHighlightSave`, `memHighlights`,
   `memHighlightDelete`, `memSimilar`, `memAsk`, `memChanged`, `memSnapshot`, `memSavings`, `transcribe`.
-  It also has the `onAnswer` hook.
+  It also has the `onAnswer` hook. Plan T7 (extension pages only): `entityList`, `entitySave` (the person's save:
+  `by: 'person'`, confirmed), `entityKeep` (confirms a gardener's file as it is, so its template stays data),
+  `entityDelete`, `docList`, `docGet`, `docSave`, `docDelete`. Exports `confirmedEntities`, `rememberEntity`,
+  `docAt`, `writeDoc` (≤ 50 per gardener) and `deleteDocs` for the garden worker.
 - `monitors.ts` handlers: `watchPage`, `unwatch`, `listMonitors`, `checkNow`, `schedule`, `unschedule`,
   `runScheduleNow`.
 - `tabs.ts` handlers: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`. Exports `tabText(tabId, cap)` and `tabPage` (text and the URL read at; `read_my_tab` refuses a moved tab).
@@ -327,10 +333,10 @@ It also owns these parts:
 - IndexedDB `hg-outputs` v1 (store `artifacts`, keyed by `id`: `{ v: 1, id, kind, title, data, runId?, chatId?, at }`,
   checked by `parseArtifact` on every read).
 - IndexedDB `hg-trust` v1 (store `confirmed`: the steps the user confirmed for each scheduled mission).
-- IndexedDB `eg-memory` v3 (`upgradeMemory` in domain/garden/notes.ts), with the stores `history`, `highlights`,
-  `kb`, `snapshots` and `notes` (the gardeners' notebook: `{ v: 1, id, gardenerId?, text, by, at, vec? }`, at most
+- IndexedDB `eg-memory` v4 (`upgradeMemory` in domain/garden/notes.ts), with the stores `history`, `highlights`,
+  `kb`, `snapshots`, `entities` and `docs` (plan T7, `domain/memory.ts`) and `notes` (the gardeners' notebook: `{ v: 1, id, gardenerId?, text, by, at, vec? }`, at most
   200 per gardener, the oldest model notes going first). `onAnswer` adds `history`, updates `savings`, adds `kb`
-  entries and saves `snapshots`. An older build can't open v3 (`VersionError`): its memory features fail, and no data
+  entries and saves `snapshots`. An older build can't open v4 (`VersionError`): its memory features fail, and no data
   is lost.
 - On install, the content scripts are injected into every existing `http(s)` tab.
 - `sidePanel.setPanelBehavior({openPanelOnActionClick:true})` when the worker starts.

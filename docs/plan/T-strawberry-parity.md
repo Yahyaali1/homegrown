@@ -956,7 +956,7 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T9 done (merged from t9-outputs). T6 in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T9 done (merged from t9-outputs). T7 in progress.
 
 | Slice | State |
 |---|---|
@@ -966,8 +966,8 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T3b | Done (4517f73), reviewed (0 Blockers, 1 Major fixed): 217 unit tests pass; `tests/helpers.spec.mjs` 1/1, run twice on the real model (12 pages, at most 3 tabs, one `word` think); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2. Deviations: `LIMITS.readUrls` 25 (recipes keep `urls` 5); helpers keep the routine id; auto-retry waits as `queued` with `retryAt`; `WORD` prompt says what a first look holds |
 | T4 | Done (44a7268), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 230 unit tests pass before the merge (14 new in `garden-triggers`); `tests/triggers.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `helpers.spec` 1/1. Deviations: event snapshot key `<routineId>\nevent <url>`; pure `eventCheck` and `checkFetch` in `schedule.ts`; the first check at save is the baseline; no check while a run works; a one-off doesn't wait behind Run now; a one-off in the past is refused; expiry says 'Needed you for too long.'; `GardenRun.deadline`; `Routine.missed` |
 | T5 | Done (c7852a7), reviewed (0 Blockers, 3 Majors and 2 Minors fixed): 252 unit tests pass; `tests/tabs.spec.mjs` 4/4 (no model, download by referrer included); every garden regression passes. Built: `act_my_tab` (always asked; never granted, never in Approve all or a plan; its fills are sensitive), `help` requests for challenge pages (a No fails with `HELP_REFUSED`; any answer closes the held tab), `background/devtools.ts` (one shared debugger attach, never on the person's tab), screencast Watch of the group's newest tab, the optional `downloads` permission as the setting, `GardenRun.files`, `Gardener.devtools`. No live-view e2e |
-| T6 | Built, review fixes in (3 Major, 4 Minor: plan text only on a chat's first message; saves read-modify-write in one transaction with a `BroadcastChannel` reload; hover fetches nothing, Read the page is a click; Plan gate checks the model the chat uses; `sameSite` refuses single labels and shared suffixes via `site()`; `openLink` extension pages only; the timed save doesn't redraw the list): 262 unit tests pass (10 in `chat`); `tests/chat.spec.mjs` 4/4 before and after the fixes (1 `@slow` on the real model); `extension.spec` chat tests 5/5 (chat streams, PDF translate, long selection, dark theme, link preview); `garden.spec` 4/4. Deviations: pure rules in new `domain/chat.ts` (`highlightParts` gives parts, the page builds text nodes and `<mark>`); chat Report is `chatReport` (no message text), not `reportOf`; no runtime returns thinking, so Reasoning reads a leading `<think>` part; `markdown()` has no links, so `ui/linkcard.ts` `linkify` makes them from text nodes (chat and Garden results); turns gain optional `label` and `selection`; a chat's model is Settings' chat model if set, else `modeModel`; Duplicate is on model answers only; no tab-list row "Open in chat" (the side panel has no tab list); the panel reopens the last chat, so two `extension.spec` tests click New chat first and its `answer()` reads `#messages > li` |
-| T7 | Planned |
+| T6 | Done (d2d6e87), reviewed (0 Blockers, 3 Majors and 4 Minors fixed): 262 unit tests pass; `tests/chat.spec.mjs` 4/4 (1 `@slow` on the real model: reload during an answer → Interrupted → Retry); the `extension.spec` chat tests 5/5; `garden.spec` 4/4. New: `domain/chat.ts`, `pages/chat.ts` (moved out of `sidepanel.ts`), `ui/linkcard.ts`, the `hg-chat` store, the `chat:page` and `chat:link` menus, `openLink` (extension pages only), the `linksInActiveTab` setting, links in answers and Garden results, `chatReport` |
+| T7 | Built, not yet reviewed: 269 unit tests pass (7 new in `memory`); `tests/memory.spec.mjs` 2/2 (no model); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `chat.spec` 4/4. Deviations: extra handler `entityKeep` (Keep confirms a model's file without making it the person's, so its template stays data); `remember` args are `type`, `name`, `body`; `doc_write` is also denied for `Documents/` paths; doc paths are per gardener; the `facts` rewording of corrections is not built (no model has `facts`); a draft edit's correction text is its `diffText`; chat resolves `@` anchors into the turn's `selection`; choose data caps each step's args at 500 chars; no Meetings folder until T10 |
 | T8 | Planned |
 | T9 | Done (eea5354, merged 5f61607), reviewed (0 Blockers, 2 Majors fixed): e2e 6/6 (2 `@slow`); merged suite 242 unit tests pass, build ok. `abilities.mjs` on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6, so no T9 ability is set, and decks are built by code. E4B not measured (no local copy; about 8 GB of disk free). Every research report is saved as a `brief`. Editing is on the output page |
 | T10 | Planned |
@@ -979,6 +979,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 
 | Round | Reviewer | Blockers / Major | Result |
 | --- | --- | --- | --- |
+| T6 | code review | 0 / 3 | Fixed: the plan prefix goes only on a chat's first message; a save is one IndexedDB read-modify-write that merges turns, then `BroadcastChannel('hg-chat')` reloads other views; hover cards fetch nothing (host and warnings only), and "Read the page" fetches on click (the T6 plan text was rewritten to match). Minors fixed: the Plan gate checks the chat's own model; `sameSite` uses `site()`'s suffix list; `openLink` checks `isExtensionPage`; a streaming save doesn't redraw the list |
 | T5 | code review | 0 / 3 | Fixed: Take over and Show tab go to the borrowed tab first (`workTab`); a call that throws taints through the pure `failTaints` (`act_my_tab` always, `act` when on the gardener's sites); `isChallenge` only on short pages (under 600 chars) or interstitial titles, with Turnstile and invisible hCaptcha left out. Minors fixed: the help path releases the lock; Take over ungroups a tab only from the run's own group |
 | T9 | code review | 0 / 2 | Fixed: table edits had no debounce; `fontStack` cleans non-ASCII and overlong font stacks. Minors fixed: `citeAnswer` is page-only and checks the ability before it sends text; XML strips U+FFFE and U+FFFF; "007" stays text |
 | T4 | code review | 0 / 3 | Fixed: the event fetch has a 30 s timeout and event checks don't block worker start (`started`); an error status (`!res.ok`) fails the check; signed-in checks use `redirect: 'manual'`, and a redirect fails the check. Minors fixed: the snapshot is saved only when nothing changed or a run was made; a missed one-off shows "Missed" |
@@ -1130,3 +1131,17 @@ The Elephant's running memory. Newest entry last. Each entry: date, what happene
   3. The `act_my_tab` approval card can't be edited.
   4. Disk: 5.4 GB free. The old `.profile-*` folders (about 30 GB) belong to the user and were not deleted; ask before
      T10.
+
+**2026-10-30: T6 landed (commit d2d6e87).**
+- 262 unit tests pass; `tests/chat.spec.mjs` 4/4 (1 `@slow` on the real model); the `extension.spec` chat tests 5/5;
+  `garden.spec` 4/4.
+- Deviations, accepted:
+  - Reasoning shows only when a reply starts with `<think>`.
+  - Duplicate is offered only on model answers.
+  - There is no "Open in chat" in a tab list: the side panel has no tab list (decision 15 named one), so the page and
+    link menus are the only way in.
+  - The panel reopens the last chat, so the `extension.spec` tests click New chat first.
+- Review: 0 Blockers, 3 Majors and 4 Minors fixed (see Review history).
+- Open items:
+  1. A thumbs-down is stored but nothing uses it yet. T8 evidence reads it.
+  2. That a chat survives a worker restart is untested. The panel itself stores chats, so the risk is low.

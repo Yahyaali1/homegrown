@@ -73,7 +73,11 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   in an `<img>` (kept nowhere); declined, it offers Show the tab (`runTab`, then `tabs.update`/`windows.update`). The
   gardener form's DevTools switch asks for `debugger` when turned on (`Gardener.devtools`). "Keep downloads with
   runs" is the `downloads` permission itself (on requests it, off removes it); a `file` card's Open calls
-  `downloads.show`. `showRequests()` re-renders the trays when
+  `downloads.show`. Plan T7: a `doc` card opens it in Library → Memory; a `memory` card has Keep / Discard while
+  off; a draft is editable before Copy, and an edit, or a follow-up or Steer starting no / don't / never /
+  always, offers "Remember this?" (a `preference` with `correction: true`, the person's words). The routine form
+  has "Works for" (`Routine.for`, confirmed entities). `chat.ts` puts `@Name` files in the turn's `selection`
+  (the data part). `showRequests()` re-renders the trays when
   the Chat tab shows, so their requests are reported shown (`requestShown`) while on screen.
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its
@@ -107,7 +111,9 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     a saved mission ready to save again (from the "not confirmed for unattended runs" notification). An opened
     mission keeps its id through a run, so Save updates it.
 - `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
-  library", flashcard spaced repetition and the savings meter. Both pages link to Outputs.
+  library", flashcard spaced repetition, Memory (plan T7: folders by type, then Documents/<gardener>; each file
+  edits in place; a gardener's proposed file shows Keep / Discard) and the savings meter. Both pages link to
+  Outputs. `openMemory(id)` opens a file or document (a run's `doc` or `memory` card).
 - `outputs.ts` (`outputs.html`, plan T9): with `?id=`, one artifact from `bg('artifactGet')`; without, the list
   (`artifactList`, Delete), "Brand kit from a site" (`brandRead`) and "Write a brief".
   - Table or chart: Table · Bars · Line (`ui/chart.ts`, with KPI cards); cells edit in place, rows are added and

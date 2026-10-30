@@ -1,9 +1,11 @@
 // Memory: answer history, highlights, a small knowledge base of pages tasks ran on, page snapshots for "changed
-// since your last visit", the gardeners' notebook, and the savings meter. Everything stays in this browser (IndexedDB 'eg-memory',
+// since your last visit", the gardeners' notebook, typed memory and Documents (plan T7), and the savings meter. Everything stays in this browser (IndexedDB 'eg-memory',
 // chrome.storage.local 'savings').
 import { engine, ask } from './engine.ts';
 import { cosine, diffLines, keywordScore } from '../domain/compare.ts';
 import { forGardener, MEMORY_VERSION, NOTE_CHARS, parseNote, upgradeMemory, type Note } from '../domain/garden/notes.ts';
+import { docWriteRefused, ENTITY_TYPES, MEM, parseDoc, parseEntity, pathOk, type Doc, type Entity } from '../domain/memory.ts';
+import { isExtensionPage } from './pagerequest.ts';
 
 const HISTORY_CAP = 2000;
 const NOTES_CAP = 200; // per gardener; over it, its oldest model notes go (the person's never do)
@@ -17,7 +19,7 @@ interface Embedded { id?: number; url: string; title: string; embedText: string;
 interface KbEntry extends Embedded { summary: string }
 interface Highlight extends Embedded { text: string; note: string }
 interface Snapshot { url: string; text: string; time: number }
-interface Stores { history: HistoryEntry; highlights: Highlight; kb: KbEntry; snapshots: Snapshot; notes: Note }
+interface Stores { history: HistoryEntry; highlights: Highlight; kb: KbEntry; snapshots: Snapshot; notes: Note; entities: Entity; docs: Doc }
 type StoreName = keyof Stores;
 
 const db = new Promise<IDBDatabase>((resolve, reject) => {
@@ -100,6 +102,55 @@ export async function listNotes(gardenerId?: string): Promise<Omit<Note, 'vec'>[
   return list.sort((a, b) => b.at - a.at).map(({ vec: _, ...n }) => n);
 }
 
+// ---- typed memory and Documents ----
+
+const entities = async () => (await all('entities')).flatMap((e) => parseEntity(e) ?? []);
+const docs = async () => (await all('docs')).flatMap((d) => parseDoc(d) ?? []);
+const bare = <T extends { vec?: unknown }>({ vec: _, ...x }: T) => x;
+const put = async (name: 'entities' | 'docs', value: Entity | Doc) => void (await done((await store(name, 'readwrite')).put(value)));
+
+/** The entities a prompt may hold: confirmed ones only. */
+export const confirmedEntities = async (): Promise<Entity[]> => (await entities()).filter((e) => e.confirmed);
+
+/** A memory file a gardener proposes: unconfirmed, by the model. Its id is the run's step, so a re-run stores it once. */
+export async function rememberEntity(e: Pick<Entity, 'id' | 'type' | 'name' | 'body' | 'gardenerId'>): Promise<Entity> {
+  const old = parseEntity(await done((await store('entities')).get(e.id)));
+  if (old) return old;
+  const x = parseEntity({ v: 1, aliases: [], fields: {}, ...e, by: 'model', confirmed: false, at: Date.now() });
+  if (!x) throw new Error('That memory file isn’t valid.');
+  await put('entities', x);
+  return x;
+}
+
+/** A gardener's document at `path`, if any. */
+export const docAt = async (gardenerId: string, path: string): Promise<Doc | undefined> => (await docs()).find((d) => d.gardenerId === gardenerId && d.path === path);
+
+/** Writes (or replaces) a gardener's document; at most 50 per gardener. */
+export async function writeDoc(gardenerId: string | undefined, path: string, text: string, by: Doc['by'], id?: string): Promise<Doc> {
+  const all = await docs();
+  const old = id ? all.find((d) => d.id === id) : all.find((d) => d.gardenerId === gardenerId && d.path === path);
+  const refused = docWriteRefused(old, by);
+  if (refused) throw new Error(refused);
+  if (!old && all.filter((d) => d.gardenerId === gardenerId).length >= MEM.docs) throw new Error(`A gardener keeps at most ${MEM.docs} documents.`);
+  if (all.some((d) => d.gardenerId === gardenerId && d.path === path && d.id !== old?.id)) throw new Error('Another document has that path.');
+  const doc = parseDoc({ v: 1, id: old?.id ?? crypto.randomUUID(), path, text, by, at: Date.now(), ...((old?.gardenerId ?? gardenerId) && { gardenerId: old?.gardenerId ?? gardenerId }) });
+  if (!doc) throw new Error(`A document has a path of up to ${MEM.path} characters and up to ${MEM.doc} characters of text.`);
+  await put('docs', doc);
+  return doc;
+}
+
+/** Every document of a deleted gardener. */
+export async function deleteDocs(gardenerId: string): Promise<void> {
+  const s = await store('docs', 'readwrite');
+  for (const d of (await done(s.getAll())) as { id: string; gardenerId?: unknown }[]) if (d.gardenerId === gardenerId) s.delete(d.id);
+}
+
+const mine = (sender?: chrome.runtime.MessageSender) => {
+  if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
+};
+
+const words = (x: unknown) => (Array.isArray(x) ? x : String(x ?? '').split(',')).map((a) => String(a).trim()).filter(Boolean);
+
 async function addHistory(entry: HistoryEntry): Promise<void> {
   const s = await store('history', 'readwrite');
   await done(s.add(entry));
@@ -178,6 +229,52 @@ export async function onAnswer(raw: unknown, r: { text: string; userText?: strin
 }
 
 export const handlers = {
+  // Typed memory and Documents: private, so extension pages only. A person's save makes the file theirs and confirmed.
+  async entityList(_: unknown, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    return (await entities()).sort((a, b) => b.at - a.at).map(bare);
+  },
+  async entitySave({ entity }: { entity: Partial<Entity> }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    const old = entity.id ? parseEntity(await done((await store('entities')).get(entity.id))) : null;
+    const e = parseEntity({ v: 1, fields: {}, body: '', ...old, ...entity, aliases: words(entity.aliases ?? old?.aliases), id: old?.id ?? crypto.randomUUID(),
+      type: ENTITY_TYPES.includes(entity.type as Entity['type']) ? entity.type : old?.type ?? 'person', by: 'person', confirmed: true, at: Date.now() });
+    if (!e) throw new Error(`A memory file needs a name of up to ${MEM.name} characters, and a body of up to ${MEM.body}.`);
+    delete e.vec;
+    await put('entities', e);
+    return bare(e);
+  },
+  /** Keep a gardener's proposed file as it is: confirmed, still the model's words (so its template stays data). */
+  async entityKeep({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    const e = parseEntity(await done((await store('entities')).get(String(id))));
+    if (!e) throw new Error('That memory file is gone.');
+    await put('entities', { ...e, confirmed: true });
+    return true;
+  },
+  async entityDelete({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    await done((await store('entities', 'readwrite')).delete(String(id)));
+    return true;
+  },
+  async docList({ gardenerId }: { gardenerId?: string } = {}, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    return (await docs()).filter((d) => !gardenerId || d.gardenerId === gardenerId).sort((a, b) => a.path.localeCompare(b.path));
+  },
+  async docGet({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    return parseDoc(await done((await store('docs')).get(String(id))));
+  },
+  async docSave({ doc }: { doc: Partial<Doc> }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    if (!pathOk(doc.path)) throw new Error('That isn’t a valid document path.');
+    return writeDoc(doc.gardenerId, doc.path, String(doc.text ?? ''), 'person', doc.id);
+  },
+  async docDelete({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
+    mine(sender);
+    await done((await store('docs', 'readwrite')).delete(String(id)));
+    return true;
+  },
   async memHistory({ q = '', limit = 200 }: { q?: string; limit?: number }) {
     const ql = q.toLowerCase();
     return (await all('history')).reverse().filter((h) => !ql || `${h.title} ${h.ask} ${h.answer} ${h.url}`.toLowerCase().includes(ql)).slice(0, limit);

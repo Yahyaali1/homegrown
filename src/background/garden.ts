@@ -8,12 +8,13 @@ import { factsOf, GARDEN_TOOLS, gardenNotice, MODEL_CHANGED, NeedsHelp, NeedsYou
 import { screencast } from './devtools.ts';
 import { htmlText } from './monitors.ts';
 import { recipesList } from './scrape.ts';
-import { addNote, deleteNote, deleteNotes, listNotes, notesFor } from './memory.ts';
+import { addNote, confirmedEntities, deleteDocs, deleteNote, deleteNotes, listNotes, notesFor } from './memory.ts';
+import { anchorsIn } from '../domain/memory.ts';
 import * as idb from './idb.ts';
 import * as trust from './trust.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
 import { answeredBy, answerFor, answerPlan, answerRefused, approveRequest, AUTO_RETRY_MS, autoRetry, digest, earlierOf, followUpRun, helpersOf, mergeHelpers, next, OPEN_REFUSED, parseEdit, PLAN_REFUSED, queuedFollowUp, recover, refusal, resumeAll, retryStep, said, stopRequest, type Ctx } from '../domain/garden/loop.ts';
-import { actOf, addSeen, alwaysOk, approveAllOk, callKey, failTaints, decide, onSites, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
+import { actOf, addSeen, alwaysOk, approveAllOk, callKey, failTaints, decide, onSites, taintsAfter, recipeHosts, recipeOf, SENSITIVE_WAIT, type Known, type Verdict } from '../domain/garden/policy.ts';
 import { checkFetch, claim, DEADLINE, eventCheck, expired, nextAfter, nextBatch, overdue } from '../domain/garden/schedule.ts';
 import { downloadRun, ownsTab, TOOLS, toolsFor } from '../domain/garden/tools.ts';
 import { hostOf } from '../domain/text.ts';
@@ -265,6 +266,10 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
   // The notes that best match the work, for its choose or word data (a mission's answer is its own; a helper makes no think).
   const query = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.request : run.work.kind === 'read' && !run.parentId ? `${gardener.instructions}\n${run.work.urls.join('\n')}` : '';
   const notes = query ? await notesFor(gardener.id, query).catch(() => []) : [];
+  // Memory the work names: `@` anchors in a request, and the routine's entity (confirmed ones only).
+  const remembered = run.work.kind === 'ask' || run.work.kind === 'plan' || routine?.for ? await confirmedEntities().catch(() => []) : [];
+  const anchors = run.work.kind === 'ask' || run.work.kind === 'plan' ? anchorsIn(run.work.request, remembered) : [];
+  const forEntity = routine?.for ? remembered.find((e) => e.id === routine.for) : undefined;
   const before = run.followUp ? await getRun(run.followUp) : null;
   const earlier = before ? earlierOf(before) : '';
   const budget = gardener.minutes * 60_000;
@@ -280,7 +285,8 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
     for (;;) {
       if (stop.signal.aborted) return;
       const known = await knownFor(gardener.id);
-      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }) };
+      const ctx: Ctx = { gardener, ...(routine && { routine }), tools: toolsFor(run), now: Date.now(), ...known, ...(notes.length && { notes }), ...(earlier && { earlier, earlierTainted: !!before?.tainted }),
+        ...(anchors.length && { anchors }), ...(forEntity && { forEntity }) };
       const a = next(run, ctx);
       if ('think' in a) {
         // Notes are private: from the moment the model reads them, the run is tainted (stored first).
@@ -413,7 +419,7 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
       ...(r.links && { links: r.links }), ...(r.url && { url: r.url }), ...(tries && { tries }) });
     if (r.created) run.created = [...(run.created ?? []).filter((x) => x.kind !== r.created!.kind || x.ref !== r.created!.ref), r.created];
     if (r.seen) run.seen = addSeen(run.seen, r.seen.urls, r.seen.from, r.seen.from === 'link' ? i : undefined);
-    if (r.taint) run.tainted = true;
+    if (taintsAfter(tool, r)) run.tainted = true;
   } catch (e) {
     if (tab.stop.signal.aborted) return; // the turn ends at the top of its loop
     if (failTaints(tool, args, e instanceof Error ? e.message : String(e), gardener.sites)) run.tainted = true;
@@ -567,6 +573,7 @@ export const handlers = {
     // Its runs stop first, so none takes a note after its notes are gone.
     for (const r of (await allRuns()).filter((x) => x.gardenerId === id && (x.status === 'queued' || x.status === 'running' || x.status === 'waiting'))) await handlers.runStop({ id: r.id }, sender);
     await deleteNotes(id);
+    await deleteDocs(id);
     await idb.del(await db, 'gardeners', id);
     return true;
   },

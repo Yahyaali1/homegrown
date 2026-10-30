@@ -22,6 +22,10 @@ runtime adapters and storage live outside `domain/`.
 - `chat.ts` (plan T6): `Chat`, `ChatTurn`, `Mode`, `modeModel`, `isLong`, `parseChat`, `interrupted`,
   `duplicate`, `upsertTurns`, `dropFrom`, `planFirst`, `titleOf`, `engineTurns`, `searchChats`, `highlightParts`, `questionBlock`, `splitThinking`,
   `chatReport`. The saved-chat record and its pure rules.
+- `memory.ts` (plan T7): `Entity`, `Doc`, `ENTITY_TYPES`, `MEM` (limits), `parseEntity`, `parseDoc`, `pathOk`,
+  `docRefused` (`Meetings/` and `Documents/` paths), `anchorsIn` (`@Name` or alias, confirmed only, ≤ 3), `reference`,
+  `memoryParts` (anchors as data; a routine entity's template is instruction only when the person wrote it),
+  `correctionOf` (no / don't / never / always), `correctionEntity`.
 - `links.ts`: `linkWarnings`, `sameSite(host, of)` (both through `garden/records.ts` `site()`, so a single label or
   a shared suffix is never a site). Local phishing warnings for a link: link text that does not match the host,
   punycode, brand names with digits in place of letters, and plain `http`.
@@ -109,7 +113,9 @@ runtime adapters and storage live outside `domain/`.
     sensitive whatever the taint; `alwaysOk` is false for it and `planCovers` (`act`, `collect`) never covers it.
     Reach, taint, acts and grants (ADR-16). `approveAllOk(q, run)` refuses any reach in a tainted run.
     `propose_routine` is denied in a tainted run, and allowed only when its work names no URL off the
-    gardener's sites (read pages or URLs in a request) and none of the person's tabs.
+    gardener's sites (read pages or URLs in a request) and none of the person's tabs. Plan T7: `remember` and
+    `doc_read` are allowed (`privateRead('doc_read')`: the worker taints the run after it); `doc_write` is allowed
+    up to 20 000 characters, denied for a `Meetings/` or `Documents/` path (`docRefused`).
   - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
     and has the page left the call's hosts. `CHALLENGE_HOSTS`, `isChallenge({ frames, title, text })`: a page that
     stands between the run and its content: a title that says so, or a short page (< 600 characters) whose text says
@@ -137,13 +143,13 @@ runtime adapters and storage live outside `domain/`.
   - `report.ts`: `reportOf(run, withText, version?)`, a local report: version, model, status, why, step digests;
     step outputs, turns and the answer only with `withText`.
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
-    `read_my_tab`, `act_my_tab`, `propose_routine`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
-    `parseArgs`, `toolsFor` (`read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` only with
+    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`), `EDITABLE`, `ToolSpec`, `Arg` (`record`: a value its parser takes),
+    `parseArgs`, `toolsFor` (`read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
     `agent.loop` or in a plan), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
     a borrowed tab), `devtoolsDigest` (≤ 20 console errors, ≤ 30 requests with status ≥ 400, no query strings, no
     bodies), `downloadRun` (a download's run by referrer; never one the person's tabs also have open, never a guess).
     `parseArgs` refuses unknown keys and `evaluate` steps.
-  - `notes.ts`: `Note`, `NOTE_CHARS` (500), `parseNote`, `forGardener`, `notesBlock`, `MEMORY_VERSION` (3),
+  - `notes.ts`: `Note`, `NOTE_CHARS` (500), `parseNote`, `forGardener`, `notesBlock`, `MEMORY_VERSION` (4),
     `upgradeMemory`. Notes as labelled data, whole notes only; the `eg-memory` upgrade runs one step per version.
 
 ## Invariants

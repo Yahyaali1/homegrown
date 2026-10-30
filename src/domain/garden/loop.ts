@@ -10,13 +10,15 @@ import { LIMITS, newRun, type Gardener, type GardenRun, type PlannedCall, type R
 import { describe } from '../scrape/scenario.ts';
 import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
 import { notesBlock, type Note } from './notes.ts';
+import { memoryParts, type Entity } from '../memory.ts';
 
 /**
  * `notes`: the gardener's notes the worker retrieved, best first; as many as fit go into the data, never the prompt.
  * `earlier`: a follow-up's earlier run (`earlierOf`), which starts its data; `earlierTainted`: that run is tainted
  * now (read fresh: a retry may have tainted it since), so a think that reads it taints this run first.
+ * `anchors`: the confirmed entities the request names with `@`; `forEntity`: the routine's entity (`Routine.for`).
  */
-export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[]; earlier?: string; earlierTainted?: boolean }
+export interface Ctx extends Known { gardener: Gardener; routine?: Routine; tools: ToolSpec[]; now: number; notes?: Note[]; earlier?: string; earlierTainted?: boolean; anchors?: Entity[]; forEntity?: Entity }
 
 export type Action =
   /**
@@ -273,13 +275,19 @@ const budget = (run: GardenRun) => contextChars(run.maxTokens!);
 
 /**
  * A think whose fixed part fits; the data is cut to the rest, so the engine never cuts. The person's unused Steer
- * messages are their own words, so they end the instruction part.
+ * messages are their own words, so they end the instruction part. With `ctx`, memory joins: anchors (and a template
+ * a gardener wrote) start the data, a template the person wrote ends the instruction; either taints the run.
  */
-function think(run: GardenRun, purpose: Turn['purpose'], prompt: string, data: string, taint = false): Action {
+function think(run: GardenRun, purpose: Turn['purpose'], prompt: string, data: string, taint = false, ctx?: Ctx): Action {
+  const mem = ctx ? memoryParts(ctx.anchors, ctx.forEntity) : { instruction: '', data: '' };
+  if (mem.instruction) prompt += `\n\n${mem.instruction}`;
   const steer = (run.inbox ?? []).filter((m) => m.steer && !m.usedAt);
   if (steer.length) prompt += `\n\n${steer.map((m) => `The person adds: ${m.text}`).join('\n')}`;
   const room = budget(run) - prompt.length;
   if (room < 0) return { fail: TOO_LONG };
+  // ponytail: memory takes up to a third of the room ahead of the rest, so the data's tail is what gets cut.
+  if (mem.data) data = `${mem.data.slice(0, Math.floor(room / 3))}\n\n${data}`;
+  taint ||= !!(mem.instruction || mem.data);
   return { think: { purpose, prompt, data: data.slice(0, room), ...(purpose === 'word' ? {} : { sampling: GREEDY }), ...(taint && { taint: true as const }),
     ...(steer.length && { steer: steer.map((m) => m.id) }) } };
 }
@@ -302,7 +310,7 @@ function word(run: GardenRun, ctx: Ctx, urls: string[]): Action {
     // Each page gets an equal share of the rest, so none is cut away whole.
     const per = Math.floor((budget(run) - WORD.length - head.length - (notes ? notes.length + 2 : 0)) / read.length) - 2;
     const pages = read.map((s) => `${String(s.args.url)}\n${defang(s.output) || '(no change)'}`.slice(0, Math.max(0, per))).join('\n\n');
-    return think(run, 'word', WORD, head + (notes ? `${pages}\n\n${notes}` : pages), !!notes);
+    return think(run, 'word', WORD, head + (notes ? `${pages}\n\n${notes}` : pages), !!notes, ctx);
   }
   return { done: { answer: t.reply.trim() + (missed.length ? `\n\nCouldn't read: ${missed.join(', ')}` : '') } };
 }
@@ -361,7 +369,7 @@ function open(run: GardenRun, ctx: Ctx, request: string): Action {
   const choose = (purpose: 'choose' | 'repair', tools: ToolSpec[]) => {
     const prompt = choosePrompt(ctx.gardener, request, tools, purpose);
     const d = chooseData(run, missing, ctx, budget(run) - prompt.length);
-    return think(run, purpose, prompt, d.data, d.taint);
+    return think(run, purpose, prompt, d.data, d.taint, ctx);
   };
   if (!last) return choose('choose', ctx.tools);
   const { turn, choice } = last;
@@ -420,13 +428,13 @@ function planned(run: GardenRun, ctx: Ctx, request: string): Action {
     const head = changed(run) + (ctx.earlier ? `${ctx.earlier}\n\n` : '');
     const per = Math.floor((budget(run) - prompt.length - head.length) / Math.max(1, j)) - 2;
     const data = head + run.steps.map((s) => `[${s.i}] ${s.digest ?? s.tool}\n${defang(s.output ?? s.error ?? '')}`.slice(0, Math.max(0, per))).join('\n\n');
-    return think(run, 'sum', prompt, data, !!(ctx.earlier && ctx.earlierTainted));
+    return think(run, 'sum', prompt, data, !!(ctx.earlier && ctx.earlierTainted), ctx);
   }
   const max = run.agent!.maxSteps;
   const write = (purpose: 'plan' | 'repair') => {
     const prompt = planPrompt(ctx.gardener, request, ctx.tools, max, purpose);
     const d = chooseData(run, '', ctx, budget(run) - prompt.length);
-    return think(run, purpose, prompt, d.data, d.taint);
+    return think(run, purpose, prompt, d.data, d.taint, ctx);
   };
   const last = run.turns.findLast((x) => x.purpose === 'plan' || x.purpose === 'repair');
   if (!last) return write('plan');
@@ -472,7 +480,7 @@ function chooseData(run: GardenRun, missing: string, ctx: Ctx, room: number): { 
     ...(missing ? [`Still missing: ${missing}`, ''] : []),
     ...(tabs.length ? ['Tabs the person named (read_my_tab):', ...tabs.map((m) => `- ${m.url} (${defang(m.title).slice(0, 100)})`), ''] : []),
     'Steps so far:',
-    ...(run.steps.length ? run.steps.map((s) => `${s.i}. ${s.tool} ${JSON.stringify(s.args)} → ${s.digest ?? s.error ?? s.state}`) : ['none']),
+    ...(run.steps.length ? run.steps.map((s) => `${s.i}. ${s.tool} ${JSON.stringify(s.args).slice(0, 500)} → ${s.digest ?? s.error ?? s.state}`) : ['none']),
   ].join('\n');
   const block = notesBlock(ctx.notes ?? [], Math.min(Math.floor(Math.max(0, room) / 3), room - head.length - 2));
   let data = block ? `${head}\n\n${block}` : head;
