@@ -230,7 +230,7 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
 ## Privacy and safety
 
 - Nothing you read, type or ask leaves the device; only model downloads and the pages you choose to open
-  (missions, research, link previews) use the network.
+  (missions, research, link previews) use the network, and **calls to an app you connected** (below).
 - Missions and research use **read-only tools**: they open and read pages in a collapsed background tab
   group and close them. They never click buy buttons, submit forms or log in.
 - Page text is passed to the model as data; sentences that try to give the model instructions are removed
@@ -249,6 +249,12 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
   - Only Homegrown's own pages can answer a request or change a gardener.
   - **Known gap:** a site that keeps its sign-in in page storage instead of cookies still reads as you, even off the
     gardener's sites. Requests a site's service worker makes are not covered by the per-tab rule either.
+- **Connectors (remote MCP servers) send data only on your yes.** You paste a server URL and, if it needs one, a
+  token; no OAuth apps are bundled. Local (stdio) servers can't run from a browser extension. For each tool you choose
+  Off, Ask each time, or Read (may be allowed with Always). Every call is asked unless you allowed that exact Read call,
+  and a run that read your signed-in pages asks every call. Calls with words like pay, refund, delete or send are
+  sensitive (8 s, never allowed for good). The token stays in Homegrown's own database and goes only to that server.
+  A server's tool descriptions never reach the model: only the line you confirmed does.
 
 ## How it's built
 

@@ -170,11 +170,19 @@ It also owns these parts:
     throws `NeedsHelp(tabId)` when `isChallenge` holds (`readInTab`'s `hold`).
   - `read_my_tab` reads a tab the person named (`mentionedTab`: by hand the same tab on the same URL, in a routine
     any tab on exactly that URL) with `tabText`, and taints the run.
+  - `app_call` (plan T11) loads the connector with its token from `trust.ts`, checks the tool isn't Off now, calls
+    `mcp.ts` `callTool`, and returns the reply as tainting output.
   - `gardenNotice`: notification `garden:<id>`, "<name>: <text>"; a click opens `sidepanel.html#garden`.
 - `idb.ts`: `open(name, version, upgrade)`, `req`, `tx`, `get`, `put`, `del`, `all`.
-- `trust.ts`: IndexedDB `hg-trust` v2 through `idb.ts`, out of content scripts' reach, unlike `chrome.storage.local`.
+- `trust.ts`: IndexedDB `hg-trust` v3 through `idb.ts`, out of content scripts' reach, unlike `chrome.storage.local`.
   `confirmed(id)`, `confirm(id, steps)`, `forget(id)` (store `confirmed`, missions); `grants()`, `grant(g)`,
-  `revoke(g)` (store `grants`, key `[gardenerId, tool, host, argsKey]`, added by an `oldVersion` guard).
+  `revoke(g)` (store `grants`, key `[gardenerId, tool, host, argsKey]`, added by an `oldVersion` guard);
+  `connectors()`, `connectorPut(c)`, `connectorDelete(id)` (store `connectors`, v3, key `id`, with tokens; a delete
+  revokes that connector's `app_call` grants).
+- `mcp.ts` (plan T11, ADR-17): the remote MCP client, Streamable HTTP only (`probe(url, token)`: `initialize`, then
+  `tools/list` up to 5 pages; `callTool(connector, tool, args)`), 30 s timeouts, `credentials: 'omit'`, the token only
+  as the bearer header. Handlers, extension pages only: `connectorList` (no tokens, `hasToken`), `connectorProbe`,
+  `connectorSave` (a kept token stays when none is sent), `connectorDelete`.
   - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
   - It exports `inTab`, `waitLoaded`, `Run`, `ENGINES`, `searchInTab`, `readInTab`, `joinGroup`, `endRun`,
     `markWindow`, `closeIfEmpty`, `closeLiveGroups` (only what the old worker listed, read at module load) and

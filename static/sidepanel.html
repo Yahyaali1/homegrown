@@ -102,15 +102,18 @@
 
     <section id="garden" role="tabpanel" hidden>
       <ul id="garden-requests" class="list tray" aria-live="polite"></ul>
+      <p id="app-open" class="row muted small" hidden></p>
       <h3>Gardeners</h3>
       <ul id="gardener-list" class="list"></ul>
       <details id="skills" class="card"><summary>Skills</summary><div id="garden-skills" class="stack"></div></details>
+      <details id="connectors" class="card"><summary>Connectors</summary><div id="garden-connectors" class="stack"></div></details>
       <details id="gardener-add" class="card">
         <summary>Add a gardener</summary>
         <form id="gardener-form" class="stack">
         <input id="gardener-name" maxlength="40" placeholder="Name, e.g. Release notes" aria-label="Gardener name" required>
         <textarea id="gardener-instructions" rows="3" maxlength="2000" placeholder="Instructions, e.g. Tell me what changed, in three lines" aria-label="Instructions"></textarea>
         <textarea id="gardener-sites" rows="2" placeholder="Sites it may read signed in, one per line, e.g. github.com" aria-label="Sites, one per line"></textarea>
+        <textarea id="gardener-site-notes" rows="2" placeholder="Notes for web apps, one per line, e.g. app.hubspot.com: open Contacts first" aria-label="Site notes, one per line as host: note"></textarea>
         <label class="row">Minutes per run <input id="gardener-minutes" type="number" min="1" max="60" value="10" aria-label="Minutes per run"></label>
         <label class="check"><input id="gardener-devtools" type="checkbox"> DevTools: add console errors and failed requests to its reads and actions (asks for the debugger permission; Chrome shows a “started debugging” bar)</label>
         <div class="row look"><span id="gardener-look"></span><button id="gardener-another" type="button" class="ghost">Another look</button></div>

@@ -16,6 +16,7 @@ import * as livecaptions from './livecaptions.ts';
 import * as scrape from './scrape.ts';
 import * as garden from './garden.ts';
 import * as outputs from './outputs.ts';
+import * as mcp from './mcp.ts';
 import { tabText } from './tabs.ts';
 import { isExtensionPage } from './pagerequest.ts';
 import { sameSite } from '../domain/links.ts';
@@ -31,7 +32,7 @@ interface BackgroundModule {
   /** Called after every answer to a page request. */
   onAnswer?(req: unknown, result: { text: string }, sender?: chrome.runtime.MessageSender): unknown;
 }
-const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs];
+const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs, mcp];
 const handlers: Record<string, Handler> = Object.assign({}, ...modules.map((m) => m.handlers ?? {}));
 // The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
 handlers.toPage = async ({ msg }: { msg: object }) => {

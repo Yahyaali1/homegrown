@@ -48,6 +48,12 @@ Done after the group agents report. Owner: the main session.
   (`#skills`, `#garden-skills`). `hg-garden` is v2 (`skills`); every test and bench that plants runs now opens
   `hg-garden` without a version. `domain/chat.ts` `ChatTurn` gains `skillId?`. DONE.
 
+- T11 (plan T): `background/main.ts` registers the new `mcp.ts` module (one import, one entry in `modules`);
+  `static/sidepanel.html` gains `#app-open`, Garden's Connectors card (`#connectors`, `#garden-connectors`) and the
+  gardener form's `#gardener-site-notes`; `docs/architecture.md` gains ADR-17. `hg-trust` is v3 (`connectors`).
+  `domain/garden/classify.ts` adds `refund` to the sensitive words and exports `sensitiveWord`. `trimmed` moved from
+  `background/garden.ts` to `domain/garden/report.ts`. DONE.
+
 ## Known issues
 
 - Test harness: in a reused test profile the extension's service worker occasionally fails to start, so

@@ -9,6 +9,8 @@ import { tabPage } from './tabs.ts';
 import { addNote, docAt, rememberEntity, writeDoc } from './memory.ts';
 import { search as webSearch } from './web.ts';
 import * as idb from './idb.ts';
+import * as trust from './trust.ts';
+import { callTool } from './mcp.ts';
 import { diffText } from '../domain/compare.ts';
 import { hostOf } from '../domain/text.ts';
 import { columns } from '../domain/mission/types.ts';
@@ -306,5 +308,17 @@ async function docWrite({ path, text }: { path: string; text: string }, c: ToolC
   return { output: `Saved ${path}.`, n: text.length, unit: 'chars', created: { kind: 'doc', title: path, ref: d.id } };
 }
 
+/**
+ * A connected app's tool (ADR-17). Policy allowed it (or the person said yes); the tool is checked again here, as the
+ * person may have turned it off since. The reply is the app's data: it taints the run (taintsAfter) and is defanged
+ * where a prompt reads it.
+ */
+async function appCall({ connector, tool, args }: { connector: string; tool: string; args: Record<string, unknown> }): Promise<ToolResult> {
+  const c = (await trust.connectors()).find((x) => x.id === connector);
+  if (!c?.tools.some((t) => t.name === tool && t.scope !== 'off')) throw new Error('That app tool is off or no longer connected.');
+  const text = await callTool(c, tool, args);
+  return { output: text.slice(0, LIMITS.output), n: text.length, unit: 'chars', taint: true };
+}
+
 // Args are already checked against their specs (parseArgs, or the routine's own work).
-export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, act_my_tab: actMyTab, propose_routine: proposeRoutine, remember, doc_read: docRead, doc_write: docWrite };
+export const GARDEN_TOOLS: Record<string, (args: never, c: ToolCtx) => Promise<ToolResult>> = { read_page: readPage, search, mission, draft, note, notify, act, collect, read_my_tab: readMyTab, act_my_tab: actMyTab, propose_routine: proposeRoutine, remember, doc_read: docRead, doc_write: docWrite, app_call: appCall };

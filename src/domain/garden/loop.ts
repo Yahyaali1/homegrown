@@ -2,11 +2,11 @@
 // the result (a turn, a step, a request), persists, and calls `next` again, so waiting, restarts and resume are one
 // path. Model calls are actions too; their replies are stored on the run as turns.
 import type { Sampling } from '../model.ts';
-import { contextChars, defang, parseJsonObject } from '../text.ts';
+import { contextChars, defang, hostOf, parseJsonObject } from '../text.ts';
 import { jsonArray } from '../html.ts';
-import { actOf, addSeen, argsKey, callKey, decide, planCovers, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
+import { actOf, addSeen, appOf, argsKey, callKey, decide, onSites, planCovers, sensitiveSteps, SENSITIVE_WAIT, type Known } from './policy.ts';
 import { DEADLINE, expired } from './schedule.ts';
-import { LIMITS, newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
+import { LIMITS, newRun, personUrls, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
 import { EDITABLE, parseArgs, TOOLS, type ToolSpec } from './tools.ts';
 import { notesBlock, type Note } from './notes.ts';
@@ -267,10 +267,12 @@ export function approveRequest(run: GardenRun, ctx: Ctx, i: number, tool: string
   const key = callKey({ tool, args }, ctx);
   const before = run.requests.findLast((x) => x.kind === 'approve' && x.step === i && x.tool === tool && x.argsKey === key && x.sensitive && x.why);
   stop ??= before?.index !== undefined ? { index: before.index, why: before.why! } : undefined;
-  const why = stop?.why ?? sensitiveSteps(run, act.steps, tool) ?? before?.why;
+  const why = stop?.why ?? sensitiveSteps(run, act.steps, tool) ?? act.why ?? before?.why;
+  // An app tool not marked Read is asked every time: Always isn't offered.
+  const noAlways = tool === 'app_call' && appOf({ tool, args }, ctx)?.t.scope !== 'read';
   const at = stop && act.steps[stop.index];
   const text = `${ctx.gardener.name} wants to ${act.text}`.slice(0, 1400) + (why ? `\nSensitive${at ? ` (${describe(at)})` : ''}: ${why}.` : '');
-  return { kind: 'approve', step: i, tool, argsKey: key, host: act.host, text, sensitive: !!why, ...(why && { why }), ...(stop && { index: stop.index }), expiresAt: expiresAt(ctx) };
+  return { kind: 'approve', step: i, tool, argsKey: key, host: act.host, text, sensitive: !!why, ...(why && { why }), ...(stop && { index: stop.index }), ...(noAlways && { noAlways: true as const }), expiresAt: expiresAt(ctx) };
 }
 
 const budget = (run: GardenRun) => contextChars(run.maxTokens!);
@@ -375,7 +377,7 @@ function open(run: GardenRun, ctx: Ctx, request: string): Action {
     }
   }
   const choose = (purpose: 'choose' | 'repair', tools: ToolSpec[]) => {
-    const prompt = choosePrompt(ctx.gardener, request, tools, purpose);
+    const prompt = choosePrompt(ctx.gardener, request, tools, purpose, run);
     const d = chooseData(run, missing, ctx, budget(run) - prompt.length);
     return think(run, purpose, prompt, d.data, d.taint, ctx);
   };
@@ -397,18 +399,27 @@ function open(run: GardenRun, ctx: Ctx, request: string): Action {
   return choose('choose', run.steps.length < maxSteps ? ctx.tools : []);
 }
 
-const headOf = (g: Gardener, request: string) => `You are ${g.name}, a gardener working in a web browser for one person.\nTheir instructions: ${g.instructions}\nThe task: ${request}\n`;
+/** The person's site notes for the hosts this run works on: its URLs, named tabs and steps so far. */
+export function siteNotesFor(run: GardenRun, g: Gardener): string {
+  if (!g.siteNotes) return '';
+  const urls = [...personUrls(run.work), ...(run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []).map((m) => m.url),
+    ...run.steps.flatMap((s) => [s.url, typeof s.args.url === 'string' ? s.args.url : undefined])];
+  const hosts = new Set(urls.map((u) => hostOf(u)).filter(Boolean));
+  return Object.entries(g.siteNotes).filter(([h]) => [...hosts].some((x) => onSites(x, [h]))).map(([h, n]) => `Notes for ${h}: ${n}\n`).join('');
+}
+
+const headOf = (g: Gardener, request: string, run: GardenRun) => `You are ${g.name}, a gardener working in a web browser for one person.\nTheir instructions: ${g.instructions}\n${siteNotesFor(run, g)}The task: ${request}\n`;
 const toolLines = (tools: ToolSpec[]) => tools.map((t) => `${t.name}(${Object.keys(t.args).join(', ')}): ${t.describe}`).join('\n');
 
-function choosePrompt(g: Gardener, request: string, tools: ToolSpec[], purpose: 'choose' | 'repair'): string {
+function choosePrompt(g: Gardener, request: string, tools: ToolSpec[], purpose: 'choose' | 'repair', run: GardenRun): string {
   const body = tools.length
     ? `You can use these tools, one at a time:\n${toolLines(tools)}\nReply with only one JSON object, either {"tool": "<name>", "args": {…}} or {"answer": "<your answer>"}.`
     : 'Give your answer now.\nReply with only one JSON object: {"answer": "<your answer>"}.';
-  return headOf(g, request) + body + (purpose === 'repair' ? `\n\n${REPAIR}` : '');
+  return headOf(g, request, run) + body + (purpose === 'repair' ? `\n\n${REPAIR}` : '');
 }
 
-function planPrompt(g: Gardener, request: string, tools: ToolSpec[], max: number, purpose: 'plan' | 'repair'): string {
-  return `${headOf(g, request)}You can use these tools:\n${toolLines(tools)}\nWrite a plan: a JSON array of at most ${max} tool calls, [{"tool": …, "args": {…}}], in order. Reply with only the array.`
+function planPrompt(g: Gardener, request: string, tools: ToolSpec[], max: number, purpose: 'plan' | 'repair', run: GardenRun): string {
+  return `${headOf(g, request, run)}You can use these tools:\n${toolLines(tools)}\nWrite a plan: a JSON array of at most ${max} tool calls, [{"tool": …, "args": {…}}], in order. Reply with only the array.`
     + (purpose === 'repair' ? `\n\n${PLAN_REPAIR}` : '');
 }
 
@@ -440,7 +451,7 @@ function planned(run: GardenRun, ctx: Ctx, request: string): Action {
   }
   const max = run.agent!.maxSteps;
   const write = (purpose: 'plan' | 'repair') => {
-    const prompt = planPrompt(ctx.gardener, request, ctx.tools, max, purpose);
+    const prompt = planPrompt(ctx.gardener, request, ctx.tools, max, purpose, run);
     const d = chooseData(run, '', ctx, budget(run) - prompt.length);
     return think(run, purpose, prompt, d.data, d.taint, ctx);
   };

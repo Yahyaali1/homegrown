@@ -956,7 +956,7 @@ it lands.
 
 ## Status
 
-T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T7 done (commit 91c4816). T9 done (merged from t9-outputs). T8 in progress.
+T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3b done (commit 4517f73). T4 done (commit 44a7268). T5 done (commit c7852a7). T6 done (commit d2d6e87). T7 done (commit 91c4816). T9 done (merged from t9-outputs). T8 in progress. T11 built on branch `t11-connectors`, not yet reviewed.
 
 | Slice | State |
 |---|---|
@@ -971,7 +971,7 @@ T1 done (commit c4cbc5e). T2 done (commit 1efce2f). T3 done (commit 3e37fce). T3
 | T8 | Built, not yet reviewed: 279 unit tests pass (9 new in `garden-skills`); `tests/skills.spec.mjs` 2/2 (1 `@slow` on the real model, test runs and a routine run planted pinned with `plan`); `garden.spec` 4/4, `plan.spec` 1/1, `approvals.spec` 2/2, `runlog.spec` 2/2, `chat.spec` 4/4, `memory.spec` 2/2. `hg-garden` v2. Deviations: `/name` in chat answers in the chat (method as instruction, files as `selection`, `ChatTurn.skillId`), so thumbs-down and corrections there are evidence; in Garden requests it becomes `{ kind: skill.work, request, skillId }`; the `improve` think lives in `skills.ts`, not `loop.ts`; `abilities.mjs skillEdit` (6 corrected skills, graded by `casePassed`): E2B 4/6, a pass at the threshold from one run, not yet copied into `model.ts`, so Suggest an edit stays off; `GardenRun.approvePlans` (an automatic plan yes pre-approves nothing; every reach and act is asked); a gardener's delete deletes its skills; extra handler `skillMark`; skill files take ≤ ⅓ of the data room memory leaves |
 | T9 | Done (eea5354, merged 5f61607), reviewed (0 Blockers, 2 Majors fixed): e2e 6/6 (2 `@slow`); merged suite 242 unit tests pass, build ok. `abilities.mjs` on E2B: `deck` 0/6 when titles are checked (it makes up titles), `cite` 2/4, `evidence` 3/6, so no T9 ability is set, and decks are built by code. E4B not measured (no local copy; about 8 GB of disk free). Every research report is saved as a `brief`. Editing is on the output page |
 | T10 | Planned |
-| T11 | Planned |
+| T11 | Built, not yet reviewed: 290 unit tests pass (10 new in `mcp`, the plan test now runs the real `planCovers` filter and the automatic plan yes for `app_call`); `tests/connectors.spec.mjs` 3/3 (no model, a local fake MCP server: connect, 2 tools, Read, Always, the grant followed, Off denied, the token only in the header, "connect linear" in chat); `approvals` 2/2, `tabs` 4/4, `memory` 2/2, `triggers` 2/2, `chat` 3/3 and `skills` 1/1 without `@slow`, `outputs` 4/4. `hg-trust` v3. ADR-17. Deviations: the e2e uses a local HTTP server (`http://127.0.0.1` is allowed for tests only), not a Playwright route; `EDITABLE` drops `draft` and `notify` (never asked) and adds `app_call`; a new `Request.noAlways` marks an app tool not set to Read; `refund` joins the sensitive words (pages too); a failed app call taints; enum values reach the prompt only as single tokens; the app-open line offers Connect for a known app and has no button for a connected one (its guidelines always go with its tools); site notes apply to hosts in the run's URLs, named tabs and steps |
 | T12 | Planned |
 | T13 | Planned |
 

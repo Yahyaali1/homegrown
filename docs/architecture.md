@@ -275,6 +275,35 @@ The strongest objections, answered:
 | **The cookie-storage gap remains.** | Yes. A site that keeps its sign-in in page storage (localStorage, IndexedDB) instead of cookies still reads as the person, because the header rule can't see it. Requests made by a site's service worker (tab id −1) also escape per-tab rules. Reading such a page on the gardener's sites taints the run anyway; off the sites it is the known gap. The README's Privacy and safety section says so; the Garden tab doesn't show this help yet (the plan asked for it). |
 | An approval could be replayed for a different call. | An answer binds to the step index, the tool and the `argsKey`, and is used once. A grant binds to the host too, and a recipe's to the whole recipe, so an edit needs a new yes. |
 
+### ADR-17 Local-first connectors: remote MCP behind policy
+
+Strawberry reaches apps (CRMs, trackers, docs) through connectors. Homegrown is local: nothing leaves the device but
+pages the person opens. A connector sends data to someone else's server, so it needs its own rule.
+([plan](plan/T-strawberry-parity.md), T11 and decision 11)
+
+| | |
+|---|---|
+| Option A | No connectors: a gardener drives each app's web UI in its tabs, as it does now. |
+| Option B | Remote MCP servers behind the same policy as acts: the person connects a server, chooses what each tool may do, and code asks before each call. |
+| Against B | A second way for data to leave the device, a token to keep, and server text (tool names and descriptions) that could carry instructions. |
+| Against A | Many apps are slow or brittle to drive by clicks, and some tasks (a CRM search, an issue update) are one API call. |
+| Decision | **B**, with one rule: **data goes to an app only when the person connected it, allowed that tool, and approved the call** (or granted it with Always, only for a tool they marked Read, and never under taint). |
+
+How it works:
+
+| Part | Rule |
+|---|---|
+| Transport | Streamable HTTP only (`background/mcp.ts`): JSON-RPC over POST, a `text/event-stream` reply read as a stream until the answer to that request arrives, 30 s timeout, no cookies, no redirects. An extension can't start a process, so **stdio servers are impossible**; the Connect form says so. https only (http for `localhost` test servers). |
+| Auth | The person pastes a token if the server needs one. No bundled OAuth apps, no client ids (MCP OAuth sign-in is out of scope). The token lives in `hg-trust` v3 `connectors` and leaves it only as the bearer header to the server's URL: never in a prompt, a report, a broadcast or a page (`connectorList` says `hasToken`). The server's origin is asked as an optional host permission on the Connect click. |
+| Scopes | After `tools/list`, each tool is Off, Ask each time, or Read. `readOnlyHint` only pre-fills Read; the default is Ask. A later `tools/list` change is not used until the person checks the tools again and saves. |
+| Server text | A tool's description is shown as a quote and pre-fills a field the person confirms (≤ 200 chars); only that reaches a prompt. A tool or argument name that isn't `^[A-Za-z_][A-Za-z0-9_]{0,40}$` makes the tool unusable (Off, with the reason). The prompt lists names and types only; enum values only when each is one plain token. |
+| Policy | `app_call { connector, tool, args }`: args checked against the tool's JSON Schema subset (`checkArgs`: types, required, enums, string lengths, no unknown keys). `decide`: Off or bad args → deny; Ask → asked every time, the card is editable, Always isn't offered (`noAlways`); Read → asked, grantable per gardener, connector, tool and `argsKey`. A tool name or args holding a sensitive word (pay, refund, delete, send…) is sensitive: 8 s, never granted. **A tainted run asks every app call**, grant or not, because the call carries data off the device. A plan's yes never pre-approves an app call, and Approve all never answers one. |
+| Replies | An app's reply is data: it taints the run and is defanged where a prompt reads it. A failed call taints too. |
+| Guidelines | A connector's guidelines (person-written) go into the instruction part with its tools. `Gardener.siteNotes` does the same for a web app without a connector, when the run works on that host. |
+
+**Outcome:** `tests/connectors.spec.mjs` connects a fake server, sets one tool to Read, and sees its call asked,
+granted with Always, then followed by the grant, with the token only in the request header.
+
 ### ADR-18 Measured abilities, pinned per run
 
 Some features work only when the model is good enough at one thing: writing a plan, taking meeting notes, keeping
