@@ -101,6 +101,7 @@ export async function checkFetch(url: string, credentials: RequestCredentials, g
 export const overdue = (run: GardenRun, now: number): boolean =>
   run.deadline !== undefined && run.deadline <= now && (run.status === 'queued' || run.status === 'running' || run.status === 'waiting');
 export const DEADLINE = 'Deadline passed.';
+export const MISSED = 'Missed: its deadline passed before it could start.';
 
 /** A waiting run whose open request is past `expiresAt`. */
 export const expired = (run: GardenRun, now: number): boolean =>
@@ -123,7 +124,7 @@ export function nextBatch(runs: GardenRun[], now: number): GardenRun[] {
  * The routine's alarm fired (or the worker started). Due: move `nextDue` on and queue a new run unless one is still
  * queued or running (its helpers too), in which case the slot is kept on `skipped`. A run waiting for the person
  * doesn't block: it fails only when its request expires. An event routine makes a run only with its check's
- * `trigger`. A one-off pauses; missed by more than its deadline, it makes no run (`missed`).
+ * `trigger`. A one-off pauses; missed by more than its deadline, it never runs: its record ends failed `MISSED` (`missed`).
  */
 export function claim(routine: Routine, runs: GardenRun[], now: number, trigger?: Trigger): { routine: Routine; newRun?: GardenRun; fail: string[]; missed?: true } {
   const mine = runs.filter((r) => r.routineId === routine.id);
@@ -135,17 +136,16 @@ export function claim(routine: Routine, runs: GardenRun[], now: number, trigger?
   const next: Routine = { ...routine, nextDue: nextAfter(when, routine.tz, routine.nextDue, now) };
   if (when.kind === 'event' && !trigger) return { routine: next, fail };
   const deadline = when.kind === 'once' && when.deadline ? routine.nextDue + when.deadline * 60_000 : undefined;
-  if (when.kind === 'once') {
-    next.paused = true;
-    if (deadline !== undefined && deadline <= now) return { routine: { ...next, missed: true }, fail, missed: true };
-  }
+  if (when.kind === 'once') next.paused = true;
+  const run = newRun({ id: `${routine.id}@${routine.nextDue}`, gardenerId: routine.gardenerId, routineId: routine.id, work: routineWork(routine), now,
+    ...(routine.skipped && { skipped: routine.skipped }), ...(trigger && { trigger }), ...(deadline !== undefined && { deadline }) });
+  // Missed by more than its deadline: a record that never ran, so history and Report show it.
+  if (deadline !== undefined && deadline <= now) return { routine: { ...next, missed: true, lastRunId: run.id }, newRun: { ...run, status: 'failed', endedAt: now, why: MISSED }, fail, missed: true };
   // A one-off's only slot never waits on a run of it by hand (Run now): it would be lost.
   if (when.kind !== 'once' && mine.some((r) => r.status === 'queued' || r.status === 'running' || helping(r))) {
     next.skipped = [...(routine.skipped ?? []), routine.nextDue].slice(-LIMITS.skipped);
     return { routine: next, fail };
   }
-  const run = newRun({ id: `${routine.id}@${routine.nextDue}`, gardenerId: routine.gardenerId, routineId: routine.id, work: routineWork(routine), now,
-    ...(routine.skipped && { skipped: routine.skipped }), ...(trigger && { trigger }), ...(deadline !== undefined && { deadline }) });
   delete next.skipped;
   next.lastRunId = run.id;
   return { routine: next, newRun: run, fail };

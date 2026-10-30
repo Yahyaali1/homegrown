@@ -81,7 +81,13 @@ runtime adapters and storage live outside `domain/`.
   `serverTools` (`tools/list` → `ServerTool` with `unusable`), `toolFrom` (the form's first choice: an empty line), `tokenFor`
   (a kept token only to its origin), `parseConnector`,
   `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `rpcBody`, `sseMessages`, `sseSplit`, `rpcReply`, `replyOf`, `MAX_REPLY`,
-  `callText`, `STDIO`.
+  `callText`, `STDIO`. Sign-in (MCP authorization): `Connector.oauth?` (`OAuth`: token endpoint, client id and
+  secret from registration, refresh token, resource; never in `factsOf`), `resourceMetaUrls` (the 401's
+  `resource_metadata`, else RFC 9728 well-known paths), `parseResourceMeta` (same origin as the server, an https
+  sign-in server), `asMetaUrls` and `parseAsMeta` (RFC 8414 then OpenID; issuer must match; S256 required),
+  `signInRefusal` (no registration endpoint: paste a token), `registerBody`, `parseClient`, `challengeOf`,
+  `randomCode`, `authorizeUrl` (with `resource`), `codeOf` (state checked), `parseTokens` (bearer only), `found` (a
+  discovered address: https, and on this machine only when the connector is), `capped` (a reply read up to a cap).
 - `apps.ts` (plan T11): `APPS` (known remote MCP servers: name, URL, docs, hosts), `appNamed` ("connect <name>",
   `fuzzy`), `appOpen(url, meta, connectors)` (a connected app, a known one, else the page's own name).
 - `zip.ts`: `Zip`, `unzip`, `zipWrite`, `crc32`. Reads the zip central directory and returns a lazy reader for each
@@ -118,7 +124,7 @@ runtime adapters and storage live outside `domain/`.
     5). A waiting run doesn't block it; it fails only when its request expires (24 h). An event routine gets a run
     only with the `trigger` its check found (`eventCheck`: signed in only on the gardener's sites; fires on added
     lines, with `onlyIf` on one holding a word; code only). A one-off pauses when due ("Done"); its run carries
-    `deadline` (slot + minutes) and fails "Deadline passed." after it, and a slot missed by more makes no run (`missed`). A parent waiting on helpers (`helping`, records.ts) counts as working: its
+    `deadline` (slot + minutes) and fails "Deadline passed." after it, and a slot missed by more never runs: its record ends failed `MISSED` (`missed`). A parent waiting on helpers (`helping`, records.ts) counts as working: its
     slot is skipped, never failed. `nextBatch(runs, now)`: the queue's next pick, one run or up to `HELPERS` (3) queued
     helpers of the oldest parent; a run with `retryAt` in the future waits.
   - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,
@@ -180,7 +186,7 @@ runtime adapters and storage live outside `domain/`.
     step outputs, turns and the answer only with `withText`. `trimmed(run)`: a run as broadcast and listed (outputs
     cut to 300).
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
-    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `EDITABLE` (`act`, `app_call`), `ToolSpec`, `Arg` (`record`: a value its parser takes),
+    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `EDITABLE` (`act`, `act_my_tab`, `app_call`), `ToolSpec`, `Arg` (`record`: a value its parser takes),
     `parseArgs`, `toolsFor` (`allowed`: a hired gardener's pack tools, which only narrow; `read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
     `agent.loop` or in a plan; `app_call` only with a usable app tool, its describe built by `appLines` from the
     person's lines and guidelines; a tool without a line isn't offered), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or

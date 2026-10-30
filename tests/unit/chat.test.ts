@@ -2,7 +2,7 @@
 // reload, duplicate copies up to a message, search marks only text, and link rules know a site from a lookalike.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, searchChats, splitThinking, type Chat } from '../../src/domain/chat.ts';
+import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, searchChats, splitThinking, type Chat } from '../../src/domain/chat.ts';
 import { sameSite } from '../../src/domain/links.ts';
 import { contextChars } from '../../src/domain/text.ts';
 
@@ -90,4 +90,11 @@ test('sameSite refuses single labels and shared suffixes', () => {
   assert.equal(sameSite('a.co.uk', 'co.uk'), false);
   assert.equal(sameSite('localhost', 'localhost'), false);
   assert.equal(sameSite('alice.github.io', 'alice.github.io'), true);
+});
+
+test('a correction typed after an answer is offered as "Remember this?", in the person\'s own words', () => {
+  const answered = chat({ turns: [{ role: 'user', text: 'Write a list', at: 1 }, { role: 'model', text: '- a\n- b', at: 2 }] });
+  assert.equal(chatCorrection(answered, 'Never use bullet points.'), 'Never use bullet points.');
+  assert.equal(chatCorrection(answered, 'Write it again'), null);
+  assert.equal(chatCorrection(chat({ turns: [] }), 'Never use bullet points.'), null, 'nothing to correct yet');
 });

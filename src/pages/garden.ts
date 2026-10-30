@@ -631,7 +631,7 @@ showLook(formLook, '');
 
 // ---- connectors (ADR-17): remote MCP servers the person connects, each tool Off, Ask each time or Read ----
 
-type Linked = ConnectorFacts & { hasToken: boolean };
+type Linked = ConnectorFacts & { hasToken: boolean; signedIn: boolean };
 let connectors: Linked[] = [];
 const SCOPES: [Scope, string][] = [['off', 'Off'], ['ask', 'Ask each time'], ['read', 'Read (may be allowed with Always)']];
 
@@ -649,7 +649,7 @@ function connectorItem(c: Linked): HTMLLIElement {
   const on = c.tools.filter((t) => t.scope !== 'off').length;
   const edit = h('div', { className: 'stack' });
   return h('li', { className: 'connector' },
-    h('span', { className: 't' }, h('b', { textContent: c.name }), h('span', { className: 'p', textContent: `${hostOf(c.url)} · ${on} of ${count(c.tools.length, 'tool')} on${c.hasToken ? ' · token kept' : ''}` }), err),
+    h('span', { className: 't' }, h('b', { textContent: c.name }), h('span', { className: 'p', textContent: `${hostOf(c.url)} · ${on} of ${count(c.tools.length, 'tool')} on${c.signedIn ? ' · signed in' : c.hasToken ? ' · token kept' : ''}` }), err),
     h('div', { className: 'actions' },
       labelled(button('Edit', () => edit.replaceChildren(connectForm(c, c.tools.map((t) => ({ tool: t }))).form), 'ghost'), `Edit ${c.name}`),
       // The server's list now, confirmed again before use: what it changed isn't used until then.
@@ -675,12 +675,13 @@ function connectForm(c: Linked | null, rows: ToolRow[] = [], app?: App): { form:
   const err = errLine();
   const name = h('input', { maxLength: MCP.name, placeholder: 'Name, e.g. HubSpot', value: c?.name ?? '', required: true, attrs: { 'aria-label': 'App name' } });
   const url = h('input', { type: 'url', placeholder: 'Server URL, e.g. https://mcp.example.com/mcp', value: c?.url ?? '', required: true, attrs: { 'aria-label': 'Server URL' } });
-  const token = h('input', { type: 'password', maxLength: MCP.token, placeholder: c?.hasToken ? 'Token kept: type to replace it' : 'Token, if the server needs one', autocomplete: 'off', attrs: { 'aria-label': 'Token' } });
+  const token = h('input', { type: 'password', maxLength: MCP.token, placeholder: c?.signedIn ? 'Signed in: a token typed here replaces it' : c?.hasToken ? 'Token kept: type to replace it' : 'Token, if the server needs one', autocomplete: 'off', attrs: { 'aria-label': 'Token' } });
   const hosts = h('textarea', { rows: 1, placeholder: 'Its web app hosts, one per line, e.g. app.hubspot.com', value: c?.hosts.join('\n') ?? '', attrs: { 'aria-label': 'App hosts, one per line' } });
   const guidelines = h('textarea', { rows: 2, maxLength: MCP.guidelines, placeholder: 'Guidelines for this app, e.g. search by email first', value: c?.guidelines ?? '', attrs: { 'aria-label': 'Guidelines' } });
   const docs = h('a', { target: '_blank', rel: 'noreferrer', className: 'small', hidden: true });
   const list = h('ul', { className: 'list' });
   let shown: ToolRow[] = [];
+  let auth: string | undefined; // a sign-in the worker holds until Save
   const read: (() => AppTool)[] = [];
   const showTools = (r: ToolRow[]) => {
     shown = r;
@@ -708,18 +709,29 @@ function connectForm(c: Linked | null, rows: ToolRow[] = [], app?: App): { form:
     }
   };
   if (app) fill(app);
-  const listTools = labelled(busyButton('List tools', tryIt(err, async () => {
-    const listed = await bg<ServerTool[]>('connectorProbe', { url: url.value, token: token.value, ...(c && { id: c.id }) });
+  const list1 = async () => {
+    const listed = await bg<ServerTool[]>('connectorProbe', { url: url.value, token: token.value, ...(c && { id: c.id }), ...(auth && { auth }) });
     if (!listed.length) throw new Error('The server lists no tools.');
     showTools(listed.map((x) => ({ server: x, tool: toolFrom(x) })));
-  }), 'secondary'), 'List the server’s tools');
-  const form = h('form', { className: 'stack' }, name, url, docs, token, hosts, guidelines, h('p', { className: 'muted small', textContent: STDIO }), listTools, list,
+  };
+  const listTools = labelled(busyButton('List tools', tryIt(err, list1), 'secondary'), 'List the server’s tools');
+  // MCP sign-in: the server's own sign-in page, in the browser's sign-in window. Asked for on this click.
+  const signIn = busyButton('Sign in', tryIt(err, async () => {
+    if (!(await chrome.permissions.request({ permissions: ['identity'] }))) throw new Error('Sign-in needs the identity permission.');
+    ({ auth } = await bg<{ auth: string }>('connectorSignIn', { url: url.value, ...(auth && { replaces: auth }) }));
+    token.value = '';
+    token.placeholder = 'Signed in';
+    await list1();
+  }), 'secondary');
+  const form = h('form', { className: 'stack' }, name, url, docs, token, hosts, guidelines, h('p', { className: 'muted small', textContent: STDIO }), h('div', { className: 'row' }, listTools, signIn), list,
     h('div', { className: 'row' }, h('button', { className: 'primary', textContent: c ? 'Save connector' : 'Connect' })), err);
   const save = tryIt(err, async () => {
     if (!shown.length) throw new Error('List its tools first, then choose what each may do.');
-    await bg('connectorSave', { connector: { ...(c && { id: c.id }), name: name.value.trim(), url: url.value.trim(), token: token.value, hosts: lines(hosts.value), guidelines: guidelines.value.trim(), tools: read.map((f) => f()) } });
+    await bg('connectorSave', { ...(auth && { auth }), connector: { ...(c && { id: c.id }), name: name.value.trim(), url: url.value.trim(), token: token.value, hosts: lines(hosts.value), guidelines: guidelines.value.trim(), tools: read.map((f) => f()) } });
+    auth = undefined;
     if (!c) {
       form.reset();
+      token.placeholder = 'Token, if the server needs one';
       showTools([]);
       docs.hidden = true;
     }
@@ -953,9 +965,9 @@ function memoryActions(c: Created, err: HTMLElement): HTMLElement[] {
 
 /**
  * "Remember this?": the person's own words as a preference they confirm by saving (no model). Shown after a follow-up
- * or Steer that reads as a correction, or a draft they edited before copying.
+ * or Steer that reads as a correction, a draft they edited before copying, or a correction typed in chat.
  */
-function rememberOffer(text: string): HTMLElement {
+export function rememberOffer(text: string): HTMLElement {
   const err = errLine();
   const box: HTMLElement = h('div', { className: 'remember' }, h('span', { className: 'small', textContent: 'Remember this? ' }), h('span', { className: 'muted small result', textContent: text }),
     labelled(busyButton('Remember', tryIt(err, async () => {
@@ -1047,6 +1059,9 @@ function steerBox(runId: string): HTMLFormElement {
 
 const skippedLines = (run: GardenRun) => (run.skipped ?? []).map((t) => h('div', { className: 'muted small', textContent: `Skipped ${at(t)}: the last run was still working` }));
 
+/** The person's unsaved edits to drafts, by run and step: a run broadcast again redraws its steps. */
+const drafts = new Map<string, string>();
+
 /** Each step's call and digest, with Retry step where it can be; a draft shows in full with Copy. */
 function stepLines(run: GardenRun, err: HTMLElement): HTMLElement[] {
   const out = skippedLines(run);
@@ -1062,7 +1077,9 @@ function stepLines(run: GardenRun, err: HTMLElement): HTMLElement[] {
     const text = String(s.args.text ?? '');
     const title = String(s.args.title ?? 'Draft');
     // Editable before Copy; an edit is offered as a correction, in the person's own words (the change).
-    const area = h('textarea', { className: 'text', rows: 4, value: text, attrs: { 'aria-label': `Edit ${title}` } });
+    const key = `${run.id}:${s.i}`;
+    const area = h('textarea', { className: 'text', rows: 4, value: drafts.get(key) ?? text, attrs: { 'aria-label': `Edit ${title}` } });
+    area.oninput = () => drafts.set(key, area.value);
     const draft = h('div', { className: 'draft', dataset: { step: String(s.i) } }, h('b', { textContent: title }), area,
       labelled(button('Copy', async (e) => {
         const b = e.currentTarget as HTMLButtonElement;

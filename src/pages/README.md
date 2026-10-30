@@ -75,8 +75,10 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   gardener form's DevTools switch asks for `debugger` when turned on (`Gardener.devtools`). "Keep downloads with
   runs" is the `downloads` permission itself (on requests it, off removes it); a `file` card's Open calls
   `downloads.show`. Plan T7: a `doc` card opens it in Library → Memory; a `memory` card has Keep / Discard while
-  off; a draft is editable before Copy, and an edit, or a follow-up or Steer starting no / don't / never /
-  always, offers "Remember this?" (a `preference` with `correction: true`, the person's words). The routine form
+  off; a draft is editable before Copy (an unsaved edit is kept by run and step, so a run broadcast again doesn't
+  lose it), and an edit, or a follow-up or Steer starting no / don't / never / always, offers "Remember this?"
+  (`rememberOffer`: a `preference` with `correction: true`, the person's words); chat offers it too after an answer
+  (`chatCorrection`). The routine form
   has "Works for" (`Routine.for`, confirmed entities). `chat.ts` puts `@Name` files in the turn's `selection`
   (the data part). Plan T8: Garden → Skills lists skills (on/off, Test on cases with "Approve plans for this test",
   cases with Pass / Fail marks where there is no `expect`, Improve with the evidence and a proposed edit as a
@@ -96,7 +98,7 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its
   tab and window; Done, Skip) and question cards; an approve in the person's own tab, or for an app tool not marked Read (`alwaysOk` false), has no Always; an
-  approve for `act` or `app_call` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
+  approve for `act`, `act_my_tab` or `app_call` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
   (Always is hidden while they differ). With two or more requests that `approveAllOk` allows, "Approve all" sends
   them to `requestAnswerAll`. A question with `questions` uses `ui/questions.ts`.
 - `mission.ts` (`agent.html`): Mission control.
@@ -129,7 +131,7 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   edits in place; a gardener's proposed file shows Keep / Discard; `Meetings/` docs in their own folder), Meetings
   (plan T10: Record / Stop for the active tab, Allow the microphone, Transcribe a file decoded here and sent in 20 s
   windows through `transcribe`, Ask across meetings, and each meeting with its notes, checklist, transcript, Rename,
-  Keep and Delete) and the savings meter. Chat's `/meetings <question>` (no skill of that name) puts the closest
+  Keep and Delete; the list redraws when the worker says notes are written, `meeting-notes`) and the savings meter. Chat's `/meetings <question>` (no skill of that name) puts the closest
   transcript parts in the data. Both pages link to
   Outputs. `openMemory(id)` opens a file or document (a run's `doc` or `memory` card).
 - `plaza.ts` (`plaza.html`, plan T13): Companion Plaza. Each gardener's flower (`flower` with `lookOf`), still, with

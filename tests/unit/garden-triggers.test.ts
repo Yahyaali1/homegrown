@@ -2,7 +2,7 @@
 // doesn't hold up the next slot.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkFetch, claim, eventCheck, nextAfter, nextRuns, overdue } from '../../src/domain/garden/schedule.ts';
+import { checkFetch, claim, MISSED, eventCheck, nextAfter, nextRuns, overdue } from '../../src/domain/garden/schedule.ts';
 import { next, retryStep, type Ctx } from '../../src/domain/garden/loop.ts';
 import { TOOLS } from '../../src/domain/garden/tools.ts';
 import { newRun, parseWhen, type Gardener, type GardenRun, type Routine, type When } from '../../src/domain/garden/records.ts';
@@ -44,10 +44,12 @@ test('parseWhen takes the new kinds and refuses bad ones', () => {
   assert.deepEqual(parseWhen({ kind: 'event', url: 'https://a.com/#x', every: 15, onlyIf: [' price '] }), { kind: 'event', url: 'https://a.com/', every: 15, onlyIf: ['price'] });
 });
 
-test('a one-off with a 60-minute deadline missed by 2 h fails without a run, and pauses', () => {
+test('a one-off with a 60-minute deadline missed by 2 h fails without running, leaves a Missed record, and pauses', () => {
   const r = routine({ kind: 'once', date: '2026-03-02', at: '09:00', deadline: 60 });
   const c = claim(r, [], r.nextDue + 2 * 3_600_000);
-  assert.equal(c.newRun, undefined);
+  // It leaves a record that never ran: failed "Missed", so history and Report show it.
+  assert.deepEqual([c.newRun?.status, c.newRun?.why, c.newRun?.steps.length, c.newRun?.endedAt], ['failed', MISSED, 0, r.nextDue + 2 * 3_600_000]);
+  assert.equal(c.routine.lastRunId, c.newRun?.id);
   assert.equal(c.missed, true);
   assert.equal(c.routine.paused, true);
   assert.equal(c.routine.missed, true, 'shown as Missed, not Done');

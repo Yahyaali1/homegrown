@@ -79,7 +79,7 @@ export const TOOLS: ToolSpec[] = [
 ];
 
 /** Tools whose approve card shows the args as fields the person may edit before Yes (draft and notify are never asked). */
-export const EDITABLE = ['act', 'app_call'];
+export const EDITABLE = ['act', 'act_my_tab', 'app_call'];
 
 /** The tabs the person named for this run. */
 export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);

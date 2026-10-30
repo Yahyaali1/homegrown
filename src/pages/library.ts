@@ -198,6 +198,7 @@ async function showRecording(): Promise<void> {
   $('#meet-mic').hidden = !mic || mic.state === 'granted';
 }
 chrome.storage.session.onChanged.addListener((c) => c.meeting && (void showRecording(), !c.meeting.newValue && void renderMeetings()));
+chrome.runtime.onMessage.addListener((m: { type?: string }) => void (m?.type === 'meeting-notes' && renderMeetings().catch((e) => fail(meetErr, e))));
 void showRecording();
 
 // Chrome shares a tab's sound only after a click on the extension: the stream id is asked for here, in the click.

@@ -137,3 +137,48 @@ test('a download a run tab starts is kept with the run, as a file card', async (
   expect(run.files[0]).toMatchObject({ name: 'report.csv', url: `${SHOP}/report.csv` });
   expect(run.created).toEqual([{ kind: 'file', title: 'report.csv', ref: String(run.files[0].id) }]);
 });
+
+test('act_my_tab: the card is editable; the edited fill is asked once more (sensitive, 8 s) and runs as edited', async () => {
+  const mine = await ctx.newPage();
+  await mine.goto(`${MINE}/compose`);
+  const tabId = await sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, `${MINE}/compose`);
+  const steps = { strict: true, instructions: [{ click: '#go' }] };
+  await plant(planned('mine-2', [{ tool: 'act_my_tab', args: { tab: `${MINE}/compose`, steps } }], { tabs: [{ url: `${MINE}/compose`, title: 'Compose', tabId }] }));
+  await waiting('mine-2');
+  await panel.click('[data-tab=garden]');
+  const card = panel.locator('#garden-requests li.request', { hasText: 'act in your own tab' });
+  await expect(card).toHaveCount(1);
+  await expect(card.getByRole('button', { name: /^Always/ })).toBeHidden();
+  await card.getByLabel('Edit steps').fill(JSON.stringify({ strict: true, instructions: [{ fill: ['#to', 'bob@example.com'] }, { click: '#go' }] }));
+  await card.getByRole('button', { name: 'Yes', exact: true }).click();
+  // The edit is a new call: its fill in the person's tab is sensitive, so it is asked again and can't be edited.
+  let q;
+  await expect.poll(async () => (q = (await bg('runGet', { id: 'mine-2' })).requests.find((x) => x.editedFrom))?.sensitive ?? false, { timeout: 30_000 }).toBe(true);
+  expect(q.noEdit).toBe(true);
+  expect(loads).not.toContain('/sent?to=bob%40example.com');
+  await bg('requestShown', { runId: 'mine-2', requestId: q.id });
+  await panel.waitForTimeout(8500);
+  await bg('requestAnswer', { runId: 'mine-2', requestId: q.id, value: 'yes' });
+  await expect.poll(async () => (await bg('runGet', { id: 'mine-2' })).steps[0]?.state ?? 'started', { timeout: 60_000 }).toBe('done');
+  expect(loads).toContain('/sent?to=bob%40example.com');
+  await mine.close();
+});
+
+test('act_my_tab: the person closes their tab mid-call, and the run asks "did this happen?" instead of failing', async () => {
+  const mine = await ctx.newPage();
+  await mine.goto(`${MINE}/compose`);
+  const tabId = await sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, `${MINE}/compose`);
+  const steps = { strict: true, instructions: [{ click: '#to' }, { wait: 3000 }, { click: '#go' }] };
+  await plant(planned('mine-3', [{ tool: 'act_my_tab', args: { tab: `${MINE}/compose`, steps } }], { tabs: [{ url: `${MINE}/compose`, title: 'Compose', tabId }] }));
+  await waiting('mine-3');
+  const [q] = (await bg('runGet', { id: 'mine-3' })).requests;
+  await bg('requestAnswer', { runId: 'mine-3', requestId: q.id, value: 'yes' });
+  await expect.poll(async () => (await bg('runGet', { id: 'mine-3' })).steps[0]?.state, { timeout: 30_000 }).toBe('started');
+  await mine.close();
+  let run;
+  await expect.poll(async () => (run = await bg('runGet', { id: 'mine-3' })).requests.find((x) => x.kind === 'did-it-happen')?.tool, { timeout: 30_000 }).toBe('act_my_tab');
+  expect(run.steps[0].state).toBe('started');
+  const ask = run.requests.find((x) => x.kind === 'did-it-happen');
+  await bg('requestAnswer', { runId: 'mine-3', requestId: ask.id, value: 'no' });
+  await expect.poll(async () => (await bg('runGet', { id: 'mine-3' })).steps[0]?.error, { timeout: 30_000 }).toBe('It did not happen.');
+});

@@ -1,7 +1,7 @@
 // What a gardener's tool calls do in Chrome (specs in domain/garden/tools.ts). Every tab is the run's: it carries the
 // run's cookie rule (Run.prepare), so pages off the gardener's sites are read signed out.
 import { askAs } from './engine.ts';
-import { ENGINES, inTab, missionRun, readInTab, searchInTab, waitLoaded, type Run } from './missions.ts';
+import { ENGINES, inTab, missionRun, readInTab, searchInTab, TabClosed, waitLoaded, type Run } from './missions.ts';
 import { cookieRule, play, type Guard } from './pagerequest.ts';
 import { logFor } from './devtools.ts';
 import { recipesList, scrapeRecipe } from './scrape.ts';
@@ -238,6 +238,8 @@ async function actMyTab({ tab, steps }: { tab: string; steps: Scenario }, c: Too
     // An earlier hand-back halted this page's step runner; this call was approved anew.
     await chrome.scripting.executeScript({ target: { tabId: id, allFrames: true }, func: () => void (window.__hgHalt = false) }).catch(() => {});
     const played = await play(id, { ...steps, strict: true }, c.tab, guard);
+    // The person closed their tab mid-call: a step may have happened, so the worker asks rather than failing it.
+    if (!(await chrome.tabs.get(id).catch(() => null))) throw new TabClosed();
     r = { played, ...(await where(id, tab)) };
   } finally {
     await give();

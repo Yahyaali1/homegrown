@@ -946,6 +946,52 @@ gardener; clicking one opens the side panel chat for it.
 
 ---
 
+### T14 Open items
+
+Closes the open items from the T5, T7, T10 and T4 logs, Owner decision 7 (MCP sign-in) and spikes 2 and 4. Built
+after T13 on the same branch.
+
+**Scope and how it was built**
+- **MCP sign-in (ADR-17 updated).** The MCP authorization spec, generic: the 401's `resource_metadata` (else RFC 9728
+  well-known paths) → the sign-in server's metadata (RFC 8414, then OpenID; issuer checked; PKCE S256 required) →
+  dynamic client registration (RFC 7591, a public client; no registration endpoint means "paste a token") → PKCE code
+  flow in `chrome.identity.launchWebAuthFlow` with `state` and `resource` → tokens. `identity` is an optional
+  permission, asked on the Connect form's Sign in click. The access token is kept and sent like a pasted one (only to
+  the connected origin); `Connector.oauth` (token endpoint, client id, any issued secret, refresh token) stays in
+  `hg-trust` and never reaches `factsOf`, a page or a prompt. A 401 refreshes once and retries (`authed`). Pure parts
+  in `domain/mcp.ts`; the flow and handlers (`connectorSignIn`, `auth` on Probe and Save) in `background/mcp.ts`.
+- **`act_my_tab` and a closed tab.** If the person's tab is gone after the steps, the call throws `TabClosed`; the step
+  stays started and `next()` asks "did this happen?", as for `act`.
+- **`act_my_tab` card editable.** `EDITABLE` gains it. T2's edit rules hold: an edit is a new call, so a fill added in
+  an edit is asked again as sensitive with 8 s (`noEdit`); edits answer only yes; Always is never offered.
+- **Meetings list** redraws when notes finish (`meeting-notes` message from the worker).
+- **Draft textarea** keeps the person's unsaved edit by run and step across a rebroadcast.
+- **Corrections in chat.** A chat message after an answer that starts no / don't / never / always offers "Remember
+  this?" (`chatCorrection`, the same `rememberOffer`).
+- **Missed one-off.** `claim` makes a run record that never ran, failed `MISSED` ("Missed: its deadline passed before
+  it could start."), and points `lastRunId` at it; the notice and `Routine.missed` stay.
+
+**Spikes (measured headless; a headed Chromium did not load the extension in this environment)**
+- Spike 2: `Page.startScreencast` (every 30th frame) on a tab whose window was minimized after it loaded sent 5
+  frames in 3 s, the same as a normal window (5). A window created minimized is opened normal by headless Chrome.
+  Headless doesn't throttle hidden windows, so a real minimized window on macOS may still send none; not fixed (the
+  live view's "Show the tab" covers it).
+- Spike 4: over 10 new tabs with Plaza on, `chrome://newtab/` commits at 38–97 ms, `plaza.html` commits at 89–199 ms
+  (median 132) and completes at 159–284 ms (median 222). The default page never reaches `complete` first, so it can
+  show for about 50–100 ms. Not fixed: only a manifest override removes it (decision 14).
+
+**Tests.** Unit: `tests/unit/mcp-oauth.test.ts` (7: discovery URLs, resource and issuer checks, S256, the RFC 7636
+vector, state, token and registration replies, no secret in `factsOf`); `garden-tabs2` +2 (edited `act_my_tab`, a
+started `act_my_tab` asks); `chat` +1 (`chatCorrection`); `garden-triggers` (the Missed record). E2E:
+`connectors.spec` +1 (a local fake MCP server behind a fake sign-in server that approves at once, so
+`launchWebAuthFlow` completes headless: discovery, registration, PKCE checked by the server, then a 401 refreshes
+once and the new token is kept); `tabs.spec` +2 (edit the card; close the tab mid-call → did-it-happen, No fails the
+step); `memory.spec` +1 (a draft edit survives a rebroadcast). The closed-tab and draft tests were checked to fail
+without their fix. Not covered by e2e: the Meetings refresh (needs a model with `notes`) and the chat offer (sending
+needs a model); the chat rule is unit-tested.
+
+**Status.** Built, not reviewed, not committed: `npm run check` clean, 326 unit tests pass, build ok; e2e 30/30 (`approvals` 2, `chat` 4 with 1 `@slow`, `connectors` 4, `garden` 4 `@slow`, `meetings` 4, `memory` 3, `plaza` 1, `tabs` 6, `triggers` 2). Deviations: `identity` is optional (asked on click), so `connectors.spec` loads a copy of the extension with it granted; a sign-in for a connector not yet saved waits in worker memory (`ponytail:`; a worker restart means sign in again); two calls that 401 together may each refresh (`ponytail:`). Review round 1 (2 Majors, 2 Minors, all fixed): discovered addresses may be on this machine only when the connector is (`found`); sign-in replies are read up to 100 KB (`capped`); a pending sign-in expires after 10 minutes and a repeat sign-in replaces it; a typed token wins over a sign-in. After the fixes: 328 unit tests pass, `connectors` 4/4. No owner decision was needed; spike 2 on a real minimized macOS window is still unmeasured.
+
 ## Shared files changed
 
 `background/main.ts` (T6 menus and `openLink`, T13 newtab), `static/manifest.json` (T5 `downloads` optional, T10

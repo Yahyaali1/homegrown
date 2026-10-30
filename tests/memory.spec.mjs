@@ -96,3 +96,29 @@ test('a planned doc_write ends with plan.md under Documents/Scribe and a doc car
   await expect(tree.locator('summary', { hasText: 'Scribe (1)' })).toBeVisible();
   await expect(tree.getByLabel('Text of plan.md')).toHaveValue(text);
 });
+
+test('a draft keeps the person’s unsaved edit when its run is broadcast again', async () => {
+  const run = {
+    v: 1, id: 'draft-1', gardenerId: g.id, work: { kind: 'plan', request: 'Draft a reply.' }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
+    model: 'no-model-here', maxTokens: 4096, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan: [{ tool: 'draft', args: { title: 'Reply', text: 'Hi Ann,' } }],
+    turns: [], steps: [], requests: [], seen: [], tainted: false,
+  };
+  await panel.evaluate(async (run) => {
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const t = d.transaction('runs', 'readwrite');
+    t.objectStore('runs').put(run);
+    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
+    d.close();
+  }, run);
+  await sw.evaluate(() => self.gardenFire('none'));
+  await expect.poll(async () => (await bg('runGet', { id: 'draft-1' })).endedAt ?? 0, { timeout: 60_000 }).toBeGreaterThan(0);
+  await panel.reload();
+  await panel.click('.tabs [data-tab=garden]');
+  const area = panel.getByLabel('Edit Reply');
+  if (!(await area.isVisible())) await panel.locator('#garden-runs li summary', { hasText: 'Open · 1 step' }).first().click();
+  await area.fill('Hi Ann,\nThanks for the tea.');
+  await bg('runSeen', { id: 'draft-1' }); // the worker broadcasts the run again
+  await expect.poll(() => bg('runGet', { id: 'draft-1' }).then((r) => r.seenAt ?? 0)).toBeGreaterThan(0);
+  await panel.waitForTimeout(300);
+  await expect(panel.getByLabel('Edit Reply')).toHaveValue('Hi Ann,\nThanks for the tea.');
+});

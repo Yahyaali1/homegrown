@@ -69,6 +69,12 @@ Done after the group agents report. Owner: the main session.
   switches (off), with toggles in `sidepanel.html` and `settings.html`. `scripts/build.mjs` adds the `plaza` entry.
   `pages/chat.ts` takes `pending.gardenerId` (Ask <name>). `bench/garden-fixtures.mjs` gains 8 pages for the pack
   cases. No preset lists `propose_routine` any more (Rosa and Dana included). No store or version changes. DONE.
+- T14 (plan T, open items): `static/manifest.json` adds `identity` to `optional_permissions` (MCP sign-in, asked on
+  the Connect form's Sign in click). `domain/mcp.ts` `Connector.oauth?` (optional field; `hg-trust` stays v3).
+  `domain/garden/tools.ts` `EDITABLE` gains `act_my_tab`. `domain/garden/schedule.ts` exports `MISSED`; a missed
+  one-off's `claim` now returns a failed `newRun`. `domain/chat.ts` exports `chatCorrection`; `pages/garden.ts`
+  exports `rememberOffer` (used by `pages/chat.ts`). `background/meetings.ts` sends `{ type: 'meeting-notes' }`.
+  `tests/connectors.spec.mjs` loads a copy of the extension with `identity` granted. DONE.
 
 ## Known issues
 

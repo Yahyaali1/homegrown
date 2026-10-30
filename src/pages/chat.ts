@@ -13,7 +13,7 @@ import { PROMPT_LAB } from '../shared/actions.ts';
 import type { TaskKind } from '../domain/tasks.ts';
 import { changeFor, chatSettings, checkChoice, parseSettings } from '../domain/settings.ts';
 import { parseJsonObject } from '../domain/text.ts';
-import { chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, searchChats, splitThinking, titleOf,
+import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, searchChats, splitThinking, titleOf,
   type Chat, type ChatTurn, type Mode } from '../domain/chat.ts';
 import * as idb from '../background/idb.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
@@ -22,7 +22,7 @@ import { NEEDS, skillParts, slashOf, unmet, type Skill } from '../domain/garden/
 import { fuzzy } from '../domain/reading.ts';
 import { MEETINGS_ASK } from '../domain/meeting.ts';
 import { appNamed } from '../domain/apps.ts';
-import { openConnect } from './garden.ts';
+import { openConnect, rememberOffer } from './garden.ts';
 
 interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
 interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
@@ -225,11 +225,13 @@ async function send(turn: ChatTurn, config: Record<string, number> = {}, image?:
   const persona = chat ? null : asking;
   if (!chat) open(await newChat(turn.label ?? turn.text));
   const c = chat!;
+  const correction = chatCorrection(c, turn.label ?? turn.text);
   // The companion's instructions lead the chat's first message, as the plan prefix does.
   if (persona) turn = { ...turn, label: turn.label ?? turn.text, text: `${persona.instructions}\n\n${turn.text}` };
   if (planFirst(c)) turn = { ...turn, label: turn.label ?? turn.text, text: `${PLAN_FIRST}\n\n${turn.text}` };
   await save(c, (s) => upsertTurns(s, [turn]));
   $('#messages').append(turnEl(c, turn, c.turns.length - 1));
+  if (correction) $('#messages').append(rememberOffer(correction));
   $('#empty').hidden = true;
   await answer(c, config, image);
 }

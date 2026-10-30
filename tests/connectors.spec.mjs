@@ -1,10 +1,16 @@
 // Connectors end to end, no model (ADR-17): a fake remote MCP server on this machine, Streamable HTTP. The person
 // connects it, sees its 2 tools, sets one to Read; planted plan runs (pinned, approved, a model no engine has) call it.
 // The first call asks and the person says Always; the second follows that grant; the token rides in the header only.
+// The same server also plays an MCP server behind sign-in (MCP authorization) with its own fake sign-in server, which
+// approves at once, so the browser's sign-in window closes by itself. This copy of the extension has `identity` at
+// install: Chrome asks for an optional permission in a prompt a test can't click.
 import { test, expect } from '@playwright/test';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
-import { launch, ROOT } from './harness.mjs';
+import { EXT, launch, ROOT } from './harness.mjs';
 
 const TOKEN = 'test-token-7f3a';
 const calls = []; // { method, auth, cookie } of each JSON-RPC request
@@ -15,10 +21,47 @@ const TOOLS = [
   { name: 'delete_contact', description: 'Deletes a contact.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
 ];
 
+// The sign-in server: what it was sent, and the access tokens the MCP server takes now.
+const oauth = { log: [], valid: new Set(), challenge: '', n: 0 };
+function signInServer(req, res, body) {
+  const base = `http://${req.headers.host}`;
+  const u = new URL(req.url, base);
+  const json = (x, status = 200) => res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(x));
+  oauth.log.push(`${req.method} ${u.pathname}`);
+  if (u.pathname === '/.well-known/oauth-protected-resource/secure/mcp') return json({ resource: `${base}/secure/mcp`, authorization_servers: [`${base}/as`], scopes_supported: ['contacts'] });
+  if (u.pathname === '/.well-known/oauth-authorization-server/as') return json({ issuer: `${base}/as`, authorization_endpoint: `${base}/as/authorize`, token_endpoint: `${base}/as/token`, registration_endpoint: `${base}/as/register`, code_challenge_methods_supported: ['S256'] });
+  if (u.pathname === '/as/register') {
+    const r = JSON.parse(body);
+    oauth.redirect = r.redirect_uris[0];
+    return json({ client_id: 'cid-1', redirect_uris: r.redirect_uris }, 201);
+  }
+  if (u.pathname === '/as/authorize') {
+    oauth.authorize = Object.fromEntries(u.searchParams);
+    oauth.challenge = u.searchParams.get('code_challenge');
+    return res.writeHead(302, { Location: `${u.searchParams.get('redirect_uri')}?code=code-1&state=${u.searchParams.get('state')}` }).end();
+  }
+  if (u.pathname === '/as/token') {
+    const f = Object.fromEntries(new URLSearchParams(body));
+    oauth.log.push(`token ${f.grant_type}`);
+    const pkce = crypto.createHash('sha256').update(f.code_verifier ?? '').digest('base64url') === oauth.challenge;
+    const ok = f.grant_type === 'authorization_code' ? f.code === 'code-1' && pkce && f.client_id === 'cid-1' : f.refresh_token === `ref-${oauth.n}`;
+    if (!ok) return json({ error: 'invalid_grant' }, 400);
+    oauth.n++;
+    oauth.valid = new Set([`acc-${oauth.n}`]);
+    return json({ access_token: `acc-${oauth.n}`, refresh_token: `ref-${oauth.n}`, token_type: 'Bearer', expires_in: 3600 });
+  }
+  res.writeHead(404).end();
+}
+
 function mcp(req, res) {
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
+    if (/^\/(\.well-known|as)\//.test(req.url)) return signInServer(req, res, body);
+    if (req.url === '/secure/mcp' && !oauth.valid.has(req.headers.authorization?.slice(7))) {
+      oauth.log.push(`401 ${req.headers.authorization ?? 'none'}`);
+      return res.writeHead(401, { 'WWW-Authenticate': `Bearer resource_metadata="http://${req.headers.host}/.well-known/oauth-protected-resource/secure/mcp"` }).end();
+    }
     const m = JSON.parse(body);
     calls.push({ method: m.method, auth: req.headers.authorization, cookie: req.headers.cookie, session: req.headers['mcp-session-id'] });
     if (m.id === undefined) return res.writeHead(202).end();
@@ -38,7 +81,12 @@ test.beforeAll(async () => {
   server = http.createServer(mcp);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   url = `http://127.0.0.1:${server.address().port}/mcp`;
-  ({ ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') }));
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'hg-connectors-'));
+  fs.cpSync(EXT, copy, { recursive: true });
+  const manifest = JSON.parse(fs.readFileSync(path.join(copy, 'manifest.json'), 'utf8'));
+  manifest.permissions.push('identity');
+  fs.writeFileSync(path.join(copy, 'manifest.json'), JSON.stringify(manifest));
+  ({ ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test'), ext: copy }));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
   for (const r of await bg('runList', { limit: 1000 })) {
@@ -156,4 +204,42 @@ test('"connect linear" in chat opens the Connect form filled in, with no model',
   await expect(form.getByLabel('Server URL')).toHaveValue('https://mcp.linear.app/mcp');
   await expect(form.getByRole('link', { name: 'Linear’s MCP docs' })).toBeVisible();
   expect(await bg('connectorList')).toHaveLength(1); // nothing is saved until the person connects
+});
+
+test('sign in to a server (MCP authorization): discovery, registration, PKCE; a 401 refreshes the token once', async () => {
+  const secure = url.replace(/\/mcp$/, '/secure/mcp');
+  await panel.reload();
+  await panel.click('[data-tab=garden]');
+  await panel.click('#connectors > summary');
+  const form = panel.locator('details.connect');
+  await form.locator('summary').click();
+  await form.getByLabel('App name').fill('Secure');
+  await form.getByLabel('Server URL').fill(secure);
+  await form.getByRole('button', { name: 'Sign in' }).click();
+  await expect(form.locator('li.tool')).toHaveCount(2); // signed in, then listed with the new token
+  expect(oauth.redirect).toBe(`https://${id}.chromiumapp.org/`);
+  expect(oauth.authorize).toMatchObject({ client_id: 'cid-1', code_challenge_method: 'S256', resource: secure, scope: 'contacts', response_type: 'code' });
+  expect(oauth.log).toContain('token authorization_code');
+  await form.getByLabel('What find_contact does').fill('Find a contact');
+  await form.getByRole('button', { name: 'Connect' }).click();
+  const item = panel.locator('li.connector', { hasText: 'Secure' });
+  await expect(item).toContainText('signed in');
+  const listed = JSON.stringify(await bg('connectorList'));
+  for (const secret of ['acc-1', 'ref-1', 'cid-1']) expect(listed).not.toContain(secret);
+
+  // The server drops the access token: the next use gets a 401, refreshes once, keeps the new token and goes on.
+  oauth.valid = new Set();
+  oauth.log.length = 0;
+  await item.getByRole('button', { name: 'Check Secure\'s tools again' }).click();
+  await expect(item.locator('li.tool')).toHaveCount(2);
+  expect(oauth.log).toEqual(['401 Bearer acc-1', 'POST /as/token', 'token refresh_token']);
+  oauth.log.length = 0;
+  const k = calls.length;
+  await item.getByRole('button', { name: 'Check Secure\'s tools again' }).click();
+  await expect.poll(() => calls.slice(k).filter((x) => x.method === 'tools/list').length).toBe(1);
+  expect(calls.slice(k).every((x) => x.auth === 'Bearer acc-2')).toBe(true);
+  expect(oauth.log).toEqual([]); // acc-2 was kept: no 401, no refresh
+  const [c] = (await bg('connectorList')).filter((x) => x.name === 'Secure');
+  expect(c.signedIn).toBe(true);
+  expect(JSON.stringify(c)).not.toContain('ref-2');
 });

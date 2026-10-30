@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { alwaysOk, approveAllOk, decide, failTaints, type Grant } from '../../src/domain/garden/policy.ts';
-import { answerPlan, HELP_REFUSED, next, type Ctx } from '../../src/domain/garden/loop.ts';
+import { answerPlan, HELP_REFUSED, next, parseEdit, type Ctx } from '../../src/domain/garden/loop.ts';
 import { isChallenge } from '../../src/domain/garden/classify.ts';
 import { devtoolsDigest, downloadRun, mentionedTab, ownsTab, TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { argsKey } from '../../src/domain/garden/policy.ts';
@@ -129,4 +129,27 @@ test('a download whose referrer is the person\'s tab is not claimed; one from a 
 test('a gardener keeps its devtools switch', () => {
   assert.equal(parseGardener({ ...g, devtools: true })?.devtools, true);
   assert.equal(parseGardener({ ...g, devtools: 'yes' })?.devtools, undefined);
+});
+
+test('the act_my_tab card is editable: an edit is a new call, so an added fill is asked again as sensitive with 8 s, never Always', () => {
+  const r = run({ plan: [{ tool: 'act_my_tab', args: click }], status: 'queued' });
+  const ctx: Ctx = { gardener: g, tools: toolsFor(r), now: 1 };
+  const a = next(r, ctx);
+  assert.ok('request' in a && a.request.kind === 'approve' && !a.request.sensitive, JSON.stringify(a));
+  const q: Request = { ...a.request, id: 'q1', shownAt: 1 };
+  assert.match(parseEdit(q, 'always', fill) as string, /only with yes/);
+  const edit = parseEdit(q, 'yes', fill);
+  assert.ok(typeof edit !== 'string' && edit.args, String(edit));
+  r.requests.push({ ...q, answer: { value: 'yes', at: 2, ...edit } });
+  const again = next(r, ctx);
+  assert.ok('request' in again && again.request.sensitive && again.request.noEdit && again.request.editedFrom === 'q1', JSON.stringify(again));
+  r.requests.push({ ...again.request, id: 'q2', shownAt: 10_000, answer: { value: 'yes', at: 18_001 } });
+  assert.deepEqual(next(r, ctx), { call: { i: 0, tool: 'act_my_tab', args: fill, answered: 'q2' } });
+});
+
+test('when the person closes their tab during act_my_tab, the step stays started and the run asks "did it happen?"', () => {
+  const r = run({ plan: [{ tool: 'act_my_tab', args: fill }], status: 'queued', steps: [{ i: 0, tool: 'act_my_tab', args: fill, effect: 'act', state: 'started', at: 1 }] });
+  const a = next(r, { gardener: g, tools: toolsFor(r), now: 2 });
+  assert.ok('request' in a && a.request.kind === 'did-it-happen' && a.request.tool === 'act_my_tab', JSON.stringify(a));
+  assert.match(a.request.text, /Did it happen\?/);
 });

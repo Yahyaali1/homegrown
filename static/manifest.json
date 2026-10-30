@@ -112,6 +112,7 @@
   ],
   "optional_permissions": [
     "debugger",
-    "downloads"
+    "downloads",
+    "identity"
   ]
 }

@@ -95,6 +95,7 @@ async function notes(e: Entity, lines: Line[]): Promise<void> {
   await putEntity(typeof body === 'object' && body
     ? { ...fresh, body: notesBody(body), by: 'model', confirmed: false, at: Date.now() }
     : { ...fresh, body: typeof body === 'string' ? body : 'Transcript only: the notes could not be written.' });
+  chrome.runtime.sendMessage({ type: 'meeting-notes', id: e.id }).catch(() => {}); // an open Library redraws its list
 }
 
 /** Lines from a page (Transcribe a file): checked at the boundary, no speaker. */

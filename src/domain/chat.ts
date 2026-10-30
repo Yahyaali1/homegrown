@@ -1,5 +1,6 @@
 // Saved chats (plan T6): the record kept in IndexedDB `hg-chat`, and the pure rules the side panel's chat uses.
 import { contextChars } from './text.ts';
+import { correctionOf } from './memory.ts';
 
 export type Mode = 'plan' | 'smart' | 'fast';
 export interface ChatTurn {
@@ -122,3 +123,6 @@ export const chatReport = (c: Chat, version = '') => ({
   version, id: c.id, mode: c.mode, model: c.model, createdAt: c.createdAt,
   turns: c.turns.map((t) => ({ role: t.role, at: t.at, chars: t.text.length, ...(t.error && { error: t.error }), ...(t.partial && { partial: true }) })),
 });
+
+/** A message that corrects an earlier answer ("no", "don't", "never", "always"): offered as "Remember this?" (T7). */
+export const chatCorrection = (c: Chat, text: string): string | null => (c.turns.some((t) => t.role === 'model' && !t.error) ? correctionOf(text) : null);

@@ -176,7 +176,8 @@ It also owns these parts:
   - `read_page` in a routine's direct read diffs the page markdown against its snapshot (`{ text, prev, runId }`);
     taint follows the tab's final URL and every frame's URL (unknown → tainted). `mission` runs signed out (`cookieRule(tab, [])`) and never taints.
   - `act_my_tab` plays approved steps (strict, guarded like `act`) in a tab the person named, still on that URL
-    (`mentionedTab`), never closes it, and taints the run. `read_page` and `act` with `Gardener.devtools` attach the
+    (`mentionedTab`), never closes it, and taints the run. If the person closes that tab mid-call it throws
+    `TabClosed`, so the step stays started and the run asks "did this happen?". `read_page` and `act` with `Gardener.devtools` attach the
     debugger in the tab's `prepare` and append `devtoolsDigest` (or say the permission is missing). `read_page`
     throws `NeedsHelp(tabId)` when `isChallenge` holds (`readInTab`'s `hold`).
   - `read_my_tab` reads a tab the person named (`mentionedTab`: by hand the same tab on the same URL, in a routine
@@ -194,6 +195,11 @@ It also owns these parts:
   `tools/list` up to 5 pages; `callTool(connector, tool, args)`), 30 s timeouts, `credentials: 'omit'`, the token only
   as the bearer header. Handlers, extension pages only: `connectorList` (no tokens, `hasToken`), `connectorProbe`,
   `connectorSave` (a kept token stays when none is sent, only on the same origin: `tokenFor`); replies over 1 MB fail, `connectorDelete`.
+  Sign-in (MCP authorization): `connectorSignIn({ url })` discovers the sign-in server from the 401, registers
+  Homegrown (RFC 7591, a public client), runs PKCE in `chrome.identity.launchWebAuthFlow` (optional `identity`
+  permission, asked on the page's click) and holds the tokens in worker memory under an `auth` id that
+  `connectorProbe` and `connectorSave` take. A signed-in connector keeps `oauth` beside its token in `hg-trust`;
+  on a 401, `authed` refreshes once at the token endpoint, keeps the new token and tries again.
   - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
   - It exports `inTab`, `waitLoaded`, `Run`, `ENGINES`, `searchInTab`, `readInTab`, `joinGroup`, `endRun`,
     `markWindow`, `closeIfEmpty`, `closeLiveGroups` (only what the old worker listed, read at module load) and
