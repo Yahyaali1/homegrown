@@ -73,7 +73,8 @@ async function launchOnce({ headless = true, userDataDir = '', offline = false, 
     const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => r(p)); });
   });
   // A reused profile keeps running its cached worker script; drop that cache (models live in OPFS, untouched).
-  if (userDataDir) fs.rmSync(path.join(userDataDir, 'Default', 'Service Worker'), { recursive: true, force: true });
+  // Only the script cache and registrations: Cache Storage beside them holds downloaded models (FLUX is 5.6 GB).
+  for (const d of ['ScriptCache', 'Database']) if (userDataDir) fs.rmSync(path.join(userDataDir, 'Default', 'Service Worker', d), { recursive: true, force: true });
   const ctx = await chromium.launchPersistentContext(userDataDir, {
     channel,
     headless,
