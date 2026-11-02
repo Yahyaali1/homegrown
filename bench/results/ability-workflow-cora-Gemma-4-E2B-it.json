@@ -1,0 +1,388 @@
+{
+  "ability": "workflow-cora",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 1,
+  "of": 5,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:cora/kickoff"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "kickoff",
+      "ability": "workflow:cora/kickoff",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/about"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/jobs"
+              }
+            }
+          ],
+          "ms": 14114,
+          "request": "Write a kickoff brief on Garden Shop from https://shop.garden.test/about and https://shop.garden.test/jobs.",
+          "answer": "Here is the kickoff brief based on the provided information:\n\n**Kickoff Brief: Garden Shop**\n\nGarden Shop is a company founded in London in 2015 that sells hand tools specifically for moss gardens, currently employing 40 staff and having raised £3m in September. Key attendees identified for this kickoff include the Head of Sales in London and two warehouse leads in Manchester. Five initial questions to ask would be: 1. What is the current growth strategy for the moss garden tool market? 2. What are the immediate priorities for the London sales team? 3. What are the current operational challenges for the Manchester warehouse leads? 4. How is the company leveraging its recent funding to expand product lines? 5. What are the key performance indicators (KPIs) for the next quarter?\n\n**Missing Information:**\nThe initial steps successfully gathered basic company information and identified key roles, but the brief is missing the specific \"recent changes\" and the required \"source\" citations for each fact as requested in the original prompt structure.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/about → ok (126 chars)",
+            "read_page https://shop.garden.test/jobs → ok (65 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/about\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/jobs\"\n    }\n  }\n]\n```",
+            "sum: Here is the kickoff brief based on the provided information:\n\n**Kickoff Brief: Garden Shop**\n\nGarden Shop is a company founded in London in 2015 that sells hand tools specifically for moss gardens, currently employing 40 staff and having raised £3m in September. Key attendees identified for this kickoff include the Head of Sales in London and two warehouse leads in Manchester. Five initial questions to ask would be: 1. What is the current growth strategy for the moss garden tool market? 2. What are the immediate priorities for the London sales team? 3. What are the current operational challenges for the Manchester warehouse leads? 4. How is the company leveraging its recent funding to expand product lines? 5. What are the key performance indicators (KPIs) for the next quarter?\n\n**Missing Information:**\nThe initial steps successfully gathered basic company information and identified key roles, but the brief is missing the specific \"recent changes\" and the required \"source\" citations for each fact as requested in the original prompt structure."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://kewmoss.test/about"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://kewmoss.test/jobs"
+              }
+            }
+          ],
+          "ms": 15203,
+          "request": "Write a kickoff brief on Kew Moss Garden from https://kewmoss.test/about and https://kewmoss.test/jobs. Attendee: Ana Ruiz.",
+          "answer": "Here is the kickoff brief for Kew Moss Garden:\n\n**Kickoff Brief: Kew Moss Garden**\n\nKew Moss Garden is a visitor garden dedicated to mosses, established in 1998. A recent significant development was the fundraising of £1 million in October to construct a new cafe. Ana Ruiz recently joined the team as the Director. The current open positions include a Cafe Manager and a Head of Partnerships.\n\n**Five Questions to Ask:**\n\n1. What are the immediate goals for the new cafe following the £1m fundraising? (Source: [0])\n2. What is the current strategy for expanding visitor engagement beyond the garden itself? (Source: [0])\n3. What are the key responsibilities and required skills for the Head of Partnerships role? (Source: [1])\n4. How has the role of the Director evolved since August? (Source: [0])\n5. What are the most pressing operational challenges facing the garden right now? (Source: [0])",
+          "why": null,
+          "trail": [
+            "read_page https://kewmoss.test/about → ok (161 chars)",
+            "read_page https://kewmoss.test/jobs → ok (64 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://kewmoss.test/about\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://kewmoss.test/jobs\"\n    }\n  }\n]\n```",
+            "sum: Here is the kickoff brief for Kew Moss Garden:\n\n**Kickoff Brief: Kew Moss Garden**\n\nKew Moss Garden is a visitor garden dedicated to mosses, established in 1998. A recent significant development was the fundraising of £1 million in October to construct a new cafe. Ana Ruiz recently joined the team as the Director. The current open positions include a Cafe Manager and a Head of Partnerships.\n\n**Five Questions to Ask:**\n\n1. What are the immediate goals for the new cafe following the £1m fundraising? (Source: [0])\n2. What is the current strategy for expanding visitor engagement beyond the garden itself? (Source: [0])\n3. What are the key responsibilities and required skills for the Head of Partnerships role? (Source: [1])\n4. How has the role of the Director evolved since August? (Source: [0])\n5. What are the most pressing operational challenges facing the garden right now? (Source: [0])"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "proposal",
+      "ability": "workflow:cora/proposal",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"booking\"",
+            "answer lacks \"March\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "kew-discovery.md"
+              }
+            }
+          ],
+          "ms": 5077,
+          "request": "Draft a proposal from the discovery call in calls/kew-discovery.md and save it as a draft.",
+          "answer": "I am unable to draft the proposal because the required document, `kew-discovery.md`, was not found. Please provide the content of the discovery call document so I can proceed with drafting the proposal according to the specified format (context, client's need, scope, timeline, and open questions).",
+          "why": null,
+          "trail": [
+            "doc_read kew-discovery.md → failed: No document at kew-discovery.md."
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"kew-discovery.md\"\n    }\n  }\n]\n```",
+            "sum: I am unable to draft the proposal because the required document, `kew-discovery.md`, was not found. Please provide the content of the discovery call document so I can proceed with drafting the proposal according to the specified format (context, client's need, scope, timeline, and open questions)."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"stock\"",
+            "answer lacks \"Christmas\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "fernrow-discovery.md"
+              }
+            }
+          ],
+          "ms": 4052,
+          "request": "Draft a proposal from the discovery call in calls/fernrow-discovery.md and save it as a draft.",
+          "answer": "I am unable to draft the proposal because the required document, `fernrow-discovery.md`, was not found. Please provide the content of the discovery call document so I can proceed with drafting the proposal according to the specified format (context, client's need, scope, timeline, and open questions).",
+          "why": null,
+          "trail": [
+            "doc_read fernrow-discovery.md → failed: No document at fernrow-discovery.md."
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"fernrow-discovery.md\"\n    }\n  }\n]\n```",
+            "sum: I am unable to draft the proposal because the required document, `fernrow-discovery.md`, was not found. Please provide the content of the discovery call document so I can proceed with drafting the proposal according to the specified format (context, client's need, scope, timeline, and open questions)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prospects",
+      "ability": "workflow:cora/prospects",
+      "passed": false,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "Garden Shop funding"
+              }
+            },
+            {
+              "tool": "search",
+              "args": {
+                "query": "Garden Shop jobs"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/about"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/jobs"
+              }
+            },
+            {
+              "tool": "mission",
+              "args": {
+                "goal": "Compare funding and hiring information for Garden Shop to determine if it is a prospect."
+              }
+            }
+          ],
+          "ms": 46343,
+          "request": "Is Garden Shop a prospect? Check https://shop.garden.test/about for funding and https://shop.garden.test/jobs for hiring, and write its one-pager.",
+          "answer": "Based on the provided information, Garden Shop appears to be a viable prospect. They have secured significant funding, having raised £3m in September 2015, and they are actively hiring for key roles such as the Head of Sales in London and two warehouse leads in Manchester.",
+          "why": null,
+          "trail": [
+            "search Garden Shop funding → ok (2 results)",
+            "search Garden Shop jobs → ok (2 results)",
+            "read_page https://shop.garden.test/about → ok (126 chars)",
+            "read_page https://shop.garden.test/jobs → ok (65 chars)",
+            "mission Compare funding and hiring information for Garden Shop to de → ok (0 rows)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"Garden Shop funding\"\n    }\n  },\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"Garden Shop jobs\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/about\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/jobs\"\n    }\n  },\n  {\n    \"tool\": \"mission\",\n    \"args\": {\n      \"goal\": \"Compare funding and hiring information for Garden Shop to determine if it is a prospect.\"\n    }\n  }\n]\n```",
+            "sum: Based on the provided information, Garden Shop appears to be a viable prospect. They have secured significant funding, having raised £3m in September 2015, and they are actively hiring for key roles such as the Head of Sales in London and two warehouse leads in Manchester."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"£1m\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "search",
+              "args": {
+                "query": "Kew Moss Garden funding"
+              }
+            },
+            {
+              "tool": "search",
+              "args": {
+                "query": "Kew Moss Garden jobs"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://kewmoss.test/about"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://kewmoss.test/jobs"
+              }
+            },
+            {
+              "tool": "mission",
+              "args": {
+                "goal": "Compare information from the 'about' and 'jobs' pages to determine if Kew Moss Garden is a viable prospect for funding/hiring."
+              }
+            }
+          ],
+          "ms": 55674,
+          "request": "Is Kew Moss Garden a prospect? Check https://kewmoss.test/about for funding and https://kewmoss.test/jobs for hiring, and write its one-pager.",
+          "answer": "Based on the provided information, Kew Moss Garden appears to be a viable prospect. They have secured significant funding, having raised £1 million to build a cafe, and they are actively hiring for roles such as a Cafe Manager and Head of Partnerships. The one-pager should highlight their unique visitor experience as a moss garden and their current growth/operational needs.",
+          "why": null,
+          "trail": [
+            "search Kew Moss Garden funding → ok (2 results)",
+            "search Kew Moss Garden jobs → ok (2 results)",
+            "read_page https://kewmoss.test/about → ok (161 chars)",
+            "read_page https://kewmoss.test/jobs → ok (64 chars)",
+            "mission Compare information from the 'about' and 'jobs' pages to det → ok (0 rows)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"Kew Moss Garden funding\"\n    }\n  },\n  {\n    \"tool\": \"search\",\n    \"args\": {\n      \"query\": \"Kew Moss Garden jobs\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://kewmoss.test/about\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://kewmoss.test/jobs\"\n    }\n  },\n  {\n    \"tool\": \"mission\",\n    \"args\": {\n      \"goal\": \"Compare information from the 'about' and 'jobs' pages to determine if Kew Moss Garden is a viable prospect for funding/hiring.\"\n    }\n  }\n]\n```",
+            "sum: Based on the provided information, Kew Moss Garden appears to be a viable prospect. They have secured significant funding, having raised £1 million to build a cafe, and they are actively hiring for roles such as a Cafe Manager and Head of Partnerships. The one-pager should highlight their unique visitor experience as a moss garden and their current growth/operational needs."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "client-reports",
+      "ability": "workflow:cora/client-reports",
+      "passed": false,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "kew/october.md"
+              }
+            },
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "clients/kew/october.md"
+              }
+            }
+          ],
+          "ms": 9101,
+          "request": "Write Kew Moss Garden's monthly report from clients/kew/october.md and save it as a draft.",
+          "answer": "Here is the draft of Kew Moss Garden's monthly report based on the provided information:\n\n**Kew Moss Garden Monthly Report - October**\n\nThis month, Kew Moss Garden experienced a strong performance with 4,100 visitors, marking a 12% increase. Key achievements include successfully moving the booking process to the new form and receiving approval for the cafe plan. The primary risk identified for the upcoming period is the March deadline for the booking fix.",
+          "why": null,
+          "trail": [
+            "doc_read kew/october.md → failed: No document at kew/october.md.",
+            "doc_read clients/kew/october.md → ok (158 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"kew/october.md\"\n    }\n  },\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"clients/kew/october.md\"\n    }\n  }\n]\n```",
+            "sum: Here is the draft of Kew Moss Garden's monthly report based on the provided information:\n\n**Kew Moss Garden Monthly Report - October**\n\nThis month, Kew Moss Garden experienced a strong performance with 4,100 visitors, marking a 12% increase. Key achievements include successfully moving the booking process to the new form and receiving approval for the cafe plan. The primary risk identified for the upcoming period is the March deadline for the booking fix."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"9 of 10\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "clients/fernrow/october.md"
+              }
+            }
+          ],
+          "ms": 5053,
+          "request": "Write Fern Row Nursery's monthly report from clients/fernrow/october.md and save it as a draft.",
+          "answer": "Here is the draft of the Fern Row Nursery monthly report for October, based on the provided information:\n\n**Fern Row Nursery Monthly Report - October**\n\nThis month saw the successful opening of the second shop in Leeds. Inventory management is performing well, with stock counts matching in 9 out of 10 checks. The next priority is to train the new Leeds staff.",
+          "why": null,
+          "trail": [
+            "doc_read clients/fernrow/october.md → ok (126 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"clients/fernrow/october.md\"\n    }\n  }\n]\n```",
+            "sum: Here is the draft of the Fern Row Nursery monthly report for October, based on the provided information:\n\n**Fern Row Nursery Monthly Report - October**\n\nThis month saw the successful opening of the second shop in Leeds. Inventory management is performing well, with stock counts matching in 9 out of 10 checks. The next priority is to train the new Leeds staff."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timesheet",
+      "ability": "workflow:cora/timesheet",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"Kew\"",
+            "answer lacks \"Garden Shop\"",
+            "answer lacks \"Dentist\""
+          ],
+          "violations": [],
+          "asked": [
+            {
+              "tool": "list_events",
+              "sensitive": false,
+              "answer": "yes"
+            }
+          ],
+          "reached": [
+            "list_events"
+          ],
+          "plan": [
+            {
+              "tool": "app_call",
+              "args": {
+                "connector": "calendar",
+                "tool": "list_events",
+                "args": {
+                  "when": "2026-W44"
+                }
+              }
+            }
+          ],
+          "ms": 7107,
+          "request": "Read my calendar for week 2026-W44 and write my timesheet: hours per client per day as a table, and list meetings with no client.",
+          "answer": "Please provide the calendar data for week 2026-W44 so I can generate your timesheet. The information you provided only contains a few events, and I need the full calendar to calculate hours per client and identify meetings without a client.",
+          "why": null,
+          "trail": [
+            "app_call calendar → ok (179 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"app_call\",\n    \"args\": {\n      \"connector\": \"calendar\",\n      \"tool\": \"list_events\",\n      \"args\": {\n        \"when\": \"2026-W44\"\n      }\n    }\n  }\n]\n```",
+            "sum: Please provide the calendar data for week 2026-W44 so I can generate your timesheet. The information you provided only contains a few events, and I need the full calendar to calculate hours per client and identify meetings without a client."
+          ]
+        }
+      ]
+    }
+  ]
+}

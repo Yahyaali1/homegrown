@@ -9,6 +9,7 @@ import { cell, tableRows, toMarkdown } from './markdown.ts';
 export { toMarkdown };
 import { scrape } from './scrape.ts';
 import { first, settle, step } from './scenario.ts';
+import { isObj } from '../domain/text.ts';
 
 const clean = (s: unknown): string => String(s ?? '').replace(/\s+/g, ' ').trim();
 const abs = (u: string | null | undefined): string => {
@@ -29,7 +30,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // ---- 1. structured data: JSON-LD, microdata, Open Graph ----
 
 type Json = Record<string, unknown>;
-const asObj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : {});
+const asObj = (v: unknown): Json => (isObj(v) ? (v as Json) : {});
 const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : v == null ? [] : [v]);
 
 function offerOf(o: Json): Pick<PageRecord, 'price' | 'currency' | 'availability'> {

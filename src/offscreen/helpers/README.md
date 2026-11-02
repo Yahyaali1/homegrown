@@ -31,6 +31,19 @@ a `handlers` object, and `../engine.ts` adds these handlers to its command table
       `'transcribe'`. `audioUrl` plays an audio file instead of a captured tab (test path).
     - `handlers.liveStop()` returns `true`, or `false` when no session exists.
     - `handlers.livePause({paused})` returns `true`, or `false` when no session exists.
+  - Meetings:
+    - `handlers.meetStart({streamId?, audioUrl?, mic?})` resolves `{mic}`. The tab (or `audioUrl`, the test path)
+      is "Them"; the mic (when granted to the extension) is "You". Each side goes through Whisper in 20 s windows,
+      one call at a time (`domain/meeting.ts` `serial`), with its start time (resampled to 16 kHz before it waits).
+      At most 6 windows wait; past that a window counts as failed, so Stop never waits on a long backlog. Each line
+      is broadcast as heard (`meeting-heard`, with `failed`), so the worker keeps it. The speech model loads before
+      it resolves, so a missing model fails the start. The tab track's `ended` broadcasts `meeting-ended`. One
+      recording at a time.
+    - `handlers.meetStop()` sends what is left of each window, waits for Whisper and resolves `{lines, failed}` (unmerged; `failed` counts windows Whisper failed on),
+      or `null`. `handlers.meetState()`.
+    - `handlers.meetFile({url, title})`: fetches a page's blob URL, decodes it at 16 kHz (over 2 hours throws),
+      resolves `true`, then runs 20 s windows, broadcasting `meeting-progress` (`text`) and at the end
+      `meeting-file` (`title`, `lines`, `failed`), which the worker saves.
 - `vision.ts` (Florence-2)
   - `IMAGE_READER`: the label `Florence-2`.
   - `readImage(blob, onProgress?)` returns `{description, text}`. `onProgress` receives model download

@@ -1,7 +1,7 @@
-// The gardeners' notebook (docs/plan/S-gardeners.md, V4), kept in eg-memory's `notes` store by background/memory.ts.
+// The gardeners' notebook, kept in eg-memory's `notes` store by background/memory.ts.
 // A note is the person's (by: 'person') or one a gardener took in a run (by: { runId, url }). Notes are private and,
 // for a model's, page-derived: they reach a model only in the data part of a think, labelled, and taint the run.
-import { defang, hostOf } from '../text.ts';
+import { defang, hostOf, isObj } from '../text.ts';
 
 export interface Note {
   v: 1;
@@ -17,7 +17,6 @@ export interface Note {
 
 export const NOTE_CHARS = 500;
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 
 export function parseNote(raw: unknown): Note | null {
   if (!isObj(raw) || raw.v !== 1 || typeof raw.id !== 'string' || !raw.id || typeof raw.at !== 'number') return null;
@@ -35,7 +34,7 @@ export function parseNote(raw: unknown): Note | null {
 export const forGardener = <T extends Pick<Note, 'gardenerId'>>(notes: T[], gardenerId: string): T[] => notes.filter((n) => !n.gardenerId || n.gardenerId === gardenerId);
 
 /** eg-memory's schema, one step per version: each runs once, so the stores already there keep their data. */
-export const MEMORY_VERSION = 3;
+export const MEMORY_VERSION = 4;
 export function upgradeMemory(d: Pick<IDBDatabase, 'createObjectStore'>, oldVersion: number): void {
   if (oldVersion < 1) {
     d.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
@@ -44,6 +43,10 @@ export function upgradeMemory(d: Pick<IDBDatabase, 'createObjectStore'>, oldVers
   }
   if (oldVersion < 2) d.createObjectStore('snapshots', { keyPath: 'url' });
   if (oldVersion < 3) d.createObjectStore('notes', { keyPath: 'id' });
+  if (oldVersion < 4) {
+    d.createObjectStore('entities', { keyPath: 'id' });
+    d.createObjectStore('docs', { keyPath: 'id' });
+  }
 }
 
 const PERSON = 'Notes (written by you):';

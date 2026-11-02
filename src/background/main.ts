@@ -1,5 +1,5 @@
-// Service worker: keeps the offscreen engine alive, runs requests from the in-page UI over a port, owns the
-// right-click menu and shortcuts, and hands PDF and browser-page actions to the side panel. Built to background.js.
+// Service worker: registers the feature modules, keeps the offscreen engine alive, runs requests from the in-page UI
+// over a port, and owns the task menu items and shortcuts (the side panel takes PDF and browser-page tasks).
 import { DEFAULT_TASKS, getTasks } from '../shared/actions.ts';
 import type { PageRequest } from '../shared/protocol.ts';
 import { MODELS } from '../domain/model.ts';
@@ -15,6 +15,11 @@ import * as memory from './memory.ts';
 import * as livecaptions from './livecaptions.ts';
 import * as scrape from './scrape.ts';
 import * as garden from './garden.ts';
+import * as outputs from './outputs.ts';
+import * as meetings from './meetings.ts';
+import * as mcp from './mcp.ts';
+import * as chat from './chat.ts';
+import * as plaza from './plaza.ts';
 
 type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
 /** A feature module: its handlers become bg commands; the hooks are optional. */
@@ -23,10 +28,12 @@ interface BackgroundModule {
   init?(): void;
   /** Adds its own right-click items (the menu is rebuilt from scratch). */
   menus?(): void;
+  /** A right-click item was chosen (any module's: each checks its own ids). Called in the click, for sidePanel.open. */
+  onMenu?(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): unknown;
   /** Called after every answer to a page request. */
   onAnswer?(req: unknown, result: { text: string }, sender?: chrome.runtime.MessageSender): unknown;
 }
-const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden];
+const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs, meetings, mcp, chat, plaza];
 const handlers: Record<string, Handler> = Object.assign({}, ...modules.map((m) => m.handlers ?? {}));
 // The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
 handlers.toPage = async ({ msg }: { msg: object }) => {
@@ -35,7 +42,6 @@ handlers.toPage = async ({ msg }: { msg: object }) => {
   await toTab(tab.id, msg);
   return true;
 };
-
 // ---- tasks ----
 
 async function seedTasks(): Promise<void> {
@@ -141,25 +147,25 @@ chrome.runtime.onInstalled.addListener(async () => {
   for (const tab of await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'], discarded: false })) injectInto(tab).catch(() => {});
 });
 
-async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): Promise<void> {
+/** A task or Ask… item: the in-page card where content.js runs, else the side panel (selected text in PDFs, browser pages). */
+async function taskClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): Promise<void> {
   const [type, id] = String(info.menuItemId).split(':');
+  if (type !== 'task' && type !== 'ask') return;
+  if (!inPage(info) && tab?.windowId !== undefined) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {}); // before any await
   const task = type === 'task' ? (await getTasks()).find((t) => t.id === id) ?? null : null;
   if (inPage(info) && tab?.id !== undefined) {
     await toTab(tab.id, { type: 'menu', task, ask: type === 'ask' ? id : null, srcUrl: info.srcUrl }, { frameId: info.frameId ?? 0 });
     return;
   }
-  // Side panel fallback (selected text in PDFs, and pages content scripts can't reach).
   const pending = task?.kind === 'text'
     ? { kind: 'text', title: task.title, prompt: task.prompt, selection: info.selectionText }
     : { kind: 'text', title: 'Ask…', selection: info.selectionText ?? '' };
   await chrome.storage.session.set({ pending: { ...pending, at: Date.now() } });
 }
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (!/^(task|ask):/.test(String(info.menuItemId))) return; // other modules' items (reader:…) handle themselves
-  if (!inPage(info) && tab?.windowId !== undefined) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-  handleMenuClick(info, tab).catch((e) => console.warn('menu action failed', e));
-});
+const handleMenuClick = (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) =>
+  Promise.all([taskClick(info, tab), ...modules.map((m) => m.onMenu?.(info, tab))]);
+chrome.contextMenus.onClicked.addListener((info, tab) => void handleMenuClick(info, tab).catch((e) => console.warn('menu action failed', e)));
 
 // Keyboard shortcuts: open the on-page launcher, or run the first page task.
 chrome.commands.onCommand.addListener(async (command, tab) => {

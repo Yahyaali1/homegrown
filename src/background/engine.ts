@@ -1,6 +1,6 @@
 // The service worker's line to the engine in the offscreen document: start it once, send it commands, and ask
 // one-shot questions with the model the user chose for the task. Built to bg/engine.js (shared by bg/*).
-import { TASKS, type Sampling, type TaskId } from '../domain/model.ts';
+import { anyCan, can, TASKS, type Ability, type Sampling, type TaskId } from '../domain/model.ts';
 import { parseSettings } from '../domain/settings.ts';
 
 export { TASKS };
@@ -73,4 +73,14 @@ export async function askAs(prompt: string, data: string, o: { task: TaskId; mod
   } finally {
     o.signal?.removeEventListener('abort', stop);
   }
+}
+
+/**
+ * The model a background request would use (the engine's useModel rule), if it is measured for the ability; else
+ * null (also when none is downloaded). When no model in the catalog has the ability, nothing is asked of the engine.
+ */
+export async function measured(ability: Ability): Promise<{ name: string; maxTokens: number } | null> {
+  if (!anyCan(ability)) return null;
+  const m = await engine<{ name: string; maxTokens: number }>('resolve', { name: await modelFor('background') }).catch(() => null); // none downloaded
+  return m && can(m.name, ability) ? m : null;
 }

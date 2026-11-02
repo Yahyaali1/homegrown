@@ -231,6 +231,15 @@ The strongest objections, answered:
 **Outcome:** Gemma 4 E2B scored 6/8 on `garden-eval`, with policy violations in the injection case; E4B scored 5/8.
 Neither passes (6/8 and no violation), so both keep `DEFAULT_AGENT`, and open requests stay off until a model passes.
 
+**Amendment (plan T, T3b): helpers.** Parallel model calls still gain nothing, but page loads do. A read of 6–25
+pages splits into helper runs of 5 pages (`parentId`); the parent waits on a `helpers` request that only code answers,
+when every helper ended. The queue (`nextBatch`) runs one run, or up to 3 queued helpers of the oldest parent
+together, each in its own tab group with the parent's cookie rule, so at most 3 run tabs are open. Helpers make no
+think; their model calls would still queue in the background lane. The worker's single live run became a map keyed by
+run id, so Stop, take over and the lock bar act per run, and Stop on a parent stops its helpers. A helper starts with
+the parent's pin, `seen` and taint, and any helper's taint taints the parent before its one `word` think. The 30 s
+auto-retry wait moved out of the call: the run goes back to `queued` with `retryAt` and holds no queue slot.
+
 ### ADR-16 Gardener permissions: code decides, the model proposes
 
 A gardener reads pages that can hold any text, including text written to steer it. `defang` lowers that noise, but it
@@ -254,6 +263,7 @@ How code decides:
 | Acts | `act` and acting `collect` recipes are asked every time, unless the person answered "always" to exactly that call: a grant in `hg-trust` bound to gardener, tool, host and `argsKey` (stable JSON of the args; for a recipe, of the whole recipe). |
 | Sensitive | `classify` runs in the page on the live element just before each acting step: password and card fields, words such as pay, buy, delete, send, confirm, a form or link to another host, a missing target, and typing after a signed-in read. A sensitive call is always asked, can't be granted, and the worker refuses a yes until 8 s after it was shown. A step that lands on another host stops the call. |
 | Code | The model never writes code steps: `evaluate` is refused by `parseArgs` and denied by policy. A recipe with code steps can't run in a gardener. |
+| Edits and Approve all | An approve card's edited args are parsed again and checked as a new call (taint and the 8 s rule apply to it); only a yes carries them, since "always" would grant the original. Approve all answers only non-sensitive `reach` and gardener-tab `act` / `collect` approves (`approveAllOk`), checked again in the worker. A routine the model proposes is stored paused until the person turns it on. |
 | Callers | Every garden handler needs an extension page (`isExtensionPage`). Only `runStop` and `runTakeover` also accept the run's own tab, through the lock bar's trusted clicks. |
 
 The strongest objections, answered:
@@ -264,3 +274,58 @@ The strongest objections, answered:
 | Taint stops useful open work after the first signed-in read. | Only new destinations wait. The person's own URLs, approved URLs and links from the gardener's own pages still read without asking; anything else is one request away. In `garden-eval` those requests were expected and answered yes. |
 | **The cookie-storage gap remains.** | Yes. A site that keeps its sign-in in page storage (localStorage, IndexedDB) instead of cookies still reads as the person, because the header rule can't see it. Requests made by a site's service worker (tab id −1) also escape per-tab rules. Reading such a page on the gardener's sites taints the run anyway; off the sites it is the known gap. The README's Privacy and safety section says so; the Garden tab doesn't show this help yet (the plan asked for it). |
 | An approval could be replayed for a different call. | An answer binds to the step index, the tool and the `argsKey`, and is used once. A grant binds to the host too, and a recipe's to the whole recipe, so an edit needs a new yes. |
+
+### ADR-17 Local-first connectors: remote MCP behind policy
+
+Strawberry reaches apps (CRMs, trackers, docs) through connectors. Homegrown is local: nothing leaves the device but
+pages the person opens. A connector sends data to someone else's server, so it needs its own rule.
+([plan](plan/T-strawberry-parity.md), T11 and decision 11)
+
+| | |
+|---|---|
+| Option A | No connectors: a gardener drives each app's web UI in its tabs, as it does now. |
+| Option B | Remote MCP servers behind the same policy as acts: the person connects a server, chooses what each tool may do, and code asks before each call. |
+| Against B | A second way for data to leave the device, a token to keep, and server text (tool names and descriptions) that could carry instructions. |
+| Against A | Many apps are slow or brittle to drive by clicks, and some tasks (a CRM search, an issue update) are one API call. |
+| Decision | **B**, with one rule: **data goes to an app only when the person connected it, allowed that tool, and approved the call** (or granted it with Always, only for a tool they marked Read, and never under taint). |
+
+How it works:
+
+| Part | Rule |
+|---|---|
+| Transport | Streamable HTTP only (`background/mcp.ts`): JSON-RPC over POST, a `text/event-stream` reply read as a stream until the answer to that request arrives, 30 s timeout, no cookies, no redirects. An extension can't start a process, so **stdio servers are impossible**; the Connect form says so. https only (http for `localhost` test servers). |
+| Auth | The person pastes a token, or signs in (below). No bundled OAuth apps, no client ids, no client secrets. The token lives in `hg-trust` v3 `connectors` and leaves it only as the bearer header to the server's URL: never in a prompt, a report, a broadcast or a page (`connectorList` says `hasToken`). A kept token goes only to the origin it was given for: after a URL change to another origin, the person types it again (`tokenFor`). No extra permission is asked: the manifest's `<all_urls>` host permission already covers the server. A reply over 1 MB fails. |
+| Sign-in | The MCP authorization spec, generic for any server: the server's 401 names its protected-resource metadata (RFC 9728; else the well-known paths), whose resource must be on the server's origin and whose sign-in server must be https; that server's metadata (RFC 8414, then OpenID) must match its issuer and offer PKCE S256. Homegrown registers itself there (RFC 7591, a public client whose only redirect is `https://<extension id>.chromiumapp.org/`); a server without registration can't be signed in to, and the form says to paste a token. The code flow runs in `chrome.identity.launchWebAuthFlow` (the optional `identity` permission, asked on the Sign in click) with a random `state` and `resource` (RFC 8707). The access token is kept and sent like a pasted one (only to the connected origin); the refresh token, client id and any issued secret stay beside it in `hg-trust` and go only to the token endpoint found at sign-in. A 401 refreshes once and retries; a failed refresh says to sign in again. A pasted token replaces a sign-in, and a URL on another origin drops it. |
+| Scopes | After `tools/list`, each tool is Off, Ask each time, or Read. `readOnlyHint` only pre-fills Read; the default is Ask. A later `tools/list` change is not used until the person checks the tools again and saves. |
+| Server text | A tool's description is shown only as a quote. The person writes the tool's line (≤ 200 chars); only that reaches a prompt, and a tool with no line yet isn't offered. A tool or argument name that isn't `^[A-Za-z_][A-Za-z0-9_]{0,40}$` makes the tool unusable (Off, with the reason). The prompt lists names and types only; enum values only when each is one plain token. |
+| Policy | `app_call { connector, tool, args }`: args checked against the tool's JSON Schema subset (`checkArgs`: types, required, enums, string lengths, no unknown keys). `decide`: Off or bad args → deny; Ask → asked every time, the card is editable, Always isn't offered (`Request.appWrite`); Read → asked, grantable per gardener, connector, tool and `argsKey`. A tool name or args holding a sensitive word (pay, refund, delete, send…) is sensitive: 8 s, never granted. **A tainted run asks every app call**, grant or not, because the call carries data off the device. A plan's yes never pre-approves an app call, and Approve all never answers one. |
+| Replies | An app's reply is data: it taints the run and is defanged where a prompt reads it. A failed call taints too. |
+| Guidelines | A connector's guidelines (person-written) go into the instruction part with its tools. `Gardener.siteNotes` does the same for a web app without a connector, when the run works on that host. |
+
+**Outcome:** `tests/connectors.spec.mjs` connects a fake server, sets one tool to Read, and sees its call asked,
+granted with Always, then followed by the grant, with the token only in the request header; it also signs in to a fake server through its fake sign-in server (discovery, registration, PKCE, the browser's sign-in window) and sees a 401 refresh the token once.
+
+### ADR-18 Measured abilities, pinned per run
+
+Some features work only when the model is good enough at one thing: writing a plan, taking meeting notes, keeping
+facts to the text. Gemma 4 E2B and E4B must keep working for everything else, and a stronger model must unlock more
+without new code. ([plan](plan/T-strawberry-parity.md), decision 1)
+
+| | |
+|---|---|
+| Option A | Gate each feature on the model's name or its context size. |
+| Option B | `ModelSpec.abilities?: Ability[]` in `domain/model.ts` (`plan`, `notes`, `facts`, `skillEdit`, `evidence`, `deck`, `cite`, `workflow:<preset>/<id>`), beside the measured `agent`. Each ability has one suite in `bench/abilities.mjs` and one pass rule. The owner copies a pass into `model.ts` by hand. `can(model, ability)` reads it for the UI; no entry means "cannot". |
+| Against B | Every ability needs a suite and a run on each model before anyone can use it. |
+| Against A | A name says nothing about quality, and a context size is not a skill (ADR-15). A new model would need code changes in every feature. |
+| Decision | **B.** `pin()` stores `run.abilities` beside `agent` when a run first goes `running`, so a run keeps what it was started with across restarts. The worker's `pin()` and the loop's `next()` both check the pin (`refusal`): a `plan` run whose pin lacks `plan` (and whose `agent.loop` is false) fails with "This model can't write plans yet.", also when a routine claimed it. `gardenRun` gives the same words early from `can()`. A feature that needs an ability is shown off in words and keeps its model-free part. |
+
+**Plan first** is the first ability. The model writes the whole plan once (`plan` think: a JSON array of at most
+`maxSteps` calls, parsed with `parsePlan`, one `repair`); the person sees it as an editable card, and on Yes the run
+works it as direct work, then one `sum` think. A yes covers only this: planned `read_page` URLs join `seen` as
+`approved`, and each planned `act` or acting `collect` that is not sensitive at that moment gets a `fromPlan` yes bound
+to its step, tool and `argsKey`. At call time `decide` still runs first; the yes counts only where `decide` says `ask`
+and the approval is not sensitive now (taint since the plan, or `classify` on the live element, asks again with the 8 s
+rule). Edited calls are parsed again, and a yes binds to the edited key.
+
+**Outcome:** `bench/abilities.mjs plan`: E2B 3/8 with 1 violation, E4B 5/8 with 1 violation (pass: 6/8 and none).
+Neither has `plan`, so Plan first is off in the Garden tab; tests and benches plant runs already pinned with it.

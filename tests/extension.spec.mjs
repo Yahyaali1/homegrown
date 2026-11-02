@@ -62,9 +62,9 @@ async function answer() {
   await expect
     .poll(async () => {
       last = await panel.evaluate(() => {
-        const li = [...document.querySelectorAll('#messages li')].at(-1);
+        const li = [...document.querySelectorAll('#messages > li')].at(-1); // answers hold markdown lists
         const done = document.querySelector('#chat-stop').hidden && li && li.className !== 'user' && li.textContent.length > 0;
-        return done ? { cls: li.className, text: li.textContent, user: [...document.querySelectorAll('#messages li.user')].at(-1)?.textContent } : null;
+        return done ? { cls: li.className, text: li.textContent, user: [...document.querySelectorAll('#messages > li.user')].at(-1)?.textContent } : null;
       });
       return last;
     })
@@ -99,6 +99,7 @@ test('chat streams an answer and shows stats', async () => {
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
   await panel.click('[data-tab=chat]'); // the panel reopens on the last tab used
+  await panel.click('#chat-clear'); // and on the last chat
   await panel.fill('#chat-input', 'What is the capital of France? Answer in one word.');
   await panel.click('#chat-send');
   const a = await answer();
@@ -511,6 +512,7 @@ test('chat: "use the dark theme" proposes the change, and nothing changes until 
   panel ??= await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
   await panel.click('[data-tab=chat]');
+  await panel.click('#chat-clear');
   await panel.fill('#chat-input', 'please switch to the dark theme');
   await panel.click('#chat-send');
   const confirm = panel.locator('.confirm');

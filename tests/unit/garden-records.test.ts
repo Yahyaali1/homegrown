@@ -41,3 +41,17 @@ test('a new run can reach the person\'s own URLs and survives a round trip throu
   assert.deepEqual(run.seen, [{ url: 'https://a.com/', from: 'person' }]);
   assert.deepEqual(parseRun(JSON.parse(JSON.stringify(run))), run);
 });
+
+test('a stored request from before `origin` keeps its meaning: a plan yes, or an edit asked again', () => {
+  const run = newRun({ id: 'x', gardenerId: 'g1', work: { kind: 'mission', goal: 'g' }, now: 1 });
+  const q = { kind: 'approve', text: '', sensitive: false };
+  const old = { ...run, requests: [{ ...q, id: 'a', fromPlan: true }, { ...q, id: 'b', editedFrom: 'a', noEdit: true }, { ...q, id: 'c' }] };
+  assert.deepEqual(parseRun(old)?.requests.map((r) => [r.id, r.origin, 'fromPlan' in r || 'editedFrom' in r || 'noEdit' in r]),
+    [['a', 'plan', false], ['b', { edit: 'a' }, false], ['c', undefined, false]]);
+});
+
+test('a stored request from before `appWrite` keeps Always off', () => {
+  const run = newRun({ id: 'x', gardenerId: 'g1', work: { kind: 'mission', goal: 'g' }, now: 1 });
+  const r = parseRun({ ...run, requests: [{ id: 'a', kind: 'approve', text: '', sensitive: false, noAlways: true }] })!.requests[0]!;
+  assert.deepEqual([r.appWrite, 'noAlways' in r], [true, false]);
+});

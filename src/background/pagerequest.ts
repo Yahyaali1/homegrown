@@ -2,6 +2,7 @@
 // ScrapingBee's waits, the js_scenario steps one at a time, then the rules and the page returns, and a screenshot.
 // Recipes use it for each page; missions use the steps before reading. Only Homegrown's own tabs are touched.
 import { inTab, waitLoaded, type Run } from './missions.ts';
+import { attach } from './devtools.ts';
 import { itemRule, type PageResult, type Recipe } from '../domain/scrape/recipe.ts';
 import { describe, isAct, SCENARIO_LIMITS, type Scenario, type StepReport } from '../domain/scrape/scenario.ts';
 import { verdict, type Check } from '../domain/garden/classify.ts';
@@ -15,12 +16,24 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const AD_HOSTS = ['doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'adservice.google.com', 'amazon-adsystem.com', 'adnxs.com',
   'criteo.com', 'criteo.net', 'taboola.com', 'outbrain.com', 'pubmatic.com', 'rubiconproject.com', 'openx.net', 'moatads.com', 'scorecardresearch.com'];
 
-/**
- * Steps that act may come only from Homegrown's own extension pages (Mission control, the side panel): never from a
- * content script, which a hostile page's renderer could control. Every command that takes a scenario checks this.
- */
 /** An extension page (Mission control, the side panel), not a content script in a web page. */
 export const isExtensionPage = (sender: chrome.runtime.MessageSender | null | undefined) => fromExtensionPage(sender, chrome.runtime.getURL(''));
+
+type Sender = chrome.runtime.MessageSender;
+type Handler = (msg: never, sender?: Sender) => unknown;
+type Guarded<T extends Record<string, Handler>> = { [K in keyof T]: (msg: Parameters<T[K]>[0], sender?: Sender) => Promise<Awaited<ReturnType<T[K]>>> };
+/** `handlers` only Homegrown's own pages may call: a content script, or a call without a sender, is refused. */
+export function pagesOnly<T extends Record<string, Handler>>(handlers: T): Guarded<T> {
+  return Object.fromEntries(Object.entries(handlers).map(([cmd, f]) => [cmd, async (msg: never, sender?: Sender) => {
+    if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
+    return f(msg, sender);
+  }])) as Guarded<T>;
+}
+
+/**
+ * Steps that act may come only from Homegrown's own pages: never from a content script, which a hostile page's
+ * renderer could control. Every command that takes a scenario checks this.
+ */
 
 export function refuseActs(sender: chrome.runtime.MessageSender | null | undefined, ...scenarios: (Scenario | null | undefined)[]): void {
   if (sender === undefined || !scenarios.some((s) => riskOf(s) === 'act')) return; // undefined: a call inside the worker
@@ -90,14 +103,15 @@ async function emulate(tabId: number, o: PageOptions): Promise<() => Promise<voi
   if (!needsDebugger(o)) return async () => {};
   if (!(await chrome.permissions.contains({ permissions: ['debugger'] }))) throw new Error('Screenshots, window size and device need the debugger permission: allow it from Collect from pages.');
   const target = { tabId };
-  await chrome.debugger.attach(target, '1.3');
+  const detach = await attach(tabId);
   const mobile = o.device === 'mobile';
   await chrome.debugger.sendCommand(target, 'Emulation.setDeviceMetricsOverride', { width: o.window_width, height: o.window_height, deviceScaleFactor: mobile ? 3 : 1, mobile });
   if (mobile) await chrome.debugger.sendCommand(target, 'Emulation.setUserAgentOverride', { userAgent: MOBILE_UA });
-  return () => chrome.debugger.detach(target);
+  return detach;
 }
 
-async function screenshot(tabId: number, o: PageOptions): Promise<string | null> {
+/** A PNG data URL of the tab (the debugger already attached), or null when `o` asks for none. Also the outputs page's PNG. */
+export async function screenshot(tabId: number, o: PageOptions): Promise<string | null> {
   if (!o.screenshot) return null;
   const target = { tabId };
   let clip: { x: number; y: number; width: number; height: number; scale: number } | undefined;
@@ -232,7 +246,7 @@ export async function play(tabId: number, scenario: Scenario, run: Run, guard?: 
   return { report, results, failed: null };
 }
 
-export type RequestRecipe = Pick<Recipe, 'rules' | 'waitFor' | 'wait' | 'ai' | 'aiSelector' | 'page'>;
+type RequestRecipe = Pick<Recipe, 'rules' | 'waitFor' | 'wait' | 'ai' | 'aiSelector' | 'page'>;
 
 /** One page, ScrapingBee style. Steps that fail in strict mode make the page an error, with the report kept. */
 export function pageRequest(url: string, recipe: RequestRecipe, run: Run, guard?: Guard): Promise<PageResult> {

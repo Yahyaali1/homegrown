@@ -26,3 +26,16 @@ export const busyButton = (label: string, fn: () => Promise<unknown>, cls = '') 
 
 export const row = (title: string, sub: string, result: string, ...actions: HTMLElement[]) =>
   h('li', {}, h('span', { className: 't' }, h('b', { textContent: title }), h('span', { className: 'p', textContent: sub }), h('span', { className: 'result', textContent: result })), ...actions);
+
+export const errLine = () => h('span', { className: 'err', hidden: true });
+export const fail = (el: HTMLElement, e: unknown) => ((el.textContent = e instanceof Error ? e.message : String(e)), (el.hidden = false));
+export const labelled = <T extends HTMLElement>(el: T, label: string) => (el.setAttribute('aria-label', label), el);
+/** A button's action: its error shows in `err`, inside its own row. */
+export const tryIt = (err: HTMLElement, fn: () => Promise<unknown>) => () => ((err.hidden = true), fn().catch((e) => fail(err, e)));
+
+/** Keeps the nodes in order without re-inserting the ones already in place (re-inserting restarts their motion). */
+export function place(parent: HTMLElement, nodes: Node[]): void {
+  const keep = new Set(nodes);
+  for (const c of [...parent.childNodes]) if (!keep.has(c)) c.remove();
+  nodes.forEach((n, i) => parent.childNodes[i] !== n && parent.insertBefore(n, parent.childNodes[i] ?? null));
+}

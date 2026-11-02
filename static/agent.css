@@ -111,10 +111,6 @@ td a { color: var(--link); text-decoration: none; }
 #saved .acts button { font-size: var(--t-sm); height: 26px; padding: 0 8px; }
 @media (max-width: 760px) { body { grid-template-columns: 1fr; } aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); } .goal-row { flex-direction: column; } }
 
-/* theme switch (ui/theme.js) */
-.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); width: max-content; }
-.theme-switch button { height: 26px; width: 30px; padding: 0; box-shadow: none; background: transparent; color: var(--muted); }
-.theme-switch button[aria-pressed=true] { background: var(--chip-hover); color: var(--fg); }
 #saved li.empty { flex-direction: row; align-items: center; gap: 10px; box-shadow: none; outline: 1px dashed var(--line-strong); outline-offset: -1px; --seed-ring: var(--card); }
 
 /* "Understood as": the mission brief, editable */
@@ -136,3 +132,4 @@ td a { color: var(--link); text-decoration: none; }
 .shots img { max-width: 240px; max-height: 180px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--line); }
 .pipeline textarea.code { width: 100%; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-xs); resize: vertical; }
 .pipeline textarea.bad { box-shadow: 0 0 0 1px var(--danger, #c33); }
+.chart svg { max-width: 100%; height: auto; border-radius: var(--r-sm); }

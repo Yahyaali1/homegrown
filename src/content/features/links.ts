@@ -3,6 +3,7 @@
 import { ui } from '../core.ts';
 import { h } from '../../ui/dom.ts';
 import { linkWarnings } from '../../domain/links.ts';
+import { KEY_POINTS, readMinutes } from '../../ui/linkcard.ts';
 
 async function xray(a: HTMLAnchorElement): Promise<void> {
   const card = ui.openCard('Link preview', a.getBoundingClientRect());
@@ -14,11 +15,10 @@ async function xray(a: HTMLAnchorElement): Promise<void> {
   card.actions.append(h('button', { className: 'primary', textContent: 'Open link', onclick: () => window.open(a.href, a.target || '_self') }));
   try {
     const page = await ui.bg<{ title: string; text: string }>('fetchText', { url: a.href });
-    const minutes = Math.max(1, Math.round(page.text.split(/\s+/).length / 230));
-    out.before(h('p', {}, page.title && h('b', { textContent: page.title }), page.title && h('br'), `${minutes} min read`));
+    out.before(h('p', {}, page.title && h('b', { textContent: page.title }), page.title && h('br'), `${readMinutes(page.text)} min read`));
     let raw = '';
     out.textContent = '';
-    const res = await ui.generate({ task: { kind: 'text', prompt: 'List the 3 key points of this web page as short bullets.' }, selection: page.text.slice(0, 15000) }, (t) => (out.innerHTML = ui.markdown((raw += t))));
+    const res = await ui.generate({ task: { kind: 'text', prompt: KEY_POINTS }, selection: page.text.slice(0, 15000) }, (t) => (out.innerHTML = ui.markdown((raw += t))));
     card.meta.textContent = `Read and summarized on this device · ${res.stats.decodeTps} tok/s`;
   } catch (e) {
     out.textContent = (e as Error).message;

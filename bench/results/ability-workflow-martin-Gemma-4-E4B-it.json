@@ -1,0 +1,291 @@
+{
+  "ability": "workflow-martin",
+  "model": "Gemma-4-E4B-it",
+  "maxTokens": 4096,
+  "pass": 1,
+  "of": 4,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:martin/seo-drop"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "repurpose",
+      "ability": "workflow:martin/repurpose",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"march\"",
+            "answer lacks \"damp\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/moss-care"
+              }
+            }
+          ],
+          "ms": 10070,
+          "request": "Turn the post at https://shop.garden.test/blog/moss-care into a LinkedIn post, a post for X and a newsletter section.",
+          "answer": "The provided information is insufficient to complete the task. While the blog post was read, the specific drafts for the LinkedIn post, X post, and newsletter section were not provided in the input.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/blog/moss-care → ok (134 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/moss-care\"\n    }\n  }\n]\n```",
+            "sum: The provided information is insufficient to complete the task. While the blog post was read, the specific drafts for the LinkedIn post, X post, and newsletter section were not provided in the input."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/ferns"
+              }
+            }
+          ],
+          "ms": 12082,
+          "request": "Turn the post at https://shop.garden.test/blog/ferns into a LinkedIn post, a post for X and a newsletter section.",
+          "answer": "The provided information is insufficient to complete the task. While the blog post was read, the specific content of the post (beyond the snippet \"Ferns grow best in deep shade. Water them twice a week in summer and cut old fronds in February.\") was not provided, and the drafts for the LinkedIn post, X post, and newsletter section were not generated.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/blog/ferns → ok (114 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/ferns\"\n    }\n  }\n]\n```",
+            "sum: The provided information is insufficient to complete the task. While the blog post was read, the specific content of the post (beyond the snippet \"Ferns grow best in deep shade. Water them twice a week in summer and cut old fronds in February.\") was not provided, and the drafts for the LinkedIn post, X post, and newsletter section were not generated."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "seo-drop",
+      "ability": "workflow:martin/seo-drop",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/search-console"
+              }
+            }
+          ],
+          "ms": 15102,
+          "request": "Why did my search traffic drop? Read https://shop.garden.test/search-console.",
+          "answer": "The search traffic drop is most significant on the **`/blog/moss-care`** page, which saw a **75% decrease in clicks** (from 1200 to 300). The most likely reason for this drop is the **loss of its featured snippet on October 6th**.\n\nThe data does not show the specific queries that were affected, nor does it provide a direct comparison of impressions or average position to confirm if the drop was due to ranking changes or a decrease in visibility.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/search-console → ok (205 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/search-console\"\n    }\n  }\n]\n```",
+            "sum: The search traffic drop is most significant on the **`/blog/moss-care`** page, which saw a **75% decrease in clicks** (from 1200 to 300). The most likely reason for this drop is the **loss of its featured snippet on October 6th**.\n\nThe data does not show the specific queries that were affected, nor does it provide a direct comparison of impressions or average position to confirm if the drop was due to ranking changes or a decrease in visibility."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/search-console/queries"
+              }
+            }
+          ],
+          "ms": 14102,
+          "request": "Which queries lost clicks and why? Read https://shop.garden.test/search-console/queries.",
+          "answer": "The query that lost the most clicks is **\"trowel price\"**, which dropped from 500 clicks in September to 120 clicks in October. The most likely reason for this loss is that the trowel page was moved to a new URL on October 2nd without a redirect, causing search engines to lose the link equity and traffic to the old URL.\n\nThe data does not show the specific ranking changes or the exact impact of the move on other related queries.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/search-console/queries → ok (215 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/search-console/queries\"\n    }\n  }\n]\n```",
+            "sum: The query that lost the most clicks is **\"trowel price\"**, which dropped from 500 clicks in September to 120 clicks in October. The most likely reason for this loss is that the trowel page was moved to a new URL on October 2nd without a redirect, causing search engines to lose the link equity and traffic to the old URL.\n\nThe data does not show the specific ranking changes or the exact impact of the move on other related queries."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "listening",
+      "ability": "workflow:martin/listening",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"https://shop.garden.test/reviews\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/reviews"
+              }
+            }
+          ],
+          "ms": 12088,
+          "request": "Group what people say in the reviews on https://shop.garden.test/reviews into themes, quoting one review per theme with the link.",
+          "answer": "The reviews can be grouped into three main themes: **Product Quality/Durability**, **Delivery Speed**, and **Communication**.\n\n*   **Product Quality/Durability:** \"The Ash Trowel handle split after a month.\" (Jo)\n*   **Delivery Speed:** \"Delivery took two weeks.\" (Priya)\n*   **Communication:** \"Delivery was late and nobody told me.\" (Ben)",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/reviews → ok (199 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/reviews\"\n    }\n  }\n]\n```",
+            "sum: The reviews can be grouped into three main themes: **Product Quality/Durability**, **Delivery Speed**, and **Communication**.\n\n*   **Product Quality/Durability:** \"The Ash Trowel handle split after a month.\" (Jo)\n*   **Delivery Speed:** \"Delivery took two weeks.\" (Priya)\n*   **Communication:** \"Delivery was late and nobody told me.\" (Ben)"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"https://shop.garden.test/forum\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/forum"
+              }
+            }
+          ],
+          "ms": 16092,
+          "request": "Group what people say on https://shop.garden.test/forum into themes, quoting one post per theme with the link.",
+          "answer": "The forum discussions can be grouped into two main themes: **Product Quality/Durability** and **Pricing**.\n\n*   **Product Quality/Durability:** Concerns regarding the longevity of the tools, specifically the Birch Trowel, with users reporting rust shortly after purchase.\n    *   *Quote:* \"My Birch Trowel blade rusted in a week.\" (Kim) - [Link to post]\n*   **Pricing:** Discussions regarding the value of the items being sold.\n    *   *Quote:* \"£11.25 is a fair price for the Birch Trowel.\" (Ana) - [Link to post]\n\n*(Note: The provided data did not include the specific links for the posts, so they are represented as placeholders.)*",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/forum → ok (172 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/forum\"\n    }\n  }\n]\n```",
+            "sum: The forum discussions can be grouped into two main themes: **Product Quality/Durability** and **Pricing**.\n\n*   **Product Quality/Durability:** Concerns regarding the longevity of the tools, specifically the Birch Trowel, with users reporting rust shortly after purchase.\n    *   *Quote:* \"My Birch Trowel blade rusted in a week.\" (Kim) - [Link to post]\n*   **Pricing:** Discussions regarding the value of the items being sold.\n    *   *Quote:* \"£11.25 is a fair price for the Birch Trowel.\" (Ana) - [Link to post]\n\n*(Note: The provided data did not include the specific links for the posts, so they are represented as placeholders.)*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "content-brief",
+      "ability": "workflow:martin/content-brief",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"5,400\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/analytics"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/moss-care"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/ferns"
+              }
+            }
+          ],
+          "ms": 25169,
+          "request": "Read my analytics at https://shop.garden.test/analytics, then my two best posts https://shop.garden.test/blog/moss-care and https://shop.garden.test/blog/ferns, and write a content brief with three ideas.",
+          "answer": "Based on your analytics and top posts, here are three content brief ideas:\n\n1.  **Deep Dive on Moss Care:** Since \"Caring for moss in March\" is your top post, create a comprehensive guide expanding on the basics, perhaps focusing on seasonal care throughout the year (e.g., \"Moss Care: A Seasonal Guide\").\n2.  **Advanced Fern Care:** Leverage the popularity of \"Ferns in shade\" by creating a more detailed post, such as \"Troubleshooting Ferns: Why Are My Fronds Browning?\" to address common issues.\n3.  **Cross-Promotion/Comparison:** Create a post comparing the two popular topics, such as \"Moss vs. Ferns: Which Shade Plant is Right for Your Garden?\" to capture interest from both audiences.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/analytics → ok (222 chars)",
+            "read_page https://shop.garden.test/blog/moss-care → ok (134 chars)",
+            "read_page https://shop.garden.test/blog/ferns → ok (114 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/analytics\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/moss-care\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/ferns\"\n    }\n  }\n]\n```",
+            "sum: Based on your analytics and top posts, here are three content brief ideas:\n\n1.  **Deep Dive on Moss Care:** Since \"Caring for moss in March\" is your top post, create a comprehensive guide expanding on the basics, perhaps focusing on seasonal care throughout the year (e.g., \"Moss Care: A Seasonal Guide\").\n2.  **Advanced Fern Care:** Leverage the popularity of \"Ferns in shade\" by creating a more detailed post, such as \"Troubleshooting Ferns: Why Are My Fronds Browning?\" to address common issues.\n3.  **Cross-Promotion/Comparison:** Create a post comparing the two popular topics, such as \"Moss vs. Ferns: Which Shade Plant is Right for Your Garden?\" to capture interest from both audiences."
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "answer lacks \"2,800\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/analytics/august"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/ferns"
+              }
+            },
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/blog/moss-care"
+              }
+            }
+          ],
+          "ms": 24149,
+          "request": "Read my August analytics at https://shop.garden.test/analytics/august, then https://shop.garden.test/blog/ferns and https://shop.garden.test/blog/moss-care, and write a content brief with three ideas.",
+          "answer": "Based on the analytics and content, here is a content brief with three ideas:\n\n1. **Deep Dive on Fern Care:** Since \"Ferns in shade\" is a top performer, create a comprehensive guide expanding on the basics, covering specific fern types, ideal soil mixes, and troubleshooting common issues like brown tips.\n2. **Seasonal Moss Maintenance:** Capitalize on the interest in moss by creating a guide focused on seasonal care, specifically addressing how to maintain moss through different weather patterns beyond just March.\n3. **\"Shade Garden\" Inspiration:** Combine the two popular topics into a broader theme, such as \"Creating a Lush Shade Garden,\" which could feature both ferns and moss as key elements for readers looking for aesthetic inspiration.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/analytics/august → ok (183 chars)",
+            "read_page https://shop.garden.test/blog/ferns → ok (114 chars)",
+            "read_page https://shop.garden.test/blog/moss-care → ok (134 chars)"
+          ],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/analytics/august\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/ferns\"\n    }\n  },\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/blog/moss-care\"\n    }\n  }\n]\n```",
+            "sum: Based on the analytics and content, here is a content brief with three ideas:\n\n1. **Deep Dive on Fern Care:** Since \"Ferns in shade\" is a top performer, create a comprehensive guide expanding on the basics, covering specific fern types, ideal soil mixes, and troubleshooting common issues like brown tips.\n2. **Seasonal Moss Maintenance:** Capitalize on the interest in moss by creating a guide focused on seasonal care, specifically addressing how to maintain moss through different weather patterns beyond just March.\n3. **\"Shade Garden\" Inspiration:** Combine the two popular topics into a broader theme, such as \"Creating a Lush Shade Garden,\" which could feature both ferns and moss as key elements for readers looking for aesthetic inspiration."
+          ]
+        }
+      ]
+    }
+  ]
+}

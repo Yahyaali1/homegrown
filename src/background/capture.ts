@@ -1,6 +1,7 @@
-// Image features in the service worker: on-device image generation (relaying engine progress to the tab, since
-// content scripts don't receive the engine's runtime broadcasts) and screenshots of a region of the visible tab.
+// Image features in the service worker: on-device image generation and depth maps (relaying engine progress to the
+// tab, since content scripts don't receive the engine's runtime broadcasts) and a screenshot of a region of the tab.
 import { engine } from './engine.ts';
+import { base64 } from './outputs.ts';
 import { parseSettings } from '../domain/settings.ts';
 
 type Sender = chrome.runtime.MessageSender | undefined;
@@ -40,10 +41,7 @@ async function capture({ rect, dpr }: { rect: { left: number; top: number; width
   const [x, y, w, h] = [rect.left, rect.top, rect.width, rect.height].map((v) => Math.round(v * dpr)) as [number, number, number, number];
   const canvas = new OffscreenCanvas(w, h);
   canvas.getContext('2d')!.drawImage(bmp, x, y, w, h, 0, 0, w, h);
-  const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return `data:image/png;base64,${btoa(bin)}`;
+  return `data:image/png;base64,${base64(new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer()))}`;
 }
 
 export const handlers = { generateImage, depthMap, capture };

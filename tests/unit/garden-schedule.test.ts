@@ -69,9 +69,9 @@ test('claim skips a slot while a run still works, and the next run says so', () 
   assert.equal(later.routine.skipped, undefined, 'cleared once handed over');
 });
 
-test('a due slot fails a run still waiting for the person, and starts a new one', () => {
+test('a due slot leaves a run still waiting for the person, and starts a new one beside it', () => {
   const c = claim(routine(), [run('waiting', { requests: [{ id: 'q', kind: 'reach', text: 'open?', sensitive: false }] })], at('2026-03-02T08:00Z'));
-  assert.deepEqual(c.fail, ['waiting']);
+  assert.deepEqual(c.fail, []);
   assert.ok(c.newRun);
 });
 

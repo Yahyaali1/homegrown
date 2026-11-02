@@ -1,0 +1,139 @@
+{
+  "ability": "notes",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 5,
+  "of": 6,
+  "violations": 0,
+  "passed": true,
+  "rule": "≥ 5/6 with every decision found and no invented owner",
+  "cases": [
+    {
+      "id": "launch",
+      "ok": true,
+      "ms": 2952,
+      "calls": 1,
+      "notes": {
+        "summary": "The meeting focused on settling the launch date. Based on the status of the page readiness, the launch date was set for March 3rd. Responsibilities for the press kit and venue booking were assigned.",
+        "decisions": [
+          "The launch date is set for March 3."
+        ],
+        "actions": [
+          {
+            "item": "Finish the press kit",
+            "owner": "Priya"
+          },
+          {
+            "item": "Book the venue",
+            "owner": "Leo"
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "budget",
+      "ok": true,
+      "ms": 2968,
+      "calls": 1,
+      "notes": {
+        "summary": "The cloud bill has doubled last month, prompting a decision to cap spending at $5,000 a month going forward. Omar will be responsible for setting an alert for this spending limit.",
+        "decisions": [
+          "Cap spending at $5,000 a month from now on."
+        ],
+        "actions": [
+          {
+            "item": "Set the alert for the spending cap",
+            "owner": "Omar"
+          },
+          {
+            "item": "Tell finance about the spending cap",
+            "owner": "You"
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "hire",
+      "ok": true,
+      "ms": 2060,
+      "calls": 1,
+      "notes": {
+        "summary": "The speaker reviewed three designers this week, and the group agreed that Ana was the strongest candidate. Consequently, the group decided to offer Ana the role.",
+        "decisions": [
+          "Offer Ana the role."
+        ],
+        "actions": [
+          {
+            "item": "Send the offer for Ana",
+            "owner": "Kim"
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "vendor",
+      "ok": true,
+      "ms": 2293,
+      "calls": 1,
+      "notes": {
+        "summary": "Two quotes were received for printers, leading to a decision to choose Inkly based on cost and shipping speed. The decision was made to drop the old vendor, and a contract cancellation was ordered.",
+        "decisions": [
+          "Go with Inkly and drop the old vendor."
+        ],
+        "actions": [
+          {
+            "item": "Cancel the old contract",
+            "owner": "Sam"
+          }
+        ]
+      },
+      "fails": []
+    },
+    {
+      "id": "standup",
+      "ok": false,
+      "ms": 2771,
+      "calls": 1,
+      "notes": {
+        "summary": "The login bug has been fixed, which allows for the release to go out on Thursday. The development team will be responsible for writing the release notes, and the retrospective is being moved to Friday.",
+        "decisions": [
+          "The release can go out Thursday."
+        ],
+        "actions": [
+          {
+            "item": "write the release notes",
+            "owner": "Dev"
+          },
+          {
+            "item": "move the retro to Friday"
+          }
+        ]
+      },
+      "fails": [
+        "missed the decision about friday"
+      ]
+    },
+    {
+      "id": "office",
+      "ok": true,
+      "ms": 2200,
+      "calls": 1,
+      "notes": {
+        "summary": "The lease is ending in June, so the current plan is to stay remote and not renew the lease. A monthly meetup will be organized, with Rosa taking responsibility for organizing it.",
+        "decisions": [
+          "Do not renew the lease."
+        ],
+        "actions": [
+          {
+            "item": "Organize a monthly meetup",
+            "owner": "Rosa"
+          }
+        ]
+      },
+      "fails": []
+    }
+  ]
+}

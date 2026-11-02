@@ -125,6 +125,7 @@ group (`❀ <name>`), one run at a time, and asks you before anything new. ([pla
 | Approvals, and the 8 s rule | A click or a typed value waits for your yes in the Garden tab, bound to that exact call; **Always** stores a grant for it on that host, which you can revoke. A sensitive one (pay, delete, a password field, a form to another site) is always asked, and the worker refuses a yes within 8 s of showing it | ✅ e2e: an act happens exactly once after a yes; a Pay button can't be approved before 8 s |
 | Take over | The bar on a page a gardener works in: **Take over** gives you the tab and the run waits; **Hand back** from the Garden tab re-runs a read, or asks whether an act happened. **Stop** ends the run | ✅ e2e from the bar: a page-script click on the bar does nothing, the tab outlives a worker restart. ○ the Garden tab's own Take over button |
 | Notebook and looks | Notes you write for one gardener or all, and notes a gardener takes in a run; each gardener gets its own flower | ◐ unit tests only |
+| Plan first | The gardener writes a plan of tool calls; you delete, reorder or edit steps, then say yes, and it works through exactly that plan. Pages in the plan may open; acts that turn sensitive, and anything not in it, still ask | ○ off until a model passes `bench/abilities.mjs plan` (6/8, no policy violation). Today: E2B 3/8, E4B 5/8. ✅ e2e on a planted run: a step deleted, only the kept page read |
 | Open requests ("Ask") | The gardener chooses tools itself (search, read, mission, draft, note, notify, act, collect, read a tab you name) | ○ off until a model passes `bench/garden-eval.mjs` (6/8, no policy violation). Today: E2B 6/8 with injection violations, E4B 5/8 |
 
 ### Web, tabs and automation
@@ -229,7 +230,7 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
 ## Privacy and safety
 
 - Nothing you read, type or ask leaves the device; only model downloads and the pages you choose to open
-  (missions, research, link previews) use the network.
+  (missions, research, link previews) use the network, and **calls to an app you connected** (below).
 - Missions and research use **read-only tools**: they open and read pages in a collapsed background tab
   group and close them. They never click buy buttons, submit forms or log in.
 - Page text is passed to the model as data; sentences that try to give the model instructions are removed
@@ -248,6 +249,13 @@ while 6 long background jobs were queued was answered after 1 of them (3.4 s) in
   - Only Homegrown's own pages can answer a request or change a gardener.
   - **Known gap:** a site that keeps its sign-in in page storage instead of cookies still reads as you, even off the
     gardener's sites. Requests a site's service worker makes are not covered by the per-tab rule either.
+- **Connectors (remote MCP servers) send data only on your yes.** You paste a server URL and, if it needs one, a
+  token; no OAuth apps are bundled. Local (stdio) servers can't run from a browser extension. For each tool you choose
+  Off, Ask each time, or Read (may be allowed with Always). Every call is asked unless you allowed that exact Read call,
+  and a run that read your signed-in pages asks every call. Calls with words like pay, refund, delete or send are
+  sensitive (8 s, never allowed for good). The token stays in Homegrown's own database and goes only to that server.
+  A server's tool descriptions never reach the model: only the line you write for a tool does, and a tool without one
+  isn't offered.
 
 ## How it's built
 
@@ -298,7 +306,7 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
 - `bench`: [./bench/README.md](./bench/README.md) - engine speed comparisons and the mission benchmarks (brief reading, page extraction).
 - `demo`: [./demo/README.md](./demo/README.md) - records the README demo from the real extension and cuts it into `docs/demo/`.
 - `static`: manifest, HTML, CSS and icons, copied as they are into `extension/`.
-- `tests`: unit tests (`tests/unit`, no browser), the browser suite on the real model (`extension.spec.mjs`, `harness.mjs`, configured by `playwright.config.mjs` in the repo root), the GPU typing check `typing.mjs` (run with `./scripts/gpu.sh node tests/typing.mjs`) and test pages and files in `tests/fixtures/`.
+- `tests`: unit tests (`tests/unit`, no browser), the browser suite on the real model (`extension.spec.mjs`, `harness.mjs` with the shared page helpers, `fake-mcp.mjs` (a fake MCP server the bench uses too), configured by `playwright.config.mjs` in the repo root), the GPU typing check `typing.mjs` (run with `./scripts/gpu.sh node tests/typing.mjs`) and test pages and files in `tests/fixtures/`.
 
 ### Global Invariants
 

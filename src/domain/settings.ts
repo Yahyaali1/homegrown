@@ -1,8 +1,9 @@
-// Every setting in one place (docs/architecture.md, ADR-8): its type, its default, and for switches a label. Stored
+// Every setting in one place (docs/architecture.md): its type, its default, and for switches a label. Stored
 // values (chrome.storage.sync) are merged over the defaults; a value of the wrong type falls back to the default
 // instead of breaking a feature. Tasks have their own module (shared/actions.ts).
-import { TASKS, type TaskId } from './model.ts';
+import { MODELS, TASKS, type TaskId } from './model.ts';
 import { DEPTH_MODELS, IMAGE_MODELS, type DepthModel, type ImageModel } from './imagegen.ts';
+import { isObj } from './text.ts';
 
 export type Theme = 'system' | 'light' | 'dark';
 
@@ -19,6 +20,10 @@ export const SWITCHES = {
   replyButtons: { label: 'Reply suggestions in mail and chat', default: true },
   priceChip: { label: 'Price memory on product pages', default: true },
   shoppingSense: { label: 'Look for the same product cheaper elsewhere', default: false },
+  linksInActiveTab: { label: 'Open answer links in the active tab when it is on the same site', default: true },
+  meetingOffer: { label: 'Offer to record calls on Meet, Zoom and Teams', default: true },
+  plaza: { label: 'Companion Plaza on new tabs (replaces any other new-tab page)', default: false },
+  plazaHistory: { label: 'Let Plaza talk about pages you visited', default: false },
 } as const satisfies Record<string, { label: string; default: boolean }>;
 export type SwitchKey = keyof typeof SWITCHES;
 
@@ -66,7 +71,7 @@ export const DEFAULTS: Settings = {
 };
 
 const stringMap = (v: unknown): Record<string, string> =>
-  v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
+  isObj(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
 
 /** Stored values over the defaults, each checked against its default's type. */
 export function parseSettings(raw: Record<string, unknown>): Settings {
@@ -116,4 +121,14 @@ export function changeFor(s: Settings, id: string, value: string): Record<string
   if (id.startsWith('model.')) return { taskModels: { ...s.taskModels, [id.slice(6)]: value === 'automatic' ? '' : value } };
   if (id in SWITCHES) return { [id]: value === 'on' };
   return { [id]: value };
+}
+
+/** Words a settings request uses: only such a message is worth asking the model about. */
+export const mayBeSetting = (text: string): boolean => /\b(set|change|switch|use|turn|enable|disable|theme|dark|light|translate|model)\b/i.test(text);
+
+/** The routing instruction: the model maps a message to one setting and an allowed value, or to none. */
+export function settingPrompt(choices: SettingChoice[], text: string): string {
+  const list = choices.map((c) => `- ${c.id}: ${c.label} (${c.values ? c.values.join(', ') : 'any language'}; now ${c.current || 'not set'})`).join('\n');
+  const models = MODELS.map((m) => `${m.id}: ${m.note}`).join(' ');
+  return `You route messages for the Homegrown browser extension. If the message asks to change one of these settings, reply {"setting": "<id>", "value": "<one allowed value>"}. If it is anything else (a question, a request, chat), reply {"setting": null}. JSON only.\nSettings:\n${list}\nModels: ${models}\nMessage: "${text}"`;
 }

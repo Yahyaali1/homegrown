@@ -12,7 +12,13 @@ It also owns these parts:
 - task seeding,
 - background features: missions, page monitors and schedules, web research, tab tidying, IndexedDB memory
   and live captions,
-- gardeners (`garden.ts`): routines on alarms and a one-run queue.
+- gardeners (`garden.ts`, the module `main.ts` loads, with `garden-store.ts` (records, the start latch, broadcast),
+  `garden-queue.ts` (the queue, `turn`, `call`, `ctxFor`, `gardensModel`), `garden-routines.ts` (alarms, claims, event checks), `garden-tabs.ts` (live runs, lock bar,
+  borrow, Take over, Watch, downloads), `garden-skills.ts`, `garden-hire.ts` and `garden-plaza.ts`): routines on
+  alarms and a one-run queue.
+- outputs (`outputs.ts`): the artifacts store, decks, cited answers across files, brand kits and page PNGs.
+- meetings (`meetings.ts`): record a call's tab and the mic, save the transcript under `Meetings/`.
+- chat (`chat.ts`): `openLink` and "Open in chat"; plaza (`plaza.ts`): new tabs to Plaza.
 
 ## Interface
 
@@ -30,17 +36,27 @@ It also owns these parts:
     - The command `ensure` is not in the handler table. The listener handles it first: it calls
       `ensureEngine()` and replies `{ok:true, result:true}` or `{ok:false, error}`.
     - `toPage` forwards a message to the active tab through `toTab`. It is added to the table after the merge.
-  - `BackgroundModule` (internal type, not exported): `{handlers?, init?(), menus?(), onAnswer?(req, result,
-    sender)}`.
+  - `BackgroundModule` (internal type, not exported): `{handlers?, init?(), menus?(), onMenu?(info, tab),
+    onAnswer?(req, result, sender)}`. Every module's `onMenu` gets every click, in the click (so `sidePanel.open`
+    keeps its gesture), and acts only on its own ids.
   - Context menus: the root items `root-text`, `root-page` and `root-image`, each with `task:<id>` items and
-    `ask:<kind>`. The `main.ts` click listener handles only `task:` and `ask:`. Other modules handle their
-    own items.
+    `ask:<kind>`; `main.ts` handles `task:` and `ask:`.
   - Keyboard commands: `launcher` sends `{type:'launcher'}` to the tab. `page-task` runs the first `page`
     task.
   - Test hooks on `self`: `ensureEngine`, `handleMenuClick`, `seedTasks`, `bgHandlers`, `missionScheduled`,
     `gardenFire(routineId)` (a routine's claim, as if its alarm fired).
-- `engine.ts`: `ensureEngine`, `engine(cmd, args)`, `modelFor(task)`, `ask(prompt, selection, config)`, and a
-  re-export of `TASKS` from `domain/model.ts`.
+- `engine.ts`: `ensureEngine`, `engine(cmd, args)`, `modelFor(task)`, `ask(prompt, selection, config)`, `askAs`,
+  `measured(ability)` (the model a background request would use, via `resolve`, only if `can()` says it has the
+  ability; null without asking the engine when no catalog model has it (`anyCan`), and null when none is
+  downloaded), and a re-export of `TASKS` from `domain/model.ts`.
+- `pagerequest.ts` also exports `isExtensionPage(sender)` and `pagesOnly(handlers)`: the one sender guard. Wrapped
+  handlers refuse a content script and a call with no sender (`Only Homegrown’s own pages can do that.`).
+- `chat.ts`: `openLink({url})` (`pagesOnly`, `http(s)` only): the active tab of the last focused normal window
+  follows the link when its host is the link's site or a subdomain (`sameSite`) and `linksInActiveTab` is on;
+  otherwise a new tab opens beside it. The menu items `chat:page` / `chat:link` ("Open in chat") open the side panel
+  in the click, then queue `pending` with the page (`tabText`, no debugger; else `fetchText`) or the link
+  (`fetchText`, signed out) as the attachment, 15000 characters at most.
+- `plaza.ts`: sends a tab whose `pendingUrl` is exactly `chrome://newtab/` to `plaza.html` while `plaza` is on.
   - Creates the offscreen document and sends engine RPCs. `engine()` throws when the reply is not ok.
   - `modelFor` reads `taskModels` through `parseSettings` (`domain/settings.ts`). It returns `''` (the loaded
     model) when no model is set.
@@ -62,10 +78,53 @@ It also owns these parts:
     `trust.ts` (all its steps, so a rewritten search fails too) and says so in a notification that opens Mission
     control. `missionSave` takes `actsConfirmed` only from an extension page and never
     stores it with the mission.
-- `garden.ts` handlers (docs/plan/S-gardeners.md): `gardenerList`, `gardenerSave`, `gardenerDelete`, `routineList`,
-  `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, or `{ routineId }` for Run now), `runList`,
-  `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `requestShown`, `requestAnswer`, `grantList` (`{ gardenerId? }`),
+- `garden.ts` handlers (merged from its modules): `gardenerList`, `gardenerSave`, `gardenerDelete`, `routineList`,
+  `routineSave`, `routineDelete`, `gardenRun` (`{ gardenerId, work }`, `{ routineId }` for Run now, or `{ followUp, work }`: ask or plan work
+  after an ended run), `runList`,
+  `runGet`, `runDelete` (ended runs only), `runStop`, `runTakeover` (`{ id, tabId? }`), `runTab` (`{ id }`: the run's
+  newest web tab `{ tabId, windowId }`, for Show the tab), `requestShown`, `requestAnswer`
+  (`{ runId, requestId, value, calls?, args? }`: a `plan` request's yes may carry the edited calls, parsed again; its
+  no stops the run; an editable approve's yes may carry edited `args`), `requestAnswerAll` (`{ requests: { runId,
+  requestId }[] }`), `runMessage` (`{ id, text, steer }`), `runSeen` (`{ id }`), `runRetry` (`{ id, step }`; refused on a helper), `runResumeAll` (`{ id }`: a parent's failed and stopped
+  helpers queued again; an ended parent waits on them again), `grantList` (`{ gardenerId? }`),
   `grantRevoke` (`{ gardenerId, tool, host, argsKey }`).
+  - Skills (`garden-skills.ts`): `skillList` (a test case whose run ended gets code's `verdict`), `skillSave` (new skills are the
+    person's and on; a changed method is a new version; `by`, `needs`, history and `proposed` stay the worker's; on
+    with needs the gardens model lacks is refused), `skillDelete` (pauses the routines that follow it),
+    `skillEvidence`, `skillPropose` (one `improve` think, only with `can(model, 'skillEdit')`; stored as `proposed`),
+    `skillAccept` (`{ id, accept }`), `skillTest` (`{ id, gardenerId?, approvePlans? }`: one queued hand run per case;
+    refused when off, needs unmet, or the model can't take the skill's work: `refusedWork`, `refusal` on a stub run, as `gardenRun` checks), `skillMark` (`{ id, k, pass }`).
+    `gardenRun` turns a request `/name rest` into the skill's work; `routineSave` takes `skillId` (plan or ask work
+    only). `turn` reads the run's skill at each start: `skillRefusal` fails a run whose skill is gone, off, another
+    gardener's or needs what the pin lacks; a test run with `approvePlans` answers its plan yes with `answerPlan`.
+    The worker also opens `hg-chat` v1 to read chat evidence.
+  - Plaza (`garden-plaza.ts`): `plazaLines` (extension pages): today's lines from `storage.local`; on a new day it writes
+    them once in the background lane (`askAs`, owner `plaza`) from each gardener's own notes and done answers, plus
+    the last 20 history titles only with `plazaHistory` on. `plaza.ts` turns new tabs into Plaza.
+  - Companions (`garden-hire.ts`): `hire` (`{ presetId, sites, hireId? }`: `hireRecords`, sites only from the pack's
+    suggestions; template entities through `memory.ts` `putEntity` first, the gardener last; `hireId` names the
+    records, so a retry returns the same gardener). `gardenerSave` keeps the stored `preset`. `routineSave` keeps a
+    paused pack read with no page and refuses to turn it on (`NO_PAGE`); `gardenRun` refuses it too. A hired gardener's tools narrow to its pack (`allowedFor`).
+    `routineSave` keeps `needs` from the stored routine and refuses `paused: false` while the gardens model lacks one;
+    `gardenRun` refuses Run now the same way; `pin()` fails a run whose pinned abilities lack its routine's needs (`needsRefusal`, before the plan refusal).
+  - Edited approvals (`parseEdit`): only where `editOk` (an `approve` whose tool's rule is `editable`, not itself an
+    edit asked again), only with `yes` (`always` would grant the original call), args parsed again with `parseArgs`
+    and stored as `answer.args`. The loop checks the edited call as a new call; the `call` action names its answer
+    (`answered`), which `call` finds by id through `verdictFor`. An edited yes carries no sensitive reason of the
+    original's; a stop in the page on an edited call asks again with origin `{ edit }` (`approveRequest`'s `q`).
+  - `requestAnswerAll` answers yes only where `approveAllOk` allows (non-sensitive `reach` in an untainted run,
+    non-sensitive `act` or `collect` approve), each checked again here; the rest are left.
+  - `runMessage`: a Steer message (≤ 1000 characters) joins `run.inbox` (also the live run's in memory, which the
+    turn saves). The next think puts it in the instruction part; the worker sets `usedAt` when the turn is stored.
+  - A `question` request with `questions` takes one JSON object of text answers keyed by its questions.
+  - `runMessage` with `steer: false` queues the text; when the run ends done or failed (not stopped), the oldest
+    queued message becomes a follow-up run. `runRetry` refuses what `retryStep` refuses. A failed `read_page` or
+    `search` with a timeout or network error is tried once more after 30 s (`Step.tries`; the wait holds the queue).
+    `draft`, `note` and `propose_routine` add a `created` card to the run; `doc_write` a `doc` card, `remember` a
+    `memory` card. A turn passes `@` anchors (`anchorsIn` over confirmed entities) and the routine's `for` entity
+    into `Ctx`; a think that carries them taints the run first, as notes do.
+  - `runMessage` refuses a 4th unused Steer message (or queued message). `propose_routine`'s id is `<runId>.<step>`, so a re-run after a
+    restart stores nothing new.
   - `requestAnswer` (V2): `approve` takes `yes`, `no` or `always` (`always` stores a grant; not offered for a sensitive
     one), `reach` and `did-it-happen` take `yes` or `no`. It refuses after `expiresAt`, and refuses a sensitive
     approve answered less than 8 s after `shownAt` (worker clock; `requestShown` must come first).
@@ -76,7 +135,15 @@ It also owns these parts:
     pages pass reach first. A tainted run's act and read tabs can't load pages off the gardener's sites
     and the call's own host.
   - Every handler refuses a caller that isn't an extension page; `runStop` and `runTakeover` also take a tab in the
-    live run's own group (the lock bar).
+    live run's own group or a tab it borrowed (the lock bar; `ownsTab`).
+  - Hands in your tabs. `act_my_tab` borrows the person's tab for the call (`borrowed`, the lock bar shows,
+    Stop and Take over work from it; Take over aborts the call), then halts it and gives it back; `always` is refused
+    for it (`alwaysOk`). A `read_page` whose page asks for a check for humans keeps its tab (`kept`, out of the group)
+    and waits on a `help` request (`tabId`, 24 h); yes reads it again, no fails the step. Port `garden-watch:<runId>`
+    (extension pages only): the live view, the run's newest group tab screencast (`devtools.ts`), re-picked each
+    second, ended with the port or the turn. With the optional `downloads` permission, `downloads.onCreated` keeps a
+    download with the run whose own tabs had its `referrer` open (`downloadRun`; `live` entries keep `urls`):
+    `GardenRun.files` and a `file` created card.
   - Lock: when a run's tab loads a page, `{type:'garden-lock', run, name}` goes to it until the bar answers `locked`.
     Take over (also from the Garden tab, which names no tab: the run's newest web tab): the tab is halted first
     (`window.__hgHalt` in every frame's isolated world; `__hgStep` checks it before each click or fill), joins
@@ -84,33 +151,68 @@ It also owns these parts:
     waits on a `takeover` request (`tabId`, 24 h; also when it was already waiting). Stop halts the run's tabs too. Kept tabs are never closed by `inTab`, `endRun` or start-up.
     Answering it hands back: `next()` re-runs a started read; a started act asks did-it-happen. A tab the person
     closes mid-call (`TabClosed`): a read step fails "The tab was closed."; an act stays started and asks.
-  - One run at a time, oldest `queuedAt` first. The worker does each `next()` action (domain/garden/loop.ts) and
-    persists the run after each; a tool call is checked with `decide` first (unless the person said yes to exactly
-    that call) and stored as `started` before it runs. The model is pinned when a run first goes `running`, through
-    the engine's `resolve`; every think uses `askAs` with owner `garden` on the background lane.
+  - One run at a time, oldest `queuedAt` first, or up to 3 queued helpers of one parent together (`nextBatch`; a helper
+    counts from its parent's time). `live` is a map keyed by run id (`name`, `tab`, `run`, `borrowed` tabs);
+    `owned`, `runStop`, `runTakeover`, `runMessage` and the lock bar use the entry of the run they name. A read of 6–25
+    pages waits on a `helpers` request and stores its helpers (`helpersOf`, ids `<parent>.h<k>`) in the same
+    transaction; before each pick, a parent whose helpers all ended is merged (`mergeHelpers`) and queued for its
+    `word` think. Only code answers `helpers` (`requestAnswer` refuses it). Stop on a parent stops its helpers.
+    Helpers share one minimized window when no normal window is open.
+  - Auto-retry: a read or search that timed out keeps its step `started` (`tries` + 1) and goes back to `queued` with
+    `retryAt` 30 s on; the queue skips it until then and wakes by timer and the `garden:wake` alarm, so the wait holds no slot.
+  - Triggers: before an event routine's claim, `fire` fetches its page (`checkFetch`, monitors.ts; `omit` credentials
+    off the gardener's sites) and compares it with its snapshot (`eventTrigger`), outside the claim's transaction; none while a run of it
+    still works. A one-off's run past its `deadline` fails in the queue (also woken by `garden:wake`), and a missed
+    one-off notifies. `garden:wake` only wakes the queue; it is never a routine id.
+  - The worker does each `next()` action (domain/garden/loop.ts) and
+    persists the run after each; a tool call's `verdictFor` (the person's answer to exactly that call, else `decide`)
+    is checked again when it runs, and it is stored as `started` first. A call's taint after it ran or threw is
+    `taintsAfter` (an error from `act` carries its final `url`). The model, its `agent` and its measured `abilities` are pinned
+    when a run first goes `running`, through the engine's `resolve`; a pinned run is checked again with `refusal`
+    Every think uses `askAs` with owner `garden` on the background lane.
   - Each run's tabs share one `Run`: group `❀ <gardener>`, the cookie rule for the gardener's sites, a deadline from
     its minutes. With no normal window open, it opens one minimized window (listed in `liveGroups`), closed at the turn's end
     once only blank tabs are left in it.
   - Worker start, once: `cancelOwner` (only if the offscreen document exists), `recover`, `closeLiveGroups`, then
     every routine's claim and alarm. A turn that throws fails its run in words.
   - Sends `{type:'garden-run', run}` (outputs cut to 300) to extension pages on every save.
-- `gardentools.ts`: `GARDEN_TOOLS` (`search`, `read_page`, `mission`, `draft`, `notify`, `act`, `collect`, `read_my_tab`),
+- `gardentools.ts`: `GARDEN_TOOLS` (`search`, `read_page`, `mission`, `draft`, `notify`, `act`, `collect`, `read_my_tab`,
+  `propose_routine`: stores `proposedRoutine`, paused and `by: 'model'`, in `routines`; `remember`: an unconfirmed
+  entity with id `<runId>.<step>`; `doc_read` / `doc_write`: the run's gardener's documents by path),
   `gardenAsk`, `gardenNotice`, `factsOf` (a recipe as policy sees it), `NeedsYou`.
   - `act` plays the approved steps in a run tab and returns the final URL, the step report and short page text.
     `collect` runs a saved recipe (`scrapeRecipe`) in the run's tabs with its pinned model; a closed tab (`TabClosed`) is rethrown, not a row, so an acting collect asks did-it-happen.
   - `read_page` in a routine's direct read diffs the page markdown against its snapshot (`{ text, prev, runId }`);
     taint follows the tab's final URL and every frame's URL (unknown → tainted). `mission` runs signed out (`cookieRule(tab, [])`) and never taints.
+  - `act_my_tab` plays approved steps (strict, guarded like `act`) in a tab the person named, still on that URL
+    (`mentionedTab`), never closes it, and taints the run. If the person closes that tab mid-call it throws
+    `TabClosed`, so the step stays started and the run asks "did this happen?". `read_page` and `act` with `Gardener.devtools` attach the
+    debugger in the tab's `prepare` and append `devtoolsDigest` (or say the permission is missing). `read_page`
+    throws `NeedsHelp(tabId)` when `isChallenge` holds (`readInTab`'s `hold`).
   - `read_my_tab` reads a tab the person named (`mentionedTab`: by hand the same tab on the same URL, in a routine
     any tab on exactly that URL) with `tabText`, and taints the run.
+  - `app_call` (plan T11) loads the connector with its token from `trust.ts`, checks the tool isn't Off now, calls
+    `mcp.ts` `callTool`, and returns the reply as tainting output.
   - `gardenNotice`: notification `garden:<id>`, "<name>: <text>"; a click opens `sidepanel.html#garden`.
-- `idb.ts`: `open(name, version, upgrade)`, `req`, `tx`, `get`, `put`, `del`, `all`.
-- `trust.ts`: IndexedDB `hg-trust` v2 through `idb.ts`, out of content scripts' reach, unlike `chrome.storage.local`.
+- `trust.ts`: IndexedDB `hg-trust` v3 through `shared/idb.ts`, out of content scripts' reach, unlike `chrome.storage.local`.
   `confirmed(id)`, `confirm(id, steps)`, `forget(id)` (store `confirmed`, missions); `grants()`, `grant(g)`,
-  `revoke(g)` (store `grants`, key `[gardenerId, tool, host, argsKey]`, added by an `oldVersion` guard).
+  `revoke(g)` (store `grants`, key `[gardenerId, tool, host, argsKey]`, added by an `oldVersion` guard);
+  `connectors()`, `connectorPut(c)`, `connectorDelete(id)` (store `connectors`, v3, key `id`, with tokens; a delete
+  revokes that connector's `app_call` grants; `grant` keeps an `app_call` grant's `connector` id).
+- `mcp.ts` (plan T11, ADR-17): the remote MCP client, Streamable HTTP only (`probe(url, token)`: `initialize`, then
+  `tools/list` up to 5 pages; `callTool(connector, tool, args)`), 30 s timeouts, `credentials: 'omit'`, the token only
+  as the bearer header. Handlers, extension pages only: `connectorList` (no tokens, `hasToken`), `connectorProbe`,
+  `connectorSave` (a kept token stays when none is sent, only on the same origin: `tokenFor`); `capped` reads every reply (over 1 MB fails), `connectorDelete`.
+  Sign-in (MCP authorization): `connectorSignIn({ url })` discovers the sign-in server from the 401, registers
+  Homegrown (RFC 7591, a public client), runs PKCE in `chrome.identity.launchWebAuthFlow` (optional `identity`
+  permission, asked on the page's click) and holds the tokens in worker memory under an `auth` id that
+  `connectorProbe` and `connectorSave` take. A signed-in connector keeps `oauth` beside its token in `hg-trust`;
+  on a 401, `authed` refreshes once at the token endpoint, keeps the new token and tries again.
   - On worker start it closes tabs left in "❀ Mission" groups by a worker that stopped mid-run.
   - It exports `inTab`, `waitLoaded`, `Run`, `ENGINES`, `searchInTab`, `readInTab`, `joinGroup`, `endRun`,
     `markWindow`, `closeIfEmpty`, `closeLiveGroups` (only what the old worker listed, read at module load) and
-    `missionRun`. `inTab(url, run, use, timeoutMs?, prepare = run.prepare)`: with
+    `missionRun`. `readInTab(url, run, terms, scenario?, hold?)`: a page `hold` says yes to keeps its tab open
+    (`run.kept`) and comes back with `held: tabId`. `inTab(url, run, use, timeoutMs?, prepare = run.prepare)`: with
     `prepare`, the tab opens blank, `prepare(tabId)` sets it up and returns its cleanup, then the page loads.
     `run.windowId` picks the window, `run.deadline` caps the wait, `run.title` names the group (`❀ Mission`).
   - `missionRun(goal, run, ask)`: plan and run a mission awaited inside the caller's `Run`, with its `ask`; no live
@@ -134,9 +236,33 @@ It also owns these parts:
     Wikipedia is tried with the full query, then with up to 7 keywords.
   - `research`, `researchTerm` and `checkClaim` send `{type:'web-progress', id, text}` to the asking tab. Page text, titles, snippets, notes, the topic and the claim reach the model as defanged data, never inside an instruction; a model error ends the run instead of being read as "page would not load".
   - `init` registers the MAIN-world content script `eg-youtube-main` for `*://*.youtube.com/*`.
+  - `research` uses `reportPrompt`; when the model is measured for `evidence` (`measured`), the report gains
+    "Evidence" and "Assumptions" sections and `moveCited` moves any cited assumption to Evidence. The report and its
+    sources are kept as a `brief` artifact; the reply gains `outputId`.
+- `outputs.ts`: IndexedDB `hg-outputs`. Handlers, all `pagesOnly`: `artifactSave`, `artifactGet`, `artifactList`
+  (newest first), `artifactDelete`, `deckMake({ id })`, `citeAnswer({ question, files })`, `pageShot`,
+  `brandRead({ url })`. Exports `saveArtifact` and `base64(bytes)`.
+  - `deckMake`: from a `brief` or a `table`/`chart`. With `deck`, `writeDeck` (one repair; a table also gets its
+    chart slide); otherwise `deckFromBrief` / `deckFromTable`. Saves and returns a `deck` artifact.
+  - `citeAnswer`: up to 10 files; with `cite`, `citeFiles` (map per file, reduce, `keepCited`) fitted to
+    `contextChars`; null without it.
+  - `pageShot`: the asking page's tab as a full-page PNG data URL (`pagerequest.ts` `screenshot` under the
+    optional `debugger` permission, detached after).
+  - `brandRead`: opens the page in a background tab, reads computed colours (through a canvas pixel, so as
+    `rgb()`), font families and a logo URL (`og:image`, `link[rel=icon]`, first `header img`), never page text; closes
+    the tab, fetches the logo without credentials as a data URL (images up to 300 KB) and saves a `brand` artifact.
 - `memory.ts` handlers: `memHistory`, `memClearHistory`, `memHighlightSave`, `memHighlights`,
   `memHighlightDelete`, `memSimilar`, `memAsk`, `memChanged`, `memSnapshot`, `memSavings`, `transcribe`.
-  It also has the `onAnswer` hook.
+  It also has the `onAnswer` hook. `pagesOnly`: `entityList`, `entitySave` (the person's save:
+  `by: 'person'`, confirmed), `entityKeep` (confirms a gardener's file as it is, so its template stays data),
+  `entityDelete`, `docList`, `docGet`, `docSave`, `docDelete`. Exports `confirmedEntities`, `rememberEntity`,
+  `docAt`, `writeDoc` (≤ 50 per gardener; `Meetings/` docs uncapped) and `deleteDocs` for the garden worker.
+  `meetAsk({ question, answer? })` (`pagesOnly`) asks across the `Meetings/` docs: chunks embedded at ask time,
+  ranked with `rank`, cited by meeting and time. It returns `{ data, sources, note }` for chat's `/meetings` (the
+  chat's model answers), or with `answer` `{ answer, sources }` from the background model (Library); no meetings
+  throws. `meetPassages` is the same handler under the name `tests/meetings.spec.mjs` calls. All IndexedDB access goes
+  through `shared/idb.ts`; `deleteDocs` resolves once its transaction commits. Exports `meetingDocs`,
+  `entityById`, `putEntity` (keeps `by` and `confirmed`) and `deleteRecord` for `meetings.ts`.
 - `monitors.ts` handlers: `watchPage`, `unwatch`, `listMonitors`, `checkNow`, `schedule`, `unschedule`,
   `runScheduleNow`.
 - `tabs.ts` handlers: `listTabs`, `compareTabs`, `tidyTabs`, `closeTabs`. Exports `tabText(tabId, cap)` and `tabPage` (text and the URL read at; `read_my_tab` refuses a moved tab).
@@ -150,14 +276,34 @@ It also owns these parts:
     `parseSettings`. An English target uses Whisper `translate`. Other targets use `transcribe`, then the
     LLM translates each line.
   - Starts from the menu item `live:start` or the keyboard command `live-captions`.
+- `meetings.ts`. Handlers, `pagesOnly`: `meetStart({ tabId, streamId? })`, `meetStop`, `meetRename` (the same name
+  is a no-op), `meetDelete`, `meetCheck` (ticks an action item, keeping who wrote the notes); and `meetState` (the
+  recording in `chrome.storage.session` `meeting`, `domain/meeting.ts` `Recording`, with `lines` as a count).
+  - The recorder broadcasts each line as it is heard (`meeting-heard`); they are kept with the recording, so a
+    recorder that closes mid-call loses only its queue: Stop then saves the kept lines. Writes of the recording are
+    chained, so a late line can't bring back an ended one.
+  - A transcribed file arrives as the recorder's `meeting-file` broadcast (lines checked here, no speaker) and is
+    saved like a call. Engine broadcasts are taken only from an extension page (the recorder).
+  - A recording starts only from an extension invocation: the menu item `meet:record` or the command
+    `record-meeting` (Alt+Shift+M; a second press stops), or the side panel's Record when the toolbar opened the
+    panel on that tab (a plain side panel click is refused by `tabCapture`, measured in `tests/meetings.spec.mjs`).
+  - On stop the offscreen recorder hands back its lines; they are merged (`mergeLines`) and saved as
+    `Meetings/<name>.md` (in parts past 20 000 chars) with an `event` entity (`fields.meeting`, `started`,
+    `length`, `doc`). With a model that `can('notes')`, the notes (map per 20 minutes, reduce in code) replace its
+    body, and it becomes `by: 'model'`, unconfirmed until kept. Without, the body says why.
+  - Every stop path runs `end` once: Stop, a second command or menu press, the tab closing (`tabs.onRemoved`), the
+    tab going to another host (`leftCall`), or the recorder's `meeting-ended` (the tab's track ended). The toolbar
+    badge says `REC` while recording. Windows Whisper failed on are counted at the top of the saved transcript.
+  - `meetState` gives a content script only `{ recording, mic }` for its own tab.
+  - Tells the tab `{ type: 'meeting', recording, mic?, error? }`. `self.meetStartFile` is the test path.
 - `reader.ts` handler: `openReader({url, replace})`. Opens a URL in `reader.html`. With `replace`, it opens
   the reader in the sender's tab. It adds the menu items `reader:link` and `reader:page` for PDF URLs, and
-  its `init` handles their clicks.
+  its `onMenu` handles their clicks.
 
 ## Invariants
 
 - The handlers of all modules are merged into one namespace with `Object.assign`. The order is reader,
-  web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden. A duplicate command name silently replaces
+  web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs, meetings, mcp, chat, plaza. A duplicate command name silently replaces
   the earlier one.
 - Routing: `target:'bg'` goes to the worker and `target:'engine'` to the offscreen document. Engine
   broadcasts have `source:'engine'`.
@@ -193,12 +339,17 @@ It also owns these parts:
   - `main.ts`: 6000 characters of page text in the follow-up history.
   - `tabs.ts`: 9000 characters shared across all tabs.
   - `web.ts`: 12000 characters of page text for each research source.
-  - `monitors.ts`: `KEEP_TEXT` 20000 characters for each monitor. `scheduledResults` keeps 50.
+  - `monitors.ts`: 20000 characters of page text for each monitor and event check (`htmlText`, domain/text.ts); `checkFetch` (a gardener's event check) stops at 30 s, fails on an error status and on any redirect of a signed-in fetch. `scheduledResults` keeps 50.
   - `memory.ts`: `HISTORY_CAP` 2000, `SNAPSHOT_CAP` 300, `SNAPSHOT_CHARS` 50000, `SIMILAR` 0.6. Embed text is
     cut to 1500 characters and a kb summary to 800.
   - `missions.ts`: the mission log keeps the last 150 lines. `priceBook` keeps the newest 300 products and
     30 price points for each. `shopCheck` runs once a day for each product and needs a price at least 3%
     lower.
+
+- `devtools.ts`: `chrome.debugger` (optional permission) with one attach per tab, shared: `attach(tabId)` (the last
+  user detaches), `logFor(tabId)` (`Runtime`, `Log` and `Network` events until `stop()`, which returns
+  `devtoolsDigest`; bodies are never read), `screencast(tabId, frame)` (JPEG, 480 px wide, ≤ 2 frames a second by a
+  late ack). `pagerequest.ts` emulation uses `attach` too.
 
 - `pagerequest.ts`: `pageRequest(url, recipe, run, guard?)`, `play(tabId, scenario, run, guard?)` and
   `cookieRule(tabId, keepHosts, navHosts?)` (the tab sends no `Cookie` and keeps no `Set-Cookie`, except a main frame
@@ -242,13 +393,16 @@ It also owns these parts:
     (each `{v: 1, …}`, checked by `parseRecipe` on every read, at most 50).
   - `session`: the pending side-panel request (`pending`), `notifUrls`, `liveMissions`, `liveGroups`
     (`Record<groupId, { runId, windowId? }>`: tab groups of live runs, closed at worker start).
-- IndexedDB `hg-garden` v1: `gardeners`, `routines`, `runs` (indexes `gardenerId`, `routineId`, `status`; the newest
-  30 per gardener kept), `snapshots` (`<routineId>\n<url>` → `{ text, prev, runId }`).
+- IndexedDB `hg-garden` v2 (`upgradeGarden`): v2 adds `skills` (keyed by `id`, `parseSkill`); v1: `gardeners`, `routines`, `runs` (indexes `gardenerId`, `routineId`, `status`; the newest
+  30 per gardener kept), `snapshots` (`<routineId>\n<url>` → `{ text, prev, runId }`; an event routine's page check
+  `<routineId>\nevent <url>` → `{ text }`).
+- IndexedDB `hg-outputs` v1 (store `artifacts`, keyed by `id`: `{ v: 1, id, kind, title, data, runId?, chatId?, at }`,
+  checked by `parseArtifact` on every read).
 - IndexedDB `hg-trust` v1 (store `confirmed`: the steps the user confirmed for each scheduled mission).
-- IndexedDB `eg-memory` v3 (`upgradeMemory` in domain/garden/notes.ts), with the stores `history`, `highlights`,
-  `kb`, `snapshots` and `notes` (the gardeners' notebook: `{ v: 1, id, gardenerId?, text, by, at, vec? }`, at most
+- IndexedDB `eg-memory` v4 (`upgradeMemory` in domain/garden/notes.ts), with the stores `history`, `highlights`,
+  `kb`, `snapshots`, `entities` and `docs` (`domain/memory.ts`) and `notes` (the gardeners' notebook: `{ v: 1, id, gardenerId?, text, by, at, vec? }`, at most
   200 per gardener, the oldest model notes going first). `onAnswer` adds `history`, updates `savings`, adds `kb`
-  entries and saves `snapshots`. An older build can't open v3 (`VersionError`): its memory features fail, and no data
+  entries and saves `snapshots`. An older build can't open v4 (`VersionError`): its memory features fail, and no data
   is lost.
 - On install, the content scripts are injected into every existing `http(s)` tab.
 - `sidePanel.setPanelBehavior({openPanelOnActionClick:true})` when the worker starts.
@@ -264,6 +418,7 @@ It also owns these parts:
 - Network:
   - `web.ts` fetches DuckDuckGo, Bing, the Wikipedia API and other pages, without credentials.
   - `monitors.ts` fetches watched URLs with credentials.
+  - `outputs.ts` `brandRead` opens the named page in a tab and fetches its logo without credentials.
   - Missions open real background tabs on Bing, DuckDuckGo and Brave (`search.brave.com`).
 - Uses `OffscreenCanvas` and `createImageBitmap` to crop screenshots.
 

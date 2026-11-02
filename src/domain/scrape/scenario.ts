@@ -1,7 +1,9 @@
 // js_scenario: ScrapingBee's browser steps before a page is read, in their JSON. Checked here once; the worker runs
 // them one at a time in Homegrown's own background tab (background/pagerequest.ts).
+import { isObj } from '../text.ts';
+
 type Raw = Record<string, unknown>;
-const obj = (v: unknown): Raw | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null);
+const obj = (v: unknown): Raw | null => (isObj(v) ? v : null);
 
 export type SelectorType = 'auto' | 'css' | 'xpath';
 export type Instruction =

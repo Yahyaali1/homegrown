@@ -16,6 +16,8 @@
     <button role="tab" data-tab="highlights">Highlights</button>
     <button role="tab" data-tab="ask">Ask your library</button>
     <button role="tab" data-tab="cards">Flashcards</button>
+    <button role="tab" data-tab="memory">Memory</button>
+    <button role="tab" data-tab="meetings">Meetings</button>
   </nav>
 
   <section id="history" class="lib-panel">
@@ -34,6 +36,23 @@
     <ol id="ask-sources"></ol>
   </section>
 
+  <section id="memory" class="lib-panel" hidden>
+    <p class="muted small">Memory stays on this device. A gardener reads a file only when you name it with @, or when a routine works for it.</p>
+    <form id="memory-new" class="row"><select id="memory-type" aria-label="Type"></select><input id="memory-name" maxlength="80" placeholder="Name" aria-label="New file name"><input id="memory-aliases" placeholder="Also called, e.g. M." aria-label="New file aliases"><button class="secondary">New file</button></form>
+    <span id="memory-err" class="err" hidden></span>
+    <div id="memory-tree"></div>
+  </section>
+  <section id="meetings" class="lib-panel" hidden>
+    <p class="muted small">Calls you record and files you transcribe stay on this device. "You" is your microphone, "Them" is the call's tab. In chat, ask with /meetings and a question.</p>
+    <div class="row"><button id="meet-record" class="primary">● Record this tab</button><button id="meet-mic" class="secondary" hidden>Allow the microphone</button></div>
+    <p id="meet-state" class="muted small">Opens on the call's tab: Record here, Alt+Shift+M, or right-click the page → Record this meeting.</p>
+    <label class="row small">Transcribe a file <input id="meet-file" type="file" accept="audio/*,video/*" aria-label="Transcribe a file"></label>
+    <span id="meet-err" class="err" hidden></span>
+    <form id="meet-form" class="row"><input id="meet-q" placeholder="Ask across meetings…" aria-label="Ask across meetings"><button class="secondary">Ask</button></form>
+    <div id="meet-answer" class="answer" hidden></div>
+    <ol id="meet-sources"></ol>
+    <div id="meet-list"></div>
+  </section>
   <section id="cards" class="lib-panel" hidden>
     <p id="cards-count" class="muted"></p>
     <div id="card" class="card" hidden>
@@ -48,7 +67,7 @@
       </div>
     </div>
   </section>
-  <p class="muted" style="margin-top:32px"><a href="settings.html">Settings</a></p>
+  <p class="muted" style="margin-top:32px"><a href="outputs.html">Outputs</a> · <a href="settings.html">Settings</a></p>
 </main>
 <script type="module" src="library.js"></script>
 </body>

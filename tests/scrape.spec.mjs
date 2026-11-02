@@ -2,9 +2,7 @@
 // with pagination, nested fields, a table, late content and a formula cell. No model is needed.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
-import { serve, launch, ROOT, EXT } from './harness.mjs';
+import { serve, launch, ROOT } from './harness.mjs';
 import { parseWorkflow } from '../src/domain/mission/workflow.ts';
 
 let ctx, sw, id, site;
@@ -401,14 +399,7 @@ test('Mission control: New lets go of a running mission (Run comes back, a reloa
 });
 
 test('screenshots, full page and of one element, and a mobile device (with the debugger permission granted)', async () => {
-  // The permission is optional and Chrome asks for it in a native prompt a test can't click: this copy of the build
-  // has it granted at install instead. Same code.
-  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'hg-dbg-'));
-  fs.cpSync(EXT, copy, { recursive: true });
-  const manifest = JSON.parse(fs.readFileSync(path.join(copy, 'manifest.json'), 'utf8'));
-  manifest.permissions.push('debugger');
-  fs.writeFileSync(path.join(copy, 'manifest.json'), JSON.stringify(manifest));
-  const b = await launch({ userDataDir: '', ext: copy });
+  const b = await launch({ permissions: ['debugger'] });
   try {
     const go = (extra) => b.sw.evaluate((r) => self.bgHandlers.scrapeRun({ runId: 'shot', recipe: r }), { urls: [`${site.url}/scrape/shop.html`], extract_rules: { h: 'h1' }, ...extra });
     const png = (u) => Buffer.from(u.split(',')[1], 'base64');

@@ -20,8 +20,9 @@ import * as livecaptions from './features/livecaptions.ts';
 import * as missions from './features/missions.ts';
 import * as palette from './features/palette.ts';
 import * as gardenlock from './features/gardenlock.ts';
+import * as meetoffer from './features/meetoffer.ts';
 
-const FEATURES: { install(): void }[] = [writing, ghost, replies, jargon, forms, youtube, reading, translate, scrollscrape, images, search, links, tabs, memory, voice, livecaptions, missions, palette, gardenlock];
+const FEATURES: { install(): void }[] = [writing, ghost, replies, jargon, forms, youtube, reading, translate, scrollscrape, images, search, links, tabs, memory, voice, livecaptions, missions, palette, gardenlock, meetoffer];
 
 if (start()) {
   for (const f of FEATURES) {

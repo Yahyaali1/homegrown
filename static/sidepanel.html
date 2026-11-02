@@ -31,14 +31,22 @@
         <div id="page-tasks" class="chips" aria-label="Run on this page"></div>
         <button id="page-actions" class="chip" type="button" title="Open every action in the page's ❀ menu">All actions…</button>
       </div>
+      <details id="chats" class="chats">
+        <summary>Chats</summary>
+        <input id="chat-search" type="search" placeholder="Search your chats" aria-label="Search chats">
+        <ul id="chat-list" class="list"></ul>
+      </details>
       <ol id="messages" aria-live="polite"></ol>
       <div id="empty" class="empty">
         <i class="hg-mark" data-size="56"></i>
         <p><b>Ask anything.</b><br><span class="muted">It runs on this device: nothing you type leaves it.</span></p>
       </div>
       <div class="dock">
+        <ul id="chat-requests" class="list tray" aria-live="polite" aria-label="Requests from gardeners"></ul>
+        <div id="long-chat" class="attachment" role="status" hidden></div>
         <div id="attached" class="attachment" hidden><span class="muted">Selected text</span> <span id="attached-text"></span> <button id="attached-clear" type="button" aria-label="Remove selected text">×</button></div>
         <div id="attached-image" class="attachment" hidden><img id="image-preview" alt="Attached image"><span class="muted">Image attached</span> <button id="image-clear" type="button" aria-label="Remove image">×</button></div>
+        <ul id="slash" class="list" aria-label="Skills" hidden></ul>
         <form id="chat-form" class="composer">
           <textarea id="chat-input" rows="2" placeholder="Message the model…" aria-label="Message"></textarea>
           <div class="composer-bar">
@@ -52,12 +60,18 @@
                 <label>Top K <input id="lab-topk" type="range" min="1" max="100" step="1" value="64"><output for="lab-topk"></output></label>
               </div>
             </details>
+            <div id="chat-modes" class="modes" role="group" aria-label="Mode">
+              <button type="button" class="ghost" data-mode="plan" title="Writes a short plan first and waits for Go">Plan</button>
+              <button type="button" class="ghost" data-mode="smart" title="The largest downloaded model">Smart</button>
+              <button type="button" class="ghost" data-mode="fast" title="The smallest downloaded model">Fast</button>
+            </div>
             <span class="grow"></span>
             <button id="chat-clear" class="ghost" type="button">New chat</button>
             <button id="chat-stop" class="secondary" type="button" hidden>Stop</button>
             <button id="chat-send" class="primary">Send</button>
           </div>
         </form>
+        <span id="mode-note" class="muted small" hidden></span>
       </div>
     </section>
 
@@ -87,22 +101,29 @@
     </section>
 
     <section id="garden" role="tabpanel" hidden>
-      <ul id="garden-requests" class="list" aria-live="polite"></ul>
+      <ul id="garden-requests" class="list tray" aria-live="polite"></ul>
+      <p id="app-open" class="row muted small" hidden></p>
       <h3>Gardeners</h3>
       <ul id="gardener-list" class="list"></ul>
+      <details id="hire" class="card"><summary>Hire a companion</summary><div id="garden-hire" class="stack"></div></details>
+      <details id="skills" class="card"><summary>Skills</summary><div id="garden-skills" class="stack"></div></details>
+      <details id="connectors" class="card"><summary>Connectors</summary><div id="garden-connectors" class="stack"></div></details>
       <details id="gardener-add" class="card">
         <summary>Add a gardener</summary>
         <form id="gardener-form" class="stack">
         <input id="gardener-name" maxlength="40" placeholder="Name, e.g. Release notes" aria-label="Gardener name" required>
         <textarea id="gardener-instructions" rows="3" maxlength="2000" placeholder="Instructions, e.g. Tell me what changed, in three lines" aria-label="Instructions"></textarea>
         <textarea id="gardener-sites" rows="2" placeholder="Sites it may read signed in, one per line, e.g. github.com" aria-label="Sites, one per line"></textarea>
+        <textarea id="gardener-site-notes" rows="2" placeholder="Notes for web apps, one per line, e.g. app.hubspot.com: open Contacts first" aria-label="Site notes, one per line as host: note"></textarea>
         <label class="row">Minutes per run <input id="gardener-minutes" type="number" min="1" max="60" value="10" aria-label="Minutes per run"></label>
+        <label class="check"><input id="gardener-devtools" type="checkbox"> DevTools: add console errors and failed requests to its reads and actions (asks for the debugger permission; Chrome shows a “started debugging” bar)</label>
         <div class="row look"><span id="gardener-look"></span><button id="gardener-another" type="button" class="ghost">Another look</button></div>
         <span id="gardener-error" class="err" hidden></span>
         <div class="row"><button class="primary">Save gardener</button><button id="gardener-cancel" type="button" class="ghost">Cancel</button></div>
         </form>
       </details>
       <h3>Runs</h3>
+      <label class="check"><input id="garden-downloads" type="checkbox"> Keep downloads with runs (asks for the downloads permission)</label>
       <ul id="garden-runs" class="list"></ul>
     </section>
 
@@ -112,6 +133,8 @@
         <button role="tab" data-tab="highlights">Highlights</button>
         <button role="tab" data-tab="ask">Ask</button>
         <button role="tab" data-tab="cards">Flashcards</button>
+        <button role="tab" data-tab="memory">Memory</button>
+        <button role="tab" data-tab="meetings">Meetings</button>
       </nav>
       <section id="history" class="lib-panel">
         <div class="row"><input id="history-q" type="search" placeholder="Search your questions and answers" aria-label="Search history"><button id="history-clear" class="secondary">Clear</button></div>
@@ -123,6 +146,23 @@
         <form id="ask-form" class="row"><input id="ask-q" placeholder="What did I read about…" aria-label="Question"><button class="primary">Ask</button></form>
         <div id="ask-answer" class="answer" hidden></div>
         <ol id="ask-sources"></ol>
+      </section>
+      <section id="memory" class="lib-panel" hidden>
+        <p class="muted small">Memory stays on this device. A gardener reads a file only when you name it with @, or when a routine works for it.</p>
+        <form id="memory-new" class="row"><select id="memory-type" aria-label="Type"></select><input id="memory-name" maxlength="80" placeholder="Name" aria-label="New file name"><input id="memory-aliases" placeholder="Also called, e.g. M." aria-label="New file aliases"><button class="secondary">New file</button></form>
+        <span id="memory-err" class="err" hidden></span>
+        <div id="memory-tree"></div>
+      </section>
+      <section id="meetings" class="lib-panel" hidden>
+        <p class="muted small">Calls you record and files you transcribe stay on this device. "You" is your microphone, "Them" is the call's tab. In chat, ask with /meetings and a question.</p>
+        <div class="row"><button id="meet-record" class="primary">● Record this tab</button><button id="meet-mic" class="secondary" hidden>Allow the microphone</button></div>
+        <p id="meet-state" class="muted small">Opens on the call's tab: Record here, Alt+Shift+M, or right-click the page → Record this meeting.</p>
+        <label class="row small">Transcribe a file <input id="meet-file" type="file" accept="audio/*,video/*" aria-label="Transcribe a file"></label>
+        <span id="meet-err" class="err" hidden></span>
+        <form id="meet-form" class="row"><input id="meet-q" placeholder="Ask across meetings…" aria-label="Ask across meetings"><button class="secondary">Ask</button></form>
+        <div id="meet-answer" class="answer" hidden></div>
+        <ol id="meet-sources"></ol>
+        <div id="meet-list"></div>
       </section>
       <section id="cards" class="lib-panel" hidden>
         <p id="cards-count" class="muted"></p>
@@ -138,6 +178,7 @@
           </div>
         </div>
       </section>
+      <p class="muted small"><a href="outputs.html" target="_blank">Outputs ›</a> tables, charts, decks, briefs and brand kits</p>
       <p id="lib-savings" class="muted small"></p>
     </section>
 
@@ -184,6 +225,10 @@
       <label class="toggle"><input type="checkbox" data-key="autoAltText" data-default="false"><span>Describe images that have no alt text</span></label>
       <label class="toggle"><input type="checkbox" data-key="searchAnswers" data-default="true"><span>Answer beside search results</span></label>
       <label class="toggle"><input type="checkbox" data-key="linkPreview" data-default="true"><span>Link preview when you hold a link</span></label>
+      <label class="toggle"><input type="checkbox" data-key="linksInActiveTab" data-default="true"><span>Links in answers open in the active tab when it is on the same site</span></label>
+      <label class="toggle"><input type="checkbox" data-key="meetingOffer" data-default="true"><span>Offer to record calls on Meet, Zoom and Teams (it never records by itself)</span></label>
+      <label class="toggle"><input type="checkbox" data-key="plaza" data-default="false"><span>Companion Plaza on new tabs, in place of any other new-tab page: your companions' flowers, still, with a line from each</span></label>
+      <label class="toggle"><input type="checkbox" data-key="plazaHistory" data-default="false"><span>Let Plaza lines use the titles of pages you visited</span></label>
       <label class="toggle"><input type="checkbox" data-key="useVoice" data-default="true"><span>Voice: Speak… and Read aloud</span></label>
       <label class="toggle"><input type="checkbox" data-key="replyButtons" data-default="true"><span>Reply button in email and chat boxes</span></label>
       <label class="toggle"><input type="checkbox" data-key="priceChip" data-default="true"><span>Price memory on product pages: show the lowest price I've seen for the same item, with Find it cheaper and price-drop alerts</span></label>

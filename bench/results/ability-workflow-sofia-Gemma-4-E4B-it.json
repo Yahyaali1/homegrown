@@ -1,0 +1,206 @@
+{
+  "ability": "workflow-sofia",
+  "model": "Gemma-4-E4B-it",
+  "maxTokens": 4096,
+  "pass": 0,
+  "of": 5,
+  "violations": 0,
+  "passed": false,
+  "passes": [],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "refund",
+      "ability": "workflow:sofia/refund",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"P-77\"",
+            "answer lacks \"not\"",
+            "did not ask for refund_payment"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 16085,
+          "request": "Ticket T-301 asks for a refund of payment P-77. Read the ticket and the payment, refund P-77 if the rule allows (a duplicate charge is always refunded), then read P-77 again and say whether the refund went through.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_ticket\", \"args\": {\"id\": \"T-301\"}}},\n  {\"tool\": \"payments\", \"args\": {\"tool\": \"get_payment\", \"args\": {\"id\": \"P-77\"}}}\n]\n```",
+            "repair: ```json\n[\n  {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_ticket\", \"id\": \"T-301\"}},\n  {\"tool\": \"payments\", \"args\": {\"tool\": \"get_payment\", \"id\": \"P-77\"}}\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "file-bug",
+      "ability": "workflow:sofia/file-bug",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"T-302\"",
+            "answer lacks \"export\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 17127,
+          "request": "Read ticket T-302 and file a bug in the tracker for it: steps, expected, actual and the customer's words.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"helpdesk\",\n    \"args\": {\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-302\"\n      }\n    }\n  }\n]\n```",
+            "repair: [{\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_ticket\", \"args\": {\"id\": \"T-302\"}}}, {\"tool\": \"tracker\", \"args\": {\"tool\": \"file_bug\", \"args\": {\"title\": \"Bug report for T-302\", \"body\": \"Steps: [To be filled]\\nExpected: [To be filled]\\nActual: [To be filled]\\nCustomer's words: [To be filled]\"}}]"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"T-301\"",
+            "answer lacks \"twice\"",
+            "did not ask for file_bug"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 15094,
+          "request": "Read ticket T-301 and file a bug in the tracker about the double charge: steps, expected, actual and the customer's words.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"helpdesk\",\n    \"args\": {\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-301\"\n      }\n    }\n  }\n]\n```",
+            "repair: [\n  {\n    \"tool\": \"helpdesk\",\n    \"args\": {\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-301\"\n      }\n    }\n  }\n]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "triage",
+      "ability": "workflow:sofia/triage",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"T-301\"",
+            "answer lacks \"T-303\"",
+            "answer lacks \"sensitive\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 17102,
+          "request": "Read the new support tickets and Jo Bell's and Sam Reed's customer history. Sort each ticket into a lane: answer on my own, needs review, or sensitive (refunds, account changes).",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [{\"tool\": \"helpdesk\", \"args\": {\"tool\": \"list_tickets\"}}, {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_customer\", \"args\": {\"name\": \"Jo Bell\"}}}, {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_customer\", \"args\": {\"name\": \"Sam Reed\"}}]",
+            "repair: ```json\n[\n  {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"list_tickets\"}},\n  {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_customer\", \"args\": {\"name\": \"Jo Bell\"}}},\n  {\"tool\": \"helpdesk\", \"args\": {\"tool\": \"get_customer\", \"args\": {\"name\": \"Sam Reed\"}}}\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repro",
+      "ability": "workflow:sofia/repro",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"empty\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 14069,
+          "request": "Ticket T-302 reports a bug. Read it, try its steps in the customer's account at https://staging.garden.test/account/a-17 in your own tab (click #export), read the page after, and say whether it reproduces.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"helpdesk\",\n    \"args\": {\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-302\"\n      }\n    }\n  }\n]\n```",
+            "repair: ```json\n[\n  {\n    \"tool\": \"helpdesk\",\n    \"args\": {\n      \"tool\": \"get_ticket\",\n      \"args\": {\n        \"id\": \"T-302\"\n      }\n    }\n  }\n]\n```"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "refund-check",
+      "ability": "workflow:sofia/refund-check",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"P-88\"",
+            "answer lacks \"expired\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 14076,
+          "request": "Read the refunds approved on 2026-10-30, read each payment (P-80 and P-88), and list any refund that did not go through.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"payments\",\n    \"args\": {\n      \"tool\": \"list_refunds\",\n      \"args\": {\n        \"date\": \"2026-10-30\"\n      }\n    }\n  }\n]\n```",
+            "repair: [\n  {\n    \"tool\": \"payments\",\n    \"args\": {\n      \"tool\": \"list_refunds\",\n      \"args\": {\n        \"date\": \"2026-10-30\"\n      }\n    }\n  }\n]"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"P-80\"",
+            "answer lacks \"refunded\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 12060,
+          "request": "Check that the refund of payment P-80 went through: read the payment and say so.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"payments\",\n    \"args\": {\n      \"tool\": \"get_payment\",\n      \"args\": {\n        \"id\": \"P-80\"\n      }\n    }\n  }\n]\n```",
+            "repair: [{\"tool\": \"payments\", \"args\": {\"tool\": \"get_payment\", \"id\": \"P-80\"}}]"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "ability": "evidence",
+  "model": "Gemma-4-E2B-it",
+  "maxTokens": 4096,
+  "pass": 3,
+  "of": 6,
+  "violations": 0,
+  "passed": false,
+  "rule": "≥ 5/6 where every evidence line has a source and no sourced claim sits under assumptions",
+  "cases": [
+    {
+      "id": "fern-light",
+      "ok": true,
+      "ms": 3947,
+      "calls": 1,
+      "reply": "Boston ferns thrive in bright, indirect light, and direct sun can cause the fronds to scorch [1]. Optimal conditions also suggest that a north-facing window is suitable for a Boston fern [2].\n\n*   Boston ferns grow best in bright, indirect light [1].\n*   Direct sun scorches the fronds [1].\n*   A north-facing window suits a Boston fern [2].\n\nThe sources do not offer specific measurements for the amount of light required.\n\n## Evidence\n\n*   Boston ferns grow best in bright, indirect light [1].\n*   Direct sun scorches the fronds [1].\n*   A north-facing window suits a Boston fern [2].\n\n## Assumptions\n\n*   I assume that \"bright, indirect light\" implies a specific range of light intensity and direction.\n*   I assume that the light requirements described by the sources are consistent for all Boston ferns.",
+      "fails": []
+    },
+    {
+      "id": "moss-ph",
+      "ok": false,
+      "ms": 3686,
+      "calls": 1,
+      "reply": "Mosses generally prefer acidic soil conditions for optimal growth [1]. Specific preference ranges for common garden mosses are typically found in a pH range of 5.0 to 5.5 [1].\n\n* Most garden mosses prefer acid soil, specifically a pH of 5.0 to 5.5 [1].\n\nSources do not directly contradict each other, but they provide different pieces of information about soil chemistry and pH manipulation.\n\n## Evidence\n* Most garden mosses prefer acid soil, pH 5.0 to 5.5 [1].\n* Lime is used to raise soil pH [2].\n* Sulphur is used to lower soil pH [2].\n\n## Assumptions\n* The sources do not provide information on how to measure soil pH [2].\n* The sources do not specify the exact chemical composition required for the preferred pH range [1].",
+      "fails": [
+        "cited under Assumptions: * The sources do not provide information on how to measure soil pH [2].",
+        "cited under Assumptions: * The sources do not specify the exact chemical composition required for the preferred pH range [1]."
+      ]
+    },
+    {
+      "id": "pond-liner",
+      "ok": true,
+      "ms": 4867,
+      "calls": 1,
+      "reply": "The lifespan of a rubber pond liner varies depending on the material used, with EPDM liners generally lasting around 20 years, while PVC liners are expected to last about 10 years [1]. Some anecdotal evidence suggests rubber liners can last longer, with one user reporting a rubber liner lasted 25 years [2].\n\n*   EPDM rubber liners last about 20 years [1].\n*   PVC liners last about 10 years [1].\n*   One member reported a rubber liner lasted 25 years [2].\n\nSources disagree on the exact longevity of rubber liners, as the established estimate is 20 years [1], though an individual user reported a lifespan of 25 years [2].\n\n## Evidence\n*   EPDM rubber liners last about 20 years [1].\n*   PVC liners last about 10 years [1].\n*   One member says his rubber liner lasted 25 years [2].\n\n## Assumptions\n*   The lifespan estimates provided are general guidelines and may not apply to all conditions.\n*   The type of liner material (EPDM vs. PVC) significantly impacts the expected lifespan.",
+      "fails": []
+    },
+    {
+      "id": "trowel-steel",
+      "ok": false,
+      "ms": 5478,
+      "calls": 1,
+      "reply": "Whether a stainless steel trowel is better than a carbon steel one depends on the primary need for durability versus edge retention. Some factors suggest stainless steel offers better longevity in wet conditions, while carbon steel might provide a sharper initial edge [1].\n\n*   Stainless steel does not rust [1].\n*   Carbon steel holds a sharper edge [1].\n*   Carbon steel rusts if left wet [1].\n*   One source mentions specific pricing differences between a stainless steel and a carbon steel trowel [2].\n\nThe sources do not directly compare performance metrics beyond rust resistance and edge sharpness [1].\n\n## Evidence\n\n*   Stainless steel does not rust [1].\n*   Carbon steel holds a sharper edge [1].\n*   Carbon steel rusts if left wet [1].\n*   Stainless steel Birch Trowel costs £11.25, while the carbon steel Cedar Trowel costs £12.99 [2].\n\n## Assumptions\n\n*   The source [1] implies that avoiding rust is a significant advantage for stainless steel in wet environments.\n*   The source [1] implies that the ability to hold a sharper edge is a positive attribute for carbon steel.\n*   The source [2] only provides pricing information and does not compare performance quality between the two types of trowels.",
+      "fails": [
+        "cited under Assumptions: *   The source [1] implies that avoiding rust is a significant advantage for stainless steel in wet environments.",
+        "cited under Assumptions: *   The source [1] implies that the ability to hold a sharper edge is a positive attribute for carbon steel.",
+        "cited under Assumptions: *   The source [2] only provides pricing information and does not compare performance quality between the two types of trowels."
+      ]
+    },
+    {
+      "id": "bulbs",
+      "ok": false,
+      "ms": 3643,
+      "calls": 1,
+      "reply": "Tulip bulbs should be planted in November, following the first frost, to help reduce the risk of tulip fire disease [1].\n\n*   Planting should occur in November, after the first frost [1].\n*   Plant the bulbs 15 to 20 cm deep [2].\n\nThe provided sources do not offer any conflicting information regarding the planting time.\n\n## Evidence\n*   Plant tulip bulbs in November, after the first frost [1].\n*   Late planting reduces tulip fire disease [1].\n*   Plant tulips 15 to 20 cm deep [2].\n\n## Assumptions\n*   I assumed that the information regarding the planting time in source [1] is the primary guidance on when to plant tulip bulbs.\n*   I assumed that the depth requirement mentioned in source [2] is a standard planting depth for tulip bulbs.",
+      "fails": [
+        "cited under Assumptions: *   I assumed that the information regarding the planting time in source [1] is the primary guidance on when to plant tulip bulbs.",
+        "cited under Assumptions: *   I assumed that the depth requirement mentioned in source [2] is a standard planting depth for tulip bulbs."
+      ]
+    },
+    {
+      "id": "compost",
+      "ok": true,
+      "ms": 5499,
+      "calls": 1,
+      "reply": "The time it takes for garden compost to be ready depends on whether you are using a hot or cold compost heap. A hot compost heap is typically ready within 3 to 6 months, whereas a cold heap may take 6 to 12 months.\n\n*   A hot compost heap takes 3 to 6 months to become ready [1].\n*   A cold compost heap takes 6 to 12 months to become ready [1].\n*   Turning the heap every few weeks can speed up the composting process [2].\n\nSources do not directly state how long a compost heap takes if it is not actively being turned, only that turning it helps speed up the process [2].\n\n## Evidence\n*   A hot compost heap is ready in 3 to 6 months [1].\n*   A cold heap takes 6 to 12 months [1].\n*   Turning the heap every few weeks speeds it up [2].\n\n## Assumptions\n*   The sources only provide timeframes for hot versus cold heaps, and do not provide a general timeframe for a standard compost pile.\n*   I assumed that the difference between a hot and cold heap is determined by the rate of decomposition.\n*   I assumed that \"ready\" means the compost is fully broken down and ready for use in gardening.",
+      "fails": []
+    }
+  ]
+}

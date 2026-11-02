@@ -210,8 +210,11 @@ export function searchInTab(query: string, n: number, run: Run, engine: SearchEn
 
 // Every frame is read, cross-origin iframes included (embedded shops, widgets). A background tab is ours to change:
 // lib/pageread.js may flatten shadow DOM and click controls named after the goal's terms.
-/** `tabUrl` and `frameUrls`: where the tab and its frames ended up (taint follows them); missing when unknown. */
-export function readInTab(url: string, run: Run, terms: string[], scenario?: Scenario): Promise<(PageModel & { tabUrl?: string; frameUrls?: string[] }) | null> {
+/**
+ * `tabUrl` and `frameUrls`: where the tab and its frames ended up (taint follows them); missing when unknown. `hold`:
+ * a page it says yes to keeps its tab open (in `run.kept`), named by `held`.
+ */
+export function readInTab(url: string, run: Run, terms: string[], scenario?: Scenario, hold?: (p: PageModel & { frameUrls?: string[] }) => boolean): Promise<(PageModel & { tabUrl?: string; frameUrls?: string[]; held?: number }) | null> {
   return inTab(url, run, async (tabId) => {
     await waitLoaded(tabId, 20000);
     await sleep(1200); // late-rendered prices
@@ -227,7 +230,10 @@ export function readInTab(url: string, run: Run, terms: string[], scenario?: Sce
     const page = mergeFrames(models, url);
     const tabUrl = (await chrome.tabs.get(tabId).catch(() => null))?.url;
     const urls = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: () => location.href }).catch(() => null);
-    return page && { ...page, ...(tabUrl && { tabUrl }), ...(urls && { frameUrls: urls.map((f) => f.result ?? '') }) };
+    const out = page && { ...page, ...(tabUrl && { tabUrl }), ...(urls && { frameUrls: urls.map((f) => f.result ?? '') }) };
+    if (!out || !hold?.(out)) return out;
+    (run.kept ??= new Set()).add(tabId);
+    return { ...out, held: tabId };
   });
 }
 

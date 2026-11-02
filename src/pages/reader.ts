@@ -1,9 +1,12 @@
 // Document reader: a PDF, ePub, DOCX, text, Markdown, CSV, JSON or HTML file as readable text, so the in-page UI (also
 // loaded by reader.html) can select, summarize, translate and ask about it. Chrome's PDF viewer blocks extensions,
-// which is why PDFs open here.
+// which is why PDFs open here. Up to 10 files open together, with one question across them.
 import { $ } from './shell.ts';
 import { h } from '../ui/dom.ts';
+import { bg } from '../shared/protocol.ts';
 import { markdown } from '../domain/markdown.ts';
+import { anyCan } from '../domain/model.ts';
+import { citeLabel, filePassages, READER_FILES, type DocFile } from '../domain/reading.ts';
 import { unzip } from '../domain/zip.ts';
 import * as pdfjs from 'pdfjs-dist';
 
@@ -83,18 +86,64 @@ async function show(name: string, type: string, getBuf: () => Promise<ArrayBuffe
   }
 }
 
-const openFile = (f: File) => show(f.name, f.type, () => f.arrayBuffer());
-$<HTMLInputElement>('#file').onchange = (e) => {
-  const f = (e.target as HTMLInputElement).files?.[0];
-  if (f) void openFile(f);
-};
+// A PDF's pages are its sections; any other file is one page.
+const pagesOf = (nodes: Node[]): string[] => (nodes.length && nodes.every((n) => n instanceof HTMLElement && n.matches('section.page'))
+  ? nodes.map((n) => [...(n as HTMLElement).querySelectorAll('p')].map((p) => p.textContent).join('\n\n'))
+  : [nodes.map((n) => n.textContent ?? '').join('\n\n')]);
+
+const NO_CITE = 'The best passages from each file. A cited answer needs a model measured for citing files.';
+/** The question across files: code picks each file's best passages; a model measured for `cite` also answers. */
+function askAcross(docs: DocFile[]): HTMLElement {
+  const q = h('input', { id: 'ask-files-q', placeholder: `Ask across these ${docs.length} files`, ariaLabel: 'Question across the files' });
+  const out = h('div', { id: 'ask-files-out' });
+  const go = async () => {
+    const question = q.value.trim();
+    if (!question) return;
+    const ps = filePassages(docs, question);
+    const passages = h('ol', { className: 'passages' }, ...ps.map((p) => h('li', {}, h('b', { textContent: citeLabel(p) }), h('span', { textContent: ` ${p.text}` }))));
+    const note = h('p', { className: 'hint', textContent: ps.length ? 'Writing a cited answer…' : 'No passage in these files matches the question.' });
+    out.replaceChildren(note, passages);
+    if (!ps.length) return;
+    // No catalog model is measured for citing: the files' text never leaves the page.
+    if (!anyCan('cite')) return void (note.textContent = NO_CITE);
+    try {
+      const cited = await bg<{ text: string; dropped: number; model: string } | null>('citeAnswer', { question, files: docs });
+      if (!cited) return void (note.textContent = NO_CITE);
+      note.replaceChildren(h('span', { className: 'answer', textContent: cited.text }),
+        h('span', { textContent: ` (${cited.model}${cited.dropped ? `; ${cited.dropped} citation${cited.dropped > 1 ? 's' : ''} dropped: the page doesn’t hold the words` : ''})` }));
+    } catch (e) {
+      note.textContent = `No cited answer: ${(e as Error).message}`;
+    }
+  };
+  return h('form', { className: 'ask-files', onsubmit: (e: Event) => (e.preventDefault(), void go()) }, q, h('button', { textContent: 'Ask' }), out);
+}
+
+async function showMany(files: File[]): Promise<void> {
+  files = files.slice(0, READER_FILES);
+  document.title = `${files.length} files · Homegrown reader`;
+  main.replaceChildren(h('p', { className: 'hint', textContent: `Opening ${files.length} files…` }));
+  const docs: DocFile[] = [];
+  const parts: Node[] = [];
+  for (const f of files) {
+    try {
+      const nodes = await toNodes(f.name, f.type, await f.arrayBuffer());
+      docs.push({ name: f.name, pages: pagesOf(nodes) });
+      parts.push(h('section', { className: 'file' }, h('h1', { textContent: f.name }), ...nodes));
+    } catch (e) {
+      parts.push(h('p', { className: 'err', textContent: `Couldn't open ${f.name}: ${(e as Error).message}` }));
+    }
+  }
+  main.replaceChildren(...(docs.length > 1 ? [askAcross(docs)] : []), ...parts);
+}
+
+const openFiles = (fs: File[]) => (fs.length > 1 ? showMany(fs) : fs[0] ? show(fs[0].name, fs[0].type, () => fs[0]!.arrayBuffer()) : Promise.resolve());
+$<HTMLInputElement>('#file').onchange = (e) => void openFiles([...(e.target as HTMLInputElement).files ?? []]);
 addEventListener('dragover', (e) => (e.preventDefault(), main.classList.add('drop')));
 addEventListener('dragleave', () => main.classList.remove('drop'));
 addEventListener('drop', (e) => {
   e.preventDefault();
   main.classList.remove('drop');
-  const f = e.dataTransfer?.files[0];
-  if (f) void openFile(f);
+  void openFiles([...e.dataTransfer?.files ?? []]);
 });
 
 const url = new URLSearchParams(location.search).get('url');

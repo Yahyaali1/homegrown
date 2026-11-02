@@ -1,9 +1,12 @@
-// Small, pure text utilities shared by the mission domain.
+// Small, pure text utilities.
+import { decode } from './html.ts';
 
 export const OUTPUT_RESERVE = 512; // tokens kept free for the answer
 // ponytail: runtimes expose no tokenizer, so a character estimate. Gemma averages ~4 chars/token in English; 3 is the
 // safe side. A runtime with a tokenizer could count exactly.
 export const CHARS_PER_TOKEN = 3;
+/** The characters of prompt and data a model with this context takes, the answer's room kept free. */
+export const contextChars = (maxTokens: number): number => (maxTokens - OUTPUT_RESERVE) * CHARS_PER_TOKEN;
 
 /** "$1,299.99", "1.299,99 €", "4.5 out of 5", "1.71E7" → number; anything else → null. */
 export function num(v: unknown): number | null {
@@ -23,13 +26,20 @@ export function num(v: unknown): number | null {
 /** "Product Name" → "product_name": a field name. */
 export const slug = (f: unknown): string => String(f).toLowerCase().trim().replace(/\W+/g, '_').replace(/^_|_$/g, '');
 
+/** A plain object (not an array or null). */
+export const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+/** A string of `min` (trimmed) to `max` characters. */
+export const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
+/** A finite number, as a stored timestamp. */
+export const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+
 /** The first {...} object in a model reply, or null: models wrap JSON in prose and code fences. */
 export function parseJsonObject(text: unknown): Record<string, unknown> | null {
   const m = /\{[\s\S]*\}/.exec(String(text ?? ''));
   if (!m) return null;
   try {
     const v: unknown = JSON.parse(m[0]);
-    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+    return isObj(v) ? v : null;
   } catch {
     return null;
   }
@@ -91,4 +101,12 @@ export function cleanContinuation(out: string, before: string): string {
   t = t.replace(/^["'“]|["'”]$/g, '').trim().split(/\s+/).slice(0, 15).join(' ');
   if (t && before && !/\s$/.test(before) && !/^[.,;:!?)]/.test(t)) t = ` ${t}`;
   return t;
+}
+
+// ponytail: regex tag strip, no DOM in the worker; good enough to diff text.
+/** A page's HTML as lines of text, at most 20,000 characters (what a page check keeps for the next diff). */
+export function htmlText(html: string): string {
+  return decode(html.replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, '\n'))
+    .split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')
+    .slice(0, 20_000);
 }

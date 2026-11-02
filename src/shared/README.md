@@ -29,6 +29,8 @@ the message and port types, the RPC helpers, the default tasks and Prompt Lab te
   - `getTasks()`: the stored tasks from `chrome.storage.sync`, or `DEFAULT_TASKS` when there are none.
   - `KINDS`, `parseTasks`, `Task`, `TaskKind`: re-exported from `../domain/tasks.ts`.
   - `PromptTemplate`, `PROMPT_LAB`: the Prompt Lab templates.
+- `idb.ts`: `open(name, version, upgrade)`, `req`, `tx`, `get`, `put`, `del`, `all`, and `openChats()` (IndexedDB
+  `hg-chat` v1, store `chats` keyed by `id`): the one place that schema is declared.
 - `pagemodel.ts`
   - `PageRecord`, `PageTable`, `PageList`, `PageModel`, `ReadOptions`: the data model of a read page.
   - `mergeFrames(frames, fallbackUrl)`: merges the child frames into the first frame. It returns `null`

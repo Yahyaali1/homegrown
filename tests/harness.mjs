@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
+import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { chromium } from '@playwright/test';
 
@@ -40,7 +41,9 @@ export function serve(dir, { cutAt } = {}) {
 
 // Chromium 156 ignores --load-extension, so load the unpacked extension over CDP.
 // The extension's worker occasionally fails to start in a reused profile; one fresh launch fixes it.
-export async function launch(opts = {}) {
+// `permissions` loads a copy with those optional permissions granted at install: a test can't click Chrome's prompt.
+export async function launch({ permissions, ...opts } = {}) {
+  if (permissions) opts.ext = withPermissions(permissions);
   try {
     return await launchOnce(opts);
   } catch (e) {
@@ -48,6 +51,16 @@ export async function launch(opts = {}) {
     console.warn('harness: extension worker did not start, retrying once');
     return launchOnce(opts);
   }
+}
+
+function withPermissions(permissions) {
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'hg-ext-'));
+  fs.cpSync(EXT, copy, { recursive: true });
+  const file = path.join(copy, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  manifest.permissions.push(...permissions);
+  fs.writeFileSync(file, JSON.stringify(manifest));
+  return copy;
 }
 
 async function launchOnce({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [], contextOptions = {}, ext = EXT } = {}) {
@@ -91,6 +104,49 @@ async function launchOnce({ headless = true, userDataDir = '', offline = false, 
   const id = new URL(sw.url()).host;
   return { ctx, sw, id, port };
 }
+
+/** A worker handler, called from an extension page as the side panel calls it. */
+export const bgOn = (page) => async (cmd, args = {}) => {
+  const r = await page.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
+  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
+  return r.result;
+};
+
+/** Puts a record (or several) in a store of the worker's own database, hg-garden; with `key`, merged into the one kept. */
+export const put = (page, store, value, key) => page.evaluate(async ([store, values, key]) => {
+  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+  const t = d.transaction(store, 'readwrite');
+  const os = t.objectStore(store);
+  const old = key ? await new Promise((ok) => (os.get(key).onsuccess = (e) => ok(e.target.result))) : {};
+  for (const v of values) os.put({ ...old, ...v });
+  await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
+  d.close();
+}, [store, [value].flat(), key]);
+
+/** Puts queued runs straight into the worker's store, then wakes the queue. */
+export async function plant(page, sw, ...runs) {
+  await put(page, 'runs', runs);
+  await sw.evaluate(() => self.gardenFire('none'));
+}
+
+/** The test profile is reused: stops and deletes every run, then deletes every gardener. */
+export async function emptyGarden(bg) {
+  for (const r of await bg('runList', { limit: 1000 })) {
+    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
+    await bg('runDelete', { id: r.id });
+  }
+  for (const g of await bg('gardenerList')) await bg('gardenerDelete', { id: g.id });
+}
+
+/**
+ * A queued plan run already pinned: by default to a model no engine has, so it stops at its first think and all a test
+ * checks happens before that. `over` sets `id`, `gardenerId` and, for an approved plan, `plan`.
+ */
+export const plannedRun = (over) => ({
+  v: 1, work: { kind: 'plan', request: 'Do it.' }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
+  model: 'no-model-here', maxTokens: 4096, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'],
+  turns: [], steps: [], requests: [], seen: [], tainted: false, ...over,
+});
 
 // Send an engine command from the service worker (the offscreen doc only talks via runtime messages).
 export async function engine(sw, cmd, args = {}) {

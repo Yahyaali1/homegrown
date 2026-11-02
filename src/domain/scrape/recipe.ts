@@ -1,6 +1,7 @@
 // Recipes: URLs plus extraction rules in ScrapingBee's extract_rules syntax, so rules copy between the two.
 import { parseAiRules, type AiRules } from './ai.ts';
 import { parsePageOptions, type PageOptions } from './options.ts';
+import { isObj } from '../text.ts';
 
 // Recipes come from the user, storage or a paste, so they are checked here once and the runner trusts them.
 
@@ -31,7 +32,7 @@ export interface Recipe {
 export const LIMITS = { pages: 5, reads: 25, urls: 25, fields: 30, depth: 3, wait: 10000, recipes: 50 } as const;
 
 type Raw = Record<string, unknown>;
-const obj = (v: unknown): Raw | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null);
+const obj = (v: unknown): Raw | null => (isObj(v) ? v : null);
 const OUTPUTS = ['text', 'text_relevant', 'markdown_relevant', 'html', 'table_json', 'table_array'];
 
 function json(v: unknown): unknown {

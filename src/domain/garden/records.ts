@@ -1,5 +1,7 @@
-// Gardener records (docs/plan/S-gardeners.md). Each is versioned; a parser returns null for an invalid record or a
+// Gardener records. Each is versioned; a parser returns null for an invalid record or a
 // newer `v`, and callers ignore such records (never delete them), so an older build leaves newer data alone.
+import type { Ability } from '../model.ts';
+import { isObj, str, time } from '../text.ts';
 
 export interface Gardener {
   v: 1;
@@ -13,6 +15,14 @@ export interface Gardener {
   createdAt: number;
   /** Its flower in the Garden tab (optional, so v stays 1). */
   look?: Look;
+  /** Its reads and acts add the page's console errors and failed requests (needs the `debugger` permission). */
+  devtools?: boolean;
+  /** The person's notes for a web app without a connector, by host: in the instruction part when a run works there. */
+  siteNotes?: Record<string, string>;
+  /** Hired from this companion pack: its tools narrow the gardener's. */
+  preset?: string;
+  /** The onboarding interview's answers (none: not asked yet); also written after the instructions. */
+  profile?: { q: string; a: string }[];
 }
 
 /** A gardener's flower: never 10 petals (the Homegrown mark's), always leaning left, the leaf on the right. */
@@ -38,12 +48,25 @@ export function lookOf(g: { id: string; look?: Look | undefined }): Look {
 export type When =
   | { kind: 'every'; hours: number }
   | { kind: 'daily'; at: string }
-  | { kind: 'weekly'; days: number[]; at: string };
+  | { kind: 'weekly'; days: number[]; at: string }
+  /** A weekday of a week of the month (`-1` the last), or a date (past the month's end: its last day). */
+  | { kind: 'monthly'; on: { week: 1 | 2 | 3 | 4 | -1; day: number } | { date: number }; at: string }
+  /** One time; then the routine pauses. `deadline` (minutes): its run fails after slot + deadline, a slot missed by more never runs. */
+  | { kind: 'once'; date: string; at: string; deadline?: number }
+  /** Checked every `every` minutes (code, no model): the work runs when lines were added, holding an `onlyIf` word if any. */
+  | { kind: 'event'; url: string; every: number; onlyIf?: string[] };
+
+/** What an event routine's check saw: its run's data starts with the diff. Signed in: the run starts tainted. */
+export interface Trigger { url: string; diff: string /* ≤ 4000 */; signedIn: boolean }
 
 export type Work =
   | { kind: 'read'; urls: string[] } // direct
   | { kind: 'mission'; goal: string } // direct
-  | { kind: 'ask'; request: string; tabs?: Mention[] }; // open: needs a model with `agent.loop`
+  | { kind: 'ask'; request: string; tabs?: Mention[]; skillId?: string } // open: needs a model with `agent.loop`
+  | { kind: 'plan'; request: string; tabs?: Mention[]; skillId?: string }; // a plan the person approves, then direct work: needs `plan`
+
+/** One call of a plan: a tool and its parsed args. */
+export interface PlannedCall { tool: string; args: Record<string, unknown> }
 
 /**
  * A tab the person named for `read_my_tab`: its URL when named. By hand it also keeps the tab's id, and the tab must
@@ -65,9 +88,34 @@ export interface Routine {
   /** Slots skipped while the last run still worked (last 5); handed to the next run, then cleared. */
   skipped?: number[];
   createdAt: number;
+  /** Who wrote it; none is the person. A routine the model proposed is stored paused until the person turns it on. */
+  by?: 'person' | 'model' | 'preset';
+  /** A one-off whose slot passed its deadline: it never ran. */
+  missed?: true;
+  /** The memory entity this routine works for: its template joins each run. */
+  for?: string;
+  /** The skill each run follows: set on each run's work; only for `plan` and `ask` work. */
+  skillId?: string;
+  /** Measured abilities it needs before it can be turned on or run (a preset's seed). Only Hire sets them. */
+  needs?: Ability[];
+}
+
+/** A pack's read routine the person hasn't given a page yet: it stays paused (an event over it has url ''). */
+export const noPage = (w: Work): boolean => w.kind === 'read' && !w.urls.length;
+export const NO_PAGE = 'Set the page it watches first.';
+
+/** Ask or plan work (a request in the person's words), else null. */
+export const requestOf = (w: Work): Extract<Work, { kind: 'ask' | 'plan' }> | null => (w.kind === 'ask' || w.kind === 'plan' ? w : null);
+
+/** The work a routine's run does: with its skill, read at run time. */
+export function routineWork(r: Routine): Work {
+  const w = requestOf(r.work);
+  return r.skillId && w ? { ...w, skillId: r.skillId } : r.work;
 }
 
 export type Status = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
+export const isEnded = (r: { status: Status }): boolean => r.status === 'done' || r.status === 'failed' || r.status === 'stopped';
+export const isWorking = (r: { status: Status }): boolean => !isEnded(r);
 
 /** Where a reachable URL came from. Under taint only `person`, `approved` and links from the gardener's sites pass. */
 export interface Seen {
@@ -87,6 +135,10 @@ export interface GardenRun {
   model?: string;
   maxTokens?: number;
   agent?: { loop: boolean; maxSteps: number };
+  /** The pinned model's measured abilities. */
+  abilities?: Ability[];
+  /** The plan the person approved: call j is step j. */
+  plan?: PlannedCall[];
   status: Status;
   queuedAt: number;
   startedAt?: number;
@@ -104,10 +156,60 @@ export interface GardenRun {
   interrupted?: number;
   /** The routine's skipped slots, shown as the run's first line. */
   skipped?: number[];
+  /** The person's messages to the run. A Steer message goes into the next think's instruction part, once (`usedAt`). */
+  inbox?: Message[];
+  /** Asked as a follow-up to this earlier run: its answer and step digests start the data. */
+  followUp?: string;
+  /** When the person last opened it: a run that ended after is Unread. */
+  seenAt?: number;
+  /** What the run made, each a card with Open. */
+  created?: Created[];
+  /** The step the person last retried, and how many tries it has had: its re-run keeps the count. */
+  retry?: { i: number; tries: number };
+  /** A helper run: the read of more than 5 pages it is a part of. */
+  parentId?: string;
+  /** Queued, but not before this: a read waiting out its auto-retry, which holds no queue slot meanwhile. */
+  retryAt?: number;
+  /** The page change that started it (an event routine). */
+  trigger?: Trigger;
+  /** A one-off routine's slot plus its deadline: not done by then, it fails "Deadline passed". */
+  deadline?: number;
+  /** Downloads its tabs started (matched by referrer), each also a `file` card. */
+  files?: RunFile[];
+  /** A skill's batch test with "Approve plans for this test": its plan gets the person's yes (non-sensitive calls only). */
+  approvePlans?: true;
 }
 
+/** A download kept with a run: Chrome's download id, its file name and URL. */
+interface RunFile { id: number; name: string; url: string; at: number }
+
+export interface Created { kind: 'draft' | 'note' | 'routine' | 'file' | 'doc' | 'artifact' | 'memory'; title: string; ref: string }
+
+/** Where a run sits in the history: Needs you, Unread (ended after it was last opened), then by routine, then by hand. */
+export function historyGroup(r: GardenRun): 'needs' | 'unread' | 'routine' | 'hand' {
+  if (r.status === 'waiting' && !helping(r)) return 'needs';
+  if (r.endedAt !== undefined && (r.seenAt ?? -1) < r.endedAt) return 'unread';
+  return r.routineId ? 'routine' : 'hand';
+}
+
+/** A parent waiting on its helpers: working, not waiting for the person. */
+export const helping = (r: GardenRun): boolean => r.status === 'waiting' && r.requests.some((q) => q.kind === 'helpers' && !q.answer);
+
+/** A helper starts only while its parent still waits on helpers: a Stop may have landed since it was stored. */
+export const mayStart = (run: GardenRun, parent: GardenRun | null | undefined): boolean => !run.parentId || (!!parent && helping(parent));
+
+/** Ids to delete: ended runs past the newest `keep` (helpers don't count, and go with their parent or when it is gone). */
+export function pruneIds(runs: GardenRun[], keep: number): string[] {
+  const top = runs.filter((r) => !r.parentId).sort((a, b) => b.queuedAt - a.queuedAt);
+  const gone = new Set(top.slice(keep).filter(isEnded).map((r) => r.id));
+  const kept = new Set(top.map((r) => r.id).filter((id) => !gone.has(id)));
+  return [...gone, ...runs.filter((r) => r.parentId && !kept.has(r.parentId) && isEnded(r)).map((r) => r.id)];
+}
+
+export interface Message { id: string; text: string /* ≤ 1000 */; at: number; steer: boolean; usedAt?: number }
+
 export interface Turn {
-  purpose: 'choose' | 'repair' | 'check' | 'word';
+  purpose: 'choose' | 'repair' | 'check' | 'word' | 'plan' | 'sum';
   reply: string;
   at: number;
 }
@@ -125,11 +227,17 @@ export interface Step {
   url?: string;
   error?: string;
   at: number;
+  /** Tries after the first: an automatic retry of a read, or the person's Retry step. */
+  tries?: number;
 }
 
 export interface Request {
   id: string;
-  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen';
+  /**
+   * `helpers`: a parent waits on its helper runs; only code answers it, when they all end. `help`: a page asked for a
+   * check for humans in tab `tabId`; yes reads it again, no fails the step.
+   */
+  kind: 'reach' | 'question' | 'approve' | 'takeover' | 'did-it-happen' | 'plan' | 'helpers' | 'help';
   step?: number;
   /** The exact call an answer applies to: its tool and `argsKey(args)`. */
   tool?: string;
@@ -144,14 +252,30 @@ export interface Request {
   tabId?: number;
   shownAt?: number;
   expiresAt?: number;
-  /** approve: yes, no or always (a grant; never for a sensitive one); did-it-happen and reach: yes or no. */
-  answer?: { value: 'yes' | 'no' | 'always' | string; at: number };
+  /**
+   * approve: yes, no or always (a grant; never for a sensitive one); did-it-happen and reach: yes or no. `args`: a yes
+   * to the call as the person edited it, which code checks as a new call.
+   */
+  answer?: { value: 'yes' | 'no' | 'always' | string; at: number; args?: Record<string, unknown> };
+  /** plan: the calls the model proposed. */
+  calls?: PlannedCall[];
+  /** question: asked one at a time; the answer is one JSON object of answers, keyed by question. */
+  questions?: { q: string; options?: string[] }[];
+  /**
+   * Who asked, when not the person's own call: `plan`, made by a plan's yes (it counts only where policy asks and the
+   * call is not sensitive at call time); `edit`, an edited call asked again (it turned sensitive) after the request
+   * whose edited yes it follows, which can't be edited again.
+   */
+  origin?: 'plan' | { edit: string };
+  /** An approve of an app tool the person didn't mark Read: Always can't answer it. */
+  appWrite?: true;
 }
 
-export const LIMITS = { sites: 20, urls: 5, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
+// `urls`: a recipe's, and each helper's share of a read; `readUrls`: a read, split into helpers above `urls`.
+export const LIMITS = { siteNote: 500, sites: 20, urls: 5, readUrls: 25, tabs: 5, seen: 300, output: 4000, links: 50, skipped: 5 } as const;
 
 // Shared-hosting suffixes: anyone can publish under them, so one entry would trust every tenant.
-export const PUBLIC_SUFFIXES = [
+const PUBLIC_SUFFIXES = [
   'github.io', 'gitlab.io', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'web.app', 'firebaseapp.com',
   'appspot.com', 'herokuapp.com', 'onrender.com', 'fly.dev', 'glitch.me', 'blogspot.com', 'wordpress.com',
   'azurewebsites.net', 'cloudfront.net', 'amazonaws.com', 'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'co.jp',
@@ -189,13 +313,19 @@ export function bare(url: string): string | null {
   }
 }
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
-const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
 const int = (x: unknown, min: number, max: number): x is number => Number.isInteger(x) && (x as number) >= min && (x as number) <= max;
-const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const AT = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-export function validTz(tz: unknown): tz is string {
+/** "2026-03-02" → its UTC midnight; null unless a real date. */
+export function dateOf(s: unknown): number | null {
+  const m = typeof s === 'string' ? DATE.exec(s) : null;
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(t).toISOString().startsWith(s as string) ? t : null;
+}
+
+function validTz(tz: unknown): tz is string {
   if (typeof tz !== 'string' || !tz) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
@@ -213,14 +343,48 @@ export function parseGardener(raw: unknown): Gardener | null {
   if (refused.length || !int(minutes, 1, 60) || !time(raw.createdAt)) return null;
   // An unknown look (a newer build's, or broken) is dropped, never the gardener: the UI draws one from its id.
   const look = raw.look === undefined ? null : parseLook(raw.look);
-  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }) };
+  const notes = raw.siteNotes === undefined ? undefined : siteNotesOf(raw.siteNotes);
+  if (notes === null) return null;
+  if (raw.preset !== undefined && !str(raw.preset, 40)) return null;
+  const qa = (x: unknown) => isObj(x) && str(x.q, 300) && str(x.a, 300, 0);
+  if (raw.profile !== undefined && !(Array.isArray(raw.profile) && raw.profile.length <= 8 && raw.profile.every(qa))) return null;
+  return { v: 1, id: raw.id, name: raw.name.trim(), instructions: raw.instructions, sites, minutes, createdAt: raw.createdAt, ...(look && { look }), ...(raw.devtools === true && { devtools: true }), ...(notes && Object.keys(notes).length && { siteNotes: notes }),
+    ...(raw.preset !== undefined && { preset: raw.preset as string }), ...(raw.profile !== undefined && { profile: (raw.profile as { q: string; a: string }[]).map(({ q, a }) => ({ q, a })) }) };
+}
+
+/** Site notes: at most 20 hosts (each a site), each note 1–500 chars; null when invalid. */
+export function siteNotesOf(raw: unknown): Record<string, string> | null {
+  if (!isObj(raw) || Object.keys(raw).length > LIMITS.sites) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (site(k) !== k || !str(v, LIMITS.siteNote)) return null;
+    out[k] = v.trim();
+  }
+  return out;
 }
 
 export function parseWhen(raw: unknown): When | null {
   if (!isObj(raw)) return null;
   if (raw.kind === 'every') return int(raw.hours, 1, 24) ? { kind: 'every', hours: raw.hours } : null;
+  if (raw.kind === 'event') {
+    const url = typeof raw.url === 'string' ? bare(raw.url) : null;
+    if (!url || !int(raw.every, 15, 1440)) return null;
+    if (raw.onlyIf === undefined) return { kind: 'event', url, every: raw.every };
+    const words = Array.isArray(raw.onlyIf) && raw.onlyIf.every((w) => str(w, 40)) ? (raw.onlyIf as string[]).map((w) => w.trim()) : null;
+    return words?.length && words.length <= 10 ? { kind: 'event', url, every: raw.every, onlyIf: [...new Set(words)] } : null;
+  }
   if (typeof raw.at !== 'string' || !AT.test(raw.at)) return null;
   if (raw.kind === 'daily') return { kind: 'daily', at: raw.at };
+  if (raw.kind === 'once') {
+    if (dateOf(raw.date) === null || (raw.deadline !== undefined && !int(raw.deadline, 5, 10080))) return null;
+    return { kind: 'once', date: raw.date as string, at: raw.at, ...(raw.deadline !== undefined && { deadline: raw.deadline as number }) };
+  }
+  if (raw.kind === 'monthly') {
+    const on = raw.on;
+    if (isObj(on) && int(on.date, 1, 31)) return { kind: 'monthly', on: { date: on.date }, at: raw.at };
+    if (!isObj(on) || ![1, 2, 3, 4, -1].includes(on.week as number) || !int(on.day, 0, 6)) return null;
+    return { kind: 'monthly', on: { week: on.week as 1 | 2 | 3 | 4 | -1, day: on.day }, at: raw.at };
+  }
   if (raw.kind !== 'weekly' || !Array.isArray(raw.days) || !raw.days.length || !raw.days.every((d) => int(d, 0, 6))) return null;
   return { kind: 'weekly', days: [...new Set(raw.days as number[])].sort(), at: raw.at };
 }
@@ -228,13 +392,15 @@ export function parseWhen(raw: unknown): When | null {
 export function parseWork(raw: unknown): Work | null {
   if (!isObj(raw)) return null;
   if (raw.kind === 'mission') return str(raw.goal, 300) ? { kind: 'mission', goal: raw.goal } : null;
-  if (raw.kind === 'ask') {
-    if (!str(raw.request, 1000)) return null;
-    if (raw.tabs === undefined) return { kind: 'ask', request: raw.request };
+  if (raw.kind === 'ask' || raw.kind === 'plan') {
+    const kind = raw.kind;
+    if (!str(raw.request, 1000) || (raw.skillId !== undefined && !str(raw.skillId, 200))) return null;
+    const skill = raw.skillId !== undefined ? { skillId: raw.skillId as string } : {};
+    if (raw.tabs === undefined) return { kind, request: raw.request, ...skill };
     const tabs = Array.isArray(raw.tabs) && raw.tabs.length <= LIMITS.tabs ? raw.tabs.map(parseMention) : [null];
-    return tabs.every((t) => t) ? { kind: 'ask', request: raw.request, tabs: tabs as Mention[] } : null;
+    return tabs.every((t) => t) ? { kind, request: raw.request, tabs: tabs as Mention[], ...skill } : null;
   }
-  if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.urls)) return null;
+  if (raw.kind !== 'read' || !Array.isArray(raw.urls) || !int(raw.urls.length, 1, LIMITS.readUrls)) return null;
   const urls = raw.urls.map((u) => (typeof u === 'string' ? bare(u) : null));
   return urls.every((u) => u) ? { kind: 'read', urls: urls as string[] } : null;
 }
@@ -251,16 +417,35 @@ function parseMention(raw: unknown): Mention | null {
 
 export function parseRoutine(raw: unknown): Routine | null {
   if (!isObj(raw) || raw.v !== 1 || !str(raw.id, 200) || !str(raw.gardenerId, 200) || !str(raw.name, 80)) return null;
-  const when = parseWhen(raw.when), work = parseWork(raw.work);
+  // Only a paused routine may lack its page (noPage).
+  const unset = raw.paused === true && isObj(raw.work) && raw.work.kind === 'read' && Array.isArray(raw.work.urls) && !raw.work.urls.length;
+  const work: Work | null = unset ? { kind: 'read', urls: [] } : parseWork(raw.work);
+  const w = raw.when;
+  const when: When | null = unset && isObj(w) && w.kind === 'event' && w.url === '' && int(w.every, 15, 1440) ? { kind: 'event', url: '', every: w.every } : parseWhen(w);
   if (!when || !work || !validTz(raw.tz) || typeof raw.paused !== 'boolean' || !time(raw.nextDue) || !time(raw.createdAt)) return null;
   const r: Routine = { v: 1, id: raw.id, gardenerId: raw.gardenerId, name: raw.name.trim(), when, tz: raw.tz, work, paused: raw.paused, nextDue: raw.nextDue, createdAt: raw.createdAt };
   if (typeof raw.lastRunId === 'string') r.lastRunId = raw.lastRunId;
   if (Array.isArray(raw.skipped)) r.skipped = raw.skipped.filter(time).slice(-LIMITS.skipped);
+  if (raw.by === 'person' || raw.by === 'model' || raw.by === 'preset') r.by = raw.by;
+  if (raw.missed === true) r.missed = true;
+  if (str(raw.for, 200)) r.for = raw.for;
+  if (Array.isArray(raw.needs) && raw.needs.every((a) => typeof a === 'string')) r.needs = raw.needs as Ability[];
+  if (raw.skillId !== undefined) {
+    if (!str(raw.skillId, 200) || !requestOf(work)) return null;
+    r.skillId = raw.skillId;
+  }
   return r;
 }
 
 const STATUSES: Status[] = ['queued', 'running', 'waiting', 'done', 'failed', 'stopped'];
 const ORIGINS: Seen['from'][] = ['person', 'approved', 'search', 'link'];
+
+/** A stored request; one from before `origin` keeps its meaning (`fromPlan`, `editedFrom`/`noEdit`). */
+function requestFrom(raw: Record<string, unknown>): Request {
+  const { fromPlan, editedFrom, noEdit: _, noAlways, ...q } = raw;
+  const origin = fromPlan === true ? 'plan' : typeof editedFrom === 'string' ? { edit: editedFrom } : undefined;
+  return { ...(q as unknown as Request), ...(origin && { origin }), ...(noAlways === true && { appWrite: true as const }) };
+}
 
 // ponytail: turns, steps and requests are checked for shape only (objects with their key fields); runs are only ever
 // written by this code, so deeper checks wait for a v2 record.
@@ -269,24 +454,27 @@ export function parseRun(raw: unknown): GardenRun | null {
   if (!STATUSES.includes(raw.status as Status) || !time(raw.queuedAt) || !time(raw.usedMs) || typeof raw.tainted !== 'boolean') return null;
   if (raw.maxTokens !== undefined && !int(raw.maxTokens, 1, 1e8)) return null;
   if (raw.agent !== undefined && !(isObj(raw.agent) && typeof raw.agent.loop === 'boolean' && int(raw.agent.maxSteps, 1, 100))) return null;
+  if (raw.abilities !== undefined && !(Array.isArray(raw.abilities) && raw.abilities.every((a) => typeof a === 'string'))) return null;
+  if (raw.plan !== undefined && !(Array.isArray(raw.plan) && raw.plan.every((c) => isObj(c) && typeof c.tool === 'string' && isObj(c.args)))) return null;
   const list = (x: unknown, ok: (o: Record<string, unknown>) => boolean) => Array.isArray(x) && x.every((o) => isObj(o) && ok(o));
   if (!list(raw.turns, (t) => typeof t.reply === 'string' && typeof t.purpose === 'string')) return null;
   if (!list(raw.steps, (s) => int(s.i, 0, 1e4) && typeof s.tool === 'string' && isObj(s.args) && typeof s.state === 'string')) return null;
   if (!list(raw.requests, (r) => typeof r.id === 'string' && typeof r.kind === 'string' && typeof r.text === 'string')) return null;
   if (!list(raw.seen, (s) => typeof s.url === 'string' && ORIGINS.includes(s.from as Seen['from']))) return null;
-  return { ...(raw as unknown as GardenRun), work: parseWork(raw.work)! };
+  return { ...(raw as unknown as GardenRun), work: parseWork(raw.work)!, requests: (raw.requests as Record<string, unknown>[]).map(requestFrom) };
 }
 
 /** The URLs the person gave: a read's pages, or absolute http(s) URLs written in a request (fragment removed, ≤ 20). */
 export function personUrls(w: Work): string[] {
   if (w.kind === 'read') return w.urls;
-  if (w.kind !== 'ask') return [];
-  const urls = [...w.request.matchAll(/https?:\/\/[^\s<>"'()\[\]]+/g)].map((m) => bare(m[0].replace(/[.,;:!?]+$/, ''))).filter((u): u is string => !!u);
+  const r = requestOf(w);
+  if (!r) return [];
+  const urls = [...r.request.matchAll(/https?:\/\/[^\s<>"'()\[\]]+/g)].map((m) => bare(m[0].replace(/[.,;:!?]+$/, ''))).filter((u): u is string => !!u);
   return [...new Set(urls)].slice(0, 20);
 }
 
 /** A new queued run. The person's own URLs are reachable from the start. */
-export function newRun(o: { id: string; gardenerId: string; routineId?: string; work: Work; now: number; skipped?: number[] }): GardenRun {
+export function newRun(o: { id: string; gardenerId: string; routineId?: string; work: Work; now: number; skipped?: number[]; trigger?: Trigger; deadline?: number }): GardenRun {
   const run: GardenRun = {
     v: 1, id: o.id, gardenerId: o.gardenerId, work: o.work, status: 'queued', queuedAt: o.now, usedMs: 0,
     turns: [], steps: [], requests: [], tainted: false,
@@ -294,5 +482,7 @@ export function newRun(o: { id: string; gardenerId: string; routineId?: string; 
   };
   if (o.routineId) run.routineId = o.routineId;
   if (o.skipped?.length) run.skipped = o.skipped;
+  if (o.trigger) Object.assign(run, { trigger: o.trigger, tainted: o.trigger.signedIn });
+  if (o.deadline !== undefined) run.deadline = o.deadline;
   return run;
 }

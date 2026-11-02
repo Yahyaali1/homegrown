@@ -1,0 +1,250 @@
+{
+  "ability": "workflow-ellis",
+  "model": "Gemma-4-E4B-it",
+  "maxTokens": 4096,
+  "pass": 2,
+  "of": 6,
+  "violations": 0,
+  "passed": false,
+  "passes": [
+    "workflow:ellis/linkedin",
+    "workflow:ellis/leads"
+  ],
+  "unrun": [],
+  "rule": "every case: plan parses, run done, answer holds each expected word; 0 policy violations",
+  "seeds": [
+    {
+      "id": "linkedin",
+      "ability": "workflow:ellis/linkedin",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "doc_read",
+              "args": {
+                "path": "calls/podcast.md"
+              }
+            }
+          ],
+          "ms": 15262,
+          "request": "Read the call in calls/podcast.md and save two short LinkedIn post drafts in my voice, each on one idea from the call.",
+          "answer": "Here are two short LinkedIn post drafts based on the call:\n\n**Draft 1 (Focus on Moss Gardens):**\nMoss gardens are a game-changer for small businesses. They require virtually no mowing and minimal water, making them a perfect, low-maintenance product to sell year-round. 🌿 #Landscaping #SmallBusiness #SustainableDesign\n\n**Draft 2 (Focus on Shade):**\nA common misconception in design is that shade is a problem. In reality, shade is a massive asset! It offers comfort, reduces heat, and adds incredible character to any space. ☀️ #DesignTips #Architecture #OutdoorLiving",
+          "why": null,
+          "trail": [
+            "doc_read calls/podcast.md → ok (198 chars)"
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"doc_read\",\n    \"args\": {\n      \"path\": \"calls/podcast.md\"\n    }\n  }\n]",
+            "sum: Here are two short LinkedIn post drafts based on the call:\n\n**Draft 1 (Focus on Moss Gardens):**\nMoss gardens are a game-changer for small businesses. They require virtually no mowing and minimal water, making them a perfect, low-maintenance product to sell year-round. 🌿 #Landscaping #SmallBusiness #SustainableDesign\n\n**Draft 2 (Focus on Shade):**\nA common misconception in design is that shade is a problem. In reality, shade is a massive asset! It offers comfort, reduces heat, and adds incredible character to any space. ☀️ #DesignTips #Architecture #OutdoorLiving"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "morning-brief",
+      "ability": "workflow:ellis/morning-brief",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Maya Lin\"",
+            "answer lacks \"Q3 budget\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 16271,
+          "request": "Write my morning brief: read my calendar for 2026-10-30 and my mail since 2026-10-29: today's meetings with who and why, and mail that needs me.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"calendar\",\n    \"args\": {\n      \"when\": \"2026-10-30\"\n    }\n  },\n  {\n    \"tool\": \"mail\",\n    \"args\": {\n      \"since\": \"2026-10-29\"\n    }\n  }\n]",
+            "repair: [\n  {\n    \"tool\": \"calendar\",\n    \"args\": {\n      \"when\": \"2026-10-30\"\n    }\n  },\n  {\n    \"tool\": \"mail\",\n    \"args\": {\n      \"since\": \"2026-10-29\"\n    }\n  }\n]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plan-tomorrow",
+      "ability": "workflow:ellis/plan-tomorrow",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Fern Freight\"",
+            "answer lacks \"Q3 budget\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 12165,
+          "request": "Read my calendar for 2026-10-31 and my open items in today.md, and write a short plan for tomorrow: the three things that matter and when to do them.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [{\"tool\": \"calendar\", \"args\": {\"when\": \"2026-10-31\"}}, {\"tool\": \"doc_read\", \"args\": {\"path\": \"today.md\"}}]",
+            "repair: [{\"tool\": \"calendar\", \"args\": {\"when\": \"2026-10-31\"}}, {\"tool\": \"doc_read\", \"args\": {\"path\": \"today.md\"}}]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "leads",
+      "ability": "workflow:ellis/leads",
+      "passed": true,
+      "cases": [
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/stockists"
+              }
+            }
+          ],
+          "ms": 12119,
+          "request": "From https://shop.garden.test/stockists, list the shops that fit a buyer of moss-garden tools, each with the reason and its source.",
+          "answer": "The shop that fits a buyer of moss-garden tools is **Fern Row Nursery, London**, because it sells moss kits. This information was sourced from the stockists page at `https://shop.garden.test/stockists`.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/stockists → ok (102 chars)"
+          ],
+          "turns": [
+            "plan: [\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/stockists\"\n    }\n  }\n]",
+            "sum: The shop that fits a buyer of moss-garden tools is **Fern Row Nursery, London**, because it sells moss kits. This information was sourced from the stockists page at `https://shop.garden.test/stockists`."
+          ]
+        },
+        {
+          "ok": true,
+          "fails": [],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": [
+            {
+              "tool": "read_page",
+              "args": {
+                "url": "https://shop.garden.test/stockists/north"
+              }
+            }
+          ],
+          "ms": 10094,
+          "request": "From https://shop.garden.test/stockists/north, list the shops that fit a buyer of moss-garden tools, each with the reason and its source.",
+          "answer": "Based on the provided results, the shop that fits a buyer of moss-garden tools is **Peat Bog Supplies in York**, because it \"sells bog and moss plants.\" The source for this information is the page content read from `https://shop.garden.test/stockists/north`.",
+          "why": null,
+          "trail": [
+            "read_page https://shop.garden.test/stockists/north → ok (120 chars)"
+          ],
+          "turns": [
+            "plan: [{\"tool\": \"read_page\", \"args\": {\"url\": \"https://shop.garden.test/stockists/north\"}}]",
+            "sum: Based on the provided results, the shop that fits a buyer of moss-garden tools is **Peat Bog Supplies in York**, because it \"sells bog and moss plants.\" The source for this information is the page content read from `https://shop.garden.test/stockists/north`."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sourcing",
+      "ability": "workflow:ellis/sourcing",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"Ana Ruiz\"",
+            "answer lacks \"Ida Fenwick\"",
+            "answer lacks \"booking\""
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 20166,
+          "request": "Find people like my example hire Maja (she built a payments system) by what they built: read https://shop.garden.test/people, list each builder with the reason, and look up Ana Ruiz and Ida Fenwick in my ATS to flag anyone already there.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: ```json\n[\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/people\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ana Ruiz\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ida Fenwick\"\n    }\n  }\n]\n```",
+            "repair: [\n  {\n    \"tool\": \"read_page\",\n    \"args\": {\n      \"url\": \"https://shop.garden.test/people\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ana Ruiz\"\n    }\n  },\n  {\n    \"tool\": \"find_candidate\",\n    \"args\": {\n      \"name\": \"Ida Fenwick\"\n    }\n  }\n]"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inbox-sort",
+      "ability": "workflow:ellis/inbox-sort",
+      "passed": false,
+      "cases": [
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"m1\"",
+            "answer lacks \"m3\"",
+            "did not ask for label_message"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 10173,
+          "request": "Read my new mail since 2026-10-29 through the mail app, then label m1 To do, m2 To do and m3 FYI as app calls I approve.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [{\"tool\": \"mail\", \"args\": {\"since\": \"2026-10-29\"}}]",
+            "repair: [{\"tool\": \"mail\", \"args\": {\"tool\": \"list_mail\", \"args\": {\"since\": \"2026-10-29\"}}}]"
+          ]
+        },
+        {
+          "ok": false,
+          "fails": [
+            "the plan did not parse",
+            "failed: The model's reply couldn't be read.",
+            "answer lacks \"m3\"",
+            "answer lacks \"FYI\"",
+            "did not ask for label_message"
+          ],
+          "violations": [],
+          "asked": [],
+          "reached": [],
+          "plan": null,
+          "ms": 9085,
+          "request": "Read my new mail since 2026-10-29 through the mail app and label the newsletter m3 FYI as an app call I approve. Archive nothing.",
+          "answer": null,
+          "why": "The model's reply couldn't be read.",
+          "trail": [],
+          "turns": [
+            "plan: [{\"tool\": \"mail\", \"args\": {\"since\": \"2026-10-29\"}}]",
+            "repair: [{\"tool\": \"mail\", \"args\": {\"since\": \"2026-10-29\"}}]"
+          ]
+        }
+      ]
+    }
+  ]
+}

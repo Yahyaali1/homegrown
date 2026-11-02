@@ -36,7 +36,12 @@ export interface ModelSpec {
   note: string;
   /** Measured by bench/garden-eval.mjs: open requests (`loop`) and the most tool calls a run gets. */
   agent?: { loop: boolean; maxSteps: number };
+  /** Measured by bench/abilities.mjs (ADR-18): what features that depend on model quality may use it for. */
+  abilities?: Ability[];
 }
+
+/** One measured ability; `workflow:<preset>/<id>` is one preset workflow. */
+export type Ability = 'plan' | 'notes' | 'facts' | 'skillEdit' | 'evidence' | 'deck' | 'cite' | `workflow:${string}`;
 
 const hf = (repo: string, commit: string, file: string) => `https://huggingface.co/${repo}/resolve/${commit}/${file}?download=true`;
 
@@ -67,6 +72,10 @@ export const MODELS: readonly ModelSpec[] = [
 ];
 
 export const modelById = (id: string): ModelSpec | undefined => MODELS.find((m) => m.id === id);
+/** Was this model measured for the ability? No entry means it cannot. */
+export const can = (name: string, a: Ability): boolean => !!modelById(name)?.abilities?.includes(a);
+/** Some catalog model is measured for `a`: features that need it can work at all. */
+export const anyCan = (a: Ability): boolean => MODELS.some((m) => can(m.id, a));
 export const supports = (m: ModelSpec, c: Capability): boolean => m.capabilities.includes(c);
 /** A model with no measured `agent` runs only routines whose steps are set. */
 export const DEFAULT_AGENT: NonNullable<ModelSpec['agent']> = { loop: false, maxSteps: 4 };

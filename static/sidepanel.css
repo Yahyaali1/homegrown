@@ -67,6 +67,25 @@ button.chip:hover { background: var(--chip-hover); }
 #messages li.model .text:empty::before { content: 'Thinking…'; background: linear-gradient(90deg, var(--faint) 35%, var(--fg) 50%, var(--faint) 65%) 0 0/300% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; animation: hg-shimmer 2s linear infinite; }
 #messages li.error, #messages li.model.error .text { color: var(--danger); }
+#messages li.model > .turn-actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: -6px; }
+#messages .turn-actions button { height: 24px; padding: 0 6px; font-size: var(--t-sm); color: var(--muted); }
+#messages .turn-actions button[aria-pressed=true] { color: var(--fg); background: var(--chip-active); }
+#messages .turn-actions .warn { margin: 0 6px 0 0; }
+#messages li.model .text p { margin: 0 0 6px; }
+#messages li.model .text ul, #messages li.model .text ol { margin: 0 0 6px; padding-left: 20px; white-space: normal; }
+#messages .reasoning summary { color: var(--muted); font-size: var(--t-sm); cursor: pointer; }
+#messages mark { background: var(--chip-active); color: var(--fg); border-radius: 2px; }
+#messages a[data-preview], #garden-runs a[data-preview] { color: var(--link); }
+.chats summary { color: var(--muted); font-size: var(--t-sm); cursor: pointer; }
+.chats #chat-list { max-height: 30vh; overflow-y: auto; margin-top: 4px; }
+.chats #chat-list li { display: flex; align-items: center; gap: 6px; }
+.chats #chat-list button.grow { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modes { display: flex; gap: 2px; }
+.modes button { height: 26px; padding: 0 8px; font-size: var(--t-sm); color: var(--muted); }
+.modes button[aria-pressed=true] { color: var(--fg); background: var(--chip-active); }
+.linkcard { position: fixed; z-index: 10; width: 280px; background: var(--panel); box-shadow: var(--shadow-float); border-radius: var(--r-md); padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); overflow-wrap: anywhere; }
+.linkcard p, .linkcard ul { margin: 0; }
 #messages .warn { display: block; color: var(--warn); font-size: var(--t-sm); margin-top: 6px; }
 .empty { flex: 1; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; color: var(--fg); }
 .empty p { margin: 0; }
@@ -122,9 +141,7 @@ li.empty-row { align-items: center; gap: 10px; background: none; box-shadow: non
 .toggle input { margin-top: 3px; }
 #translateTo { flex: 1; }
 .keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
-.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); }
-.theme-switch button { height: 24px; width: 28px; padding: 0; box-shadow: none; background: transparent; color: var(--muted); }
-.theme-switch button[aria-pressed=true] { background: var(--chip-hover); color: var(--fg); }
+.theme-switch button { height: 24px; width: 28px; }
 
 /* library */
 .segmented { display: flex; gap: 2px; padding: 2px; background: var(--chip); border-radius: var(--r-sm); }
@@ -155,19 +172,33 @@ footer b { color: var(--muted); font-weight: 600; }
 #garden details > summary { cursor: pointer; color: var(--muted); font-size: var(--t-sm); }
 #garden details[open] > summary { margin-bottom: 8px; }
 #garden > h3:first-of-type, .card > h3 { margin-top: 0; }
-#garden-runs li > .flower, #garden-requests li > .flower { flex: none; }
-#garden-runs li.enter, #garden-requests li.enter { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
-#garden-runs .result, #garden-requests .result { white-space: pre-wrap; overflow-wrap: anywhere; }
+#garden-runs li > .flower, .tray li > .flower { flex: none; }
+#garden-runs li.enter, .tray li.enter { animation: hg-rise var(--d-overlay) var(--ease-out) both; }
+#garden-runs .result, .tray .result { white-space: pre-wrap; overflow-wrap: anywhere; }
 #garden-runs .t > div { overflow-wrap: anywhere; margin-top: 4px; }
 #garden-runs .draft { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px; border-radius: var(--r-sm); background: var(--chip); }
 #garden-runs .draft .text { white-space: pre-wrap; font-size: var(--t-sm); }
 #garden-runs .draft button { height: 24px; padding: 0 8px; }
-#garden-requests:empty { display: none; }
+.tray:empty { display: none; }
+.dock .tray { max-height: 40vh; overflow-y: auto; margin: 0; }
+.tray .tray-bar { align-items: center; }
+.tray .tray-bar > button { flex: none; }
+.tray .edit input, .tray .edit textarea, #garden-runs .steer input { font: inherit; }
 .gardener .head > .flower { margin-top: 1px; }
 #gardener-form .look { align-items: center; }
 .gardener .notebook .list li { flex-direction: row; align-items: flex-start; }
 .notebook .list li > button { height: 26px; padding: 0 8px; flex: none; }
 .notebook form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .notebook .result { white-space: pre-wrap; overflow-wrap: anywhere; }
-#garden-requests .wait-bar { height: 2px; border-radius: 2px; background: var(--fg); opacity: .5; transform-origin: left; animation: hg-wait linear forwards; }
+#chat-requests .wait-bar, #garden-requests .wait-bar { height: 2px; border-radius: 2px; background: var(--fg); opacity: .5; transform-origin: left; animation: hg-wait linear forwards; }
 @keyframes hg-wait { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+#garden-runs li.group-head { background: none; box-shadow: none; padding: 8px 2px 0; color: var(--muted); font-size: var(--t-sm); font-weight: 600; }
+#garden-runs .result.why { color: var(--fg); font-weight: 600; }
+#garden-runs .step, #garden-runs .created { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+#garden-runs .step button, #garden-runs .created button, #garden-runs .run-view .row button { height: 24px; padding: 0 8px; flex: none; }
+#garden-runs img.live { width: 100%; max-width: 480px; border-radius: var(--r-sm); background: var(--chip); }
+#garden-runs .how .result { white-space: pre-wrap; }
+#memory-tree summary { font-size: var(--t-sm); }
+#garden-runs .draft textarea.text { width: 100%; }
+#garden .remember { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#garden .remember button { height: 24px; padding: 0 8px; }

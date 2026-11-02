@@ -46,15 +46,15 @@ test('retrieving notes taints the run; no notes, no taint; how many fit follows 
   assert.ok(count(4096) > 0 && count(32768) > count(4096) * 5);
 });
 
-test('the eg-memory upgrade only adds the notes store, keeping history, highlights, kb and snapshots', () => {
+test('the eg-memory upgrade only adds stores (notes, then entities and docs), keeping history, highlights, kb and snapshots', () => {
   const made = (old: number) => {
     const names: string[] = [];
     upgradeMemory({ createObjectStore: (n: string) => (names.push(n), { createIndex: () => ({}) }) as never }, old);
     return names;
   };
-  assert.deepEqual(made(2), ['notes']);
-  assert.deepEqual(made(3), []);
-  assert.deepEqual(made(0), ['history', 'highlights', 'kb', 'snapshots', 'notes']);
+  assert.deepEqual(made(2), ['notes', 'entities', 'docs']);
+  assert.deepEqual(made(4), []);
+  assert.deepEqual(made(0), ['history', 'highlights', 'kb', 'snapshots', 'notes', 'entities', 'docs']);
   assert.equal(parseNote({ ...notes[0], v: 2 }), null, 'a newer note is left alone');
   assert.equal(parseNote({ ...notes[0], text: 'x'.repeat(501) }), null);
 });
