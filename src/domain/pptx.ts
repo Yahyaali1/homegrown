@@ -1,4 +1,4 @@
-// A deck as PowerPoint (decision 17): the least Office Open XML a .pptx needs (one master, one layout, one theme),
+// A deck as PowerPoint: the least Office Open XML a .pptx needs (one master, one layout, one theme),
 // one slide part per slide with its title, bullets and, for a chart, a PNG picture. Packed by zipWrite. No library.
 import type { Deck } from './outputs.ts';
 import { zipWrite } from './zip.ts';

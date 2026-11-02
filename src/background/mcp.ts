@@ -1,15 +1,13 @@
-// The remote MCP client (ADR-17): Streamable HTTP only, JSON-RPC over POST, a `text/event-stream` reply read as a
-// stream until its answer arrives. No stdio: an extension can't start a process. Each use opens its own session
-// (initialize, then the call). No cookies go with it; the token goes only as the bearer header to the server's URL.
-// Sign-in (MCP authorization) discovers the server's sign-in server, registers Homegrown there, and runs PKCE through
-// chrome.identity (the optional `identity` permission). A signed-in connector's token is refreshed once on a 401.
+// The remote MCP client (ADR-17): Streamable HTTP sessions, sign-in, and the connector handlers for extension pages.
 import { isExtensionPage } from './pagerequest.ts';
 import * as trust from './trust.ts';
 import { sitesOf } from '../domain/garden/records.ts';
-import { asMetaUrls, authorizeUrl, capped, callText, challengeOf, codeOf, factsOf, MAX_REPLY, parseAsMeta, parseClient, parseConnector, parseResourceMeta, parseTokens, randomCode, registerBody, replyOf, resourceMetaUrls, rpcBody, rpcReply, signInRefusal, sseSplit, tokenFor, serverTools, serverUrl, type Connector, type OAuth, type ServerTool } from '../domain/mcp.ts';
+import { asMetaUrls, authorizeUrl, callText, challengeOf, codeOf, factsOf, parseAsMeta, parseClient, parseConnector, parseResourceMeta, parseTokens, randomCode, registerBody, replyOf, resourceMetaUrls, rpcBody, sameOrigin, signInRefusal, sseSplit, tokenFor, serverTools, serverUrl, type Connector, type OAuth, type Reply, type ServerTool } from '../domain/mcp.ts';
 
 const TIMEOUT = 30_000;
 const VERSION = '2025-06-18';
+const MAX_REPLY = 1_000_000;
+const init = () => ({ protocolVersion: VERSION, capabilities: {}, clientInfo: { name: 'Homegrown', version: chrome.runtime.getManifest().version } });
 type Sender = chrome.runtime.MessageSender | undefined;
 
 interface Session { url: string; token?: string | undefined; id: number; session?: string | undefined; version?: string }
@@ -30,6 +28,35 @@ const post = (s: Session, body: string) => send(s.url, { method: 'POST', headers
 /** A 401: the token is missing, expired or refused. A signed-in connector refreshes once on it. */
 class AuthError extends Error {}
 
+/**
+ * The body as text, failing past `max` bytes: a server can't fill the worker's memory. With `events`, an event stream's
+ * complete events are handed over as they arrive, and reading stops once `events` says it has what it needs.
+ */
+export async function capped(res: Response, max: number, tooLong: string, events?: (messages: unknown[]) => boolean): Promise<string> {
+  if (!res.body) throw new Error('The server sent an empty reply.');
+  if (Number(res.headers.get('content-length')) > max) {
+    void res.body.cancel().catch(() => {});
+    throw new Error(tooLong);
+  }
+  const reader = res.body.getReader(), utf8 = new TextDecoder();
+  let text = '', size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if ((size += value?.byteLength ?? 0) > max) throw new Error(tooLong);
+      text += utf8.decode(value, { stream: !done });
+      if (events) {
+        const s = sseSplit(done ? `${text}\n\n` : text);
+        text = s.rest;
+        if (events(s.messages)) return '';
+      }
+      if (done) return text;
+    }
+  } finally {
+    void reader.cancel().catch(() => {});
+  }
+}
+
 async function rpc(s: Session, method: string, params?: Record<string, unknown>): Promise<unknown> {
   const id = ++s.id;
   const res = await post(s, rpcBody(id, method, params));
@@ -37,28 +64,17 @@ async function rpc(s: Session, method: string, params?: Record<string, unknown>)
   if (res.status === 403) throw new Error('The server refused the token.');
   if (!res.ok) throw new Error(`The server answered ${res.status}.`);
   s.session ??= res.headers.get('mcp-session-id') ?? undefined;
+  // A stream may stay open after the reply, so it is read only until the reply to this request arrives.
+  let r = null as Reply | null;
   const stream = (res.headers.get('content-type') ?? '').includes('text/event-stream');
-  // Read until the reply to this request arrives (a stream may stay open after it), at most MAX_REPLY; a stream's
-  // complete events are parsed once each, as they arrive.
-  let buf = '', size = 0;
-  let r: ReturnType<typeof rpcReply> = null;
-  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      size += value?.length ?? 0;
-      if (size > MAX_REPLY) throw new Error('The server’s reply is too long (over 1 MB).');
-      buf += value ?? '';
-      if (stream) {
-        const s = sseSplit(done ? `${buf}\n\n` : buf);
-        buf = s.rest;
-        if ((r = replyOf(s.messages, id)) || done) break;
-      } else if (done) break;
+  const text = await capped(res, MAX_REPLY, 'The server’s reply is too long (over 1 MB).', stream ? (m) => !!(r = replyOf(m, id)) : undefined);
+  if (!stream) {
+    try {
+      r = replyOf([JSON.parse(text) as unknown].flat(), id);
+    } catch {
+      throw new Error('The server’s reply isn’t JSON.');
     }
-  } finally {
-    void reader.cancel().catch(() => {});
   }
-  if (!stream) r = rpcReply(buf, id, false);
   if (!r) throw new Error('The server sent no reply.');
   if ('error' in r) throw new Error(r.error);
   return r.result;
@@ -66,8 +82,7 @@ async function rpc(s: Session, method: string, params?: Record<string, unknown>)
 
 async function open(url: string, token: string | undefined): Promise<Session> {
   const s: Session = { url, token, id: 0 };
-  const init = await rpc(s, 'initialize', { protocolVersion: VERSION, capabilities: {}, clientInfo: { name: 'Homegrown', version: chrome.runtime.getManifest().version } });
-  const v = (init as { protocolVersion?: unknown } | null)?.protocolVersion;
+  const v = (await rpc(s, 'initialize', init()) as { protocolVersion?: unknown } | null)?.protocolVersion;
   s.version = typeof v === 'string' ? v.slice(0, 20) : VERSION;
   await post(s, rpcBody(undefined, 'notifications/initialized'));
   return s;
@@ -118,7 +133,7 @@ const form = async (url: string, params: Record<string, string | undefined>) =>
 /** The MCP authorization flow for `url`: discovery, registration, PKCE through the browser's sign-in window, the code for tokens. */
 export async function signIn(url: string): Promise<{ token: string; oauth: OAuth }> {
   if (!chrome.identity) throw new Error('Sign-in needs the identity permission.');
-  const first = await post({ url, id: 0 }, rpcBody(1, 'initialize', { protocolVersion: VERSION, capabilities: {}, clientInfo: { name: 'Homegrown', version: chrome.runtime.getManifest().version } }));
+  const first = await post({ url, id: 0 }, rpcBody(1, 'initialize', init()));
   void first.body?.cancel().catch(() => {});
   const www = first.status === 401 ? first.headers.get('www-authenticate') : null;
   const res = parseResourceMeta(await firstFound(resourceMetaUrls(url, www), 'This server offers no sign-in. Paste a token if it needs one.'), url);
@@ -163,7 +178,6 @@ async function authed<T>(c: Connector, fn: (token: string | undefined) => Promis
 // first, sign in again.
 const pending = new Map<string, { url: string; token: string; oauth: OAuth; at: number }>();
 const PENDING_MS = 10 * 60_000;
-const sameOrigin = (a: string, b: string) => new URL(a).origin === new URL(b).origin;
 function signedIn(auth: unknown, url: string): { token: string; oauth: OAuth } {
   const p = typeof auth === 'string' ? pending.get(auth) : undefined;
   if (!p || Date.now() - p.at > PENDING_MS || !sameOrigin(p.url, url)) throw new Error('Sign in again for this server.');
@@ -175,6 +189,11 @@ function page(sender: Sender): void {
 }
 
 const tokenOf = (t: unknown) => (typeof t === 'string' && t.trim() ? t.trim() : undefined);
+function mustUrl(raw: unknown): string {
+  const u = serverUrl(raw);
+  if (!u) throw new Error('A server URL starts with https:// (or http://localhost for a test server).');
+  return u;
+}
 
 // Connectors: extension pages only. A page never gets a token back, only whether one is kept.
 export const handlers = {
@@ -182,8 +201,7 @@ export const handlers = {
   /** `{ url, replaces? }`: signs in to the server (the person's click asked for `identity`); `auth` names the sign-in for Probe and Save. */
   connectorSignIn: async ({ url, replaces }: { url: string; replaces?: string }, sender?: Sender) => {
     page(sender);
-    const u = serverUrl(url);
-    if (!u) throw new Error('A server URL starts with https:// (or http://localhost for a test server).');
+    const u = mustUrl(url);
     const s = await signIn(u);
     const auth = crypto.randomUUID();
     if (typeof replaces === 'string') pending.delete(replaces);
@@ -194,21 +212,18 @@ export const handlers = {
   /** `{ url, token?, id?, auth? }`: the server's tools now; with `id` and no token, that connector's kept token is used. */
   connectorProbe: async ({ url, token, id, auth }: { url: string; token?: string; id?: string; auth?: string }, sender?: Sender) => {
     page(sender);
-    const u = serverUrl(url);
-    if (!u) throw new Error('A server URL starts with https:// (or http://localhost for a test server).');
+    const u = mustUrl(url);
     const typed = tokenOf(token);
     if (auth && !typed) return probe(u, signedIn(auth, u).token);
     const kept = id ? (await trust.connectors()).find((c) => c.id === id) : undefined;
     if (!typed && kept?.oauth && sameOrigin(kept.url, u)) return authed(kept, (t) => probe(u, t));
-    // A kept token goes only to the origin it was given for.
     return probe(u, tokenFor(kept, u, typed));
   },
   /** Saves what the person confirmed. With no token sent, a kept one (or sign-in) stays; `auth` stores a new sign-in. */
   connectorSave: async ({ connector, auth }: { connector: Partial<Connector>; auth?: string }, sender?: Sender) => {
     page(sender);
     const old = connector.id ? (await trust.connectors()).find((c) => c.id === connector.id) : undefined;
-    const url = serverUrl(connector.url);
-    if (!url) throw new Error('A server URL starts with https:// (or http://localhost for a test server).');
+    const url = mustUrl(connector.url);
     const typed = tokenOf(connector.token);
     const signed = auth && !typed ? signedIn(auth, url) : undefined;
     const token = typed ?? signed?.token ?? tokenFor(old, url, undefined);

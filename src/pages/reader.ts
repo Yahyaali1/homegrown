@@ -1,11 +1,11 @@
 // Document reader: a PDF, ePub, DOCX, text, Markdown, CSV, JSON or HTML file as readable text, so the in-page UI (also
 // loaded by reader.html) can select, summarize, translate and ask about it. Chrome's PDF viewer blocks extensions,
-// which is why PDFs open here. Up to 10 files open together, with one question across them (plan T9).
+// which is why PDFs open here. Up to 10 files open together, with one question across them.
 import { $ } from './shell.ts';
 import { h } from '../ui/dom.ts';
 import { bg } from '../shared/protocol.ts';
 import { markdown } from '../domain/markdown.ts';
-import { can, MODELS } from '../domain/model.ts';
+import { anyCan } from '../domain/model.ts';
 import { citeLabel, filePassages, READER_FILES, type DocFile } from '../domain/reading.ts';
 import { unzip } from '../domain/zip.ts';
 import * as pdfjs from 'pdfjs-dist';
@@ -105,7 +105,7 @@ function askAcross(docs: DocFile[]): HTMLElement {
     out.replaceChildren(note, passages);
     if (!ps.length) return;
     // No catalog model is measured for citing: the files' text never leaves the page.
-    if (!MODELS.some((m) => can(m.id, 'cite'))) return void (note.textContent = NO_CITE);
+    if (!anyCan('cite')) return void (note.textContent = NO_CITE);
     try {
       const cited = await bg<{ text: string; dropped: number; model: string } | null>('citeAnswer', { question, files: docs });
       if (!cited) return void (note.textContent = NO_CITE);

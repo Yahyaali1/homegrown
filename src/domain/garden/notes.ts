@@ -1,4 +1,4 @@
-// The gardeners' notebook (docs/plan/S-gardeners.md, V4), kept in eg-memory's `notes` store by background/memory.ts.
+// The gardeners' notebook, kept in eg-memory's `notes` store by background/memory.ts.
 // A note is the person's (by: 'person') or one a gardener took in a run (by: { runId, url }). Notes are private and,
 // for a model's, page-derived: they reach a model only in the data part of a think, labelled, and taint the run.
 import { defang, hostOf } from '../text.ts';

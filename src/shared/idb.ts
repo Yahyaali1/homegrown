@@ -1,4 +1,4 @@
-// A small IndexedDB helper for the worker's own databases (out of content scripts' reach, unlike chrome.storage).
+// A small IndexedDB helper for the extension's own databases (out of content scripts' reach, unlike chrome.storage).
 
 /** Opens `name` at `version`; `upgrade` gets the old version, so each step runs once. */
 export function open(name: string, version: number | undefined, upgrade: (db: IDBDatabase, oldVersion: number) => void): Promise<IDBDatabase> {
@@ -37,3 +37,6 @@ export const all = <T>(db: IDBDatabase, store: string, index?: string, query?: I
     const s = t.objectStore(store);
     return req((index ? s.index(index) : s).getAll(query) as IDBRequest<T[]>);
   });
+
+/** Saved chats (`domain/chat.ts` `Chat`): the side panel writes them, the garden reads them as skill evidence. */
+export const openChats = () => open('hg-chat', 1, (d, old) => void (old < 1 && d.createObjectStore('chats', { keyPath: 'id' })));

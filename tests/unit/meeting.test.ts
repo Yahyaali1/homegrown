@@ -1,4 +1,4 @@
-// Meetings (plan T10): lines merged by time, notes owners grounded in the transcript, call hosts, doc pieces.
+// Meetings: lines merged by time, notes owners grounded in the transcript, call hosts, doc pieces.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checkItem, isMeetingHost, itemsOf, meetingName, meetingPath, mergeLines, mergeNotes, notesBody, parseNotes, pieces, timeParts, transcriptOf, type Line } from '../../src/domain/meeting.ts';
@@ -84,4 +84,30 @@ test('a file over 100 MB or 2 hours is refused before it is transcribed', async 
   assert.equal(fileRefused(1 << 20, 60_000), null);
   assert.match(fileRefused(101 << 20)!, /100 MB/);
   assert.match(fileRefused(1, 3 * 3600_000)!, /2 hours/);
+});
+
+test('a meeting’s docs are found by its name, in part order, never a gardener’s or another meeting’s', async () => {
+  const { docsOfMeeting, meetingOf } = await import('../../src/domain/meeting.ts');
+  assert.equal(meetingOf('Meetings/2026-10-30 14:05 Sync (part 2).md'), '2026-10-30 14:05 Sync');
+  const docs = [
+    { path: 'Meetings/Sync (part 2).md' }, { path: 'Meetings/Sync.md' }, { path: 'Meetings/Sync 2.md' },
+    { path: 'Meetings/Sync.md', gardenerId: 'g1' }, { path: 'Notes/Sync.md' },
+  ];
+  assert.deepEqual(docsOfMeeting(docs, 'Sync').map((d) => d.path), ['Meetings/Sync.md', 'Meetings/Sync (part 2).md']);
+});
+
+test('serial runs one job at a time and refuses past its backlog', async () => {
+  const { serial } = await import('../../src/domain/meeting.ts');
+  const q = serial(2);
+  const order: number[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  assert.equal(q.add(async () => (await gate, order.push(1), undefined)), true);
+  assert.equal(q.add(async () => void order.push(2)), true);
+  assert.equal(q.add(async () => void order.push(3)), false, 'the third waits on a full backlog: dropped');
+  release();
+  await q.idle();
+  assert.deepEqual(order, [1, 2]);
+  assert.equal(q.add(async () => { throw new Error('whisper failed'); }), true, 'room again once it drains');
+  await q.idle(); // a failed job doesn't break the chain
 });

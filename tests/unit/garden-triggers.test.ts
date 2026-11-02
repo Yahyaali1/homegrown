@@ -2,7 +2,7 @@
 // doesn't hold up the next slot.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkFetch, claim, MISSED, eventCheck, nextAfter, nextRuns, overdue } from '../../src/domain/garden/schedule.ts';
+import { claim, MISSED, eventTrigger, nextAfter, nextRuns, overdue } from '../../src/domain/garden/schedule.ts';
 import { next, retryStep, type Ctx } from '../../src/domain/garden/loop.ts';
 import { TOOLS } from '../../src/domain/garden/tools.ts';
 import { newRun, parseWhen, type Gardener, type GardenRun, type Routine, type When } from '../../src/domain/garden/records.ts';
@@ -102,23 +102,18 @@ test('a due event routine with no trigger moves nextDue on and makes no run; wit
   assert.equal(c.newRun?.tainted, false);
 });
 
-test('an event with onlyIf ["price"] fires only when an added line holds "price"', async () => {
+test('an event with onlyIf ["price"] fires only when an added line holds "price"', () => {
   const when: When = { ...EVENT, onlyIf: ['price'] };
-  const page = (t: string) => async () => t;
-  assert.equal((await eventCheck(when, [], 'a\nb', page('a\nb\nNew stock'))).trigger, null);
-  assert.equal((await eventCheck(when, [], 'a\nPrice: £9', page('a'))).trigger, null, 'a removed line is not a change that fires');
-  assert.match((await eventCheck(when, [], 'a', page('a\nPRICE: £7'))).trigger!.diff, /\+ PRICE: £7/);
-  assert.equal((await eventCheck(EVENT, [], undefined, page('a'))).trigger, null, 'the first look only sets the snapshot');
+  assert.equal(eventTrigger(when, 'a\nb', 'a\nb\nNew stock', false), null);
+  assert.equal(eventTrigger(when, 'a\nPrice: £9', 'a', false), null, 'a removed line is not a change that fires');
+  assert.match(eventTrigger(when, 'a', 'a\nPRICE: £7', false)!.diff, /\+ PRICE: £7/);
+  assert.equal(eventTrigger(EVENT, undefined, 'a', false), null, 'the first look only sets the snapshot');
 });
 
-test('an off-site event check is signed out; an on-site one signed in, and its run starts tainted', async () => {
-  const seen: RequestCredentials[] = [];
-  const page = async (_: string, c: RequestCredentials) => (seen.push(c), 'a\nnew');
-  const off = await eventCheck({ ...EVENT, url: 'https://far.com/' }, ['shop.com'], 'a', page);
-  const on = await eventCheck(EVENT, ['shop.com'], 'a', page);
-  assert.deepEqual(seen, ['omit', 'include']);
-  assert.equal(off.trigger?.signedIn, false);
-  assert.equal(claim(routine(EVENT, { nextDue: 0 }), [], 0, on.trigger!).newRun?.tainted, true);
+test('a signed-in event check\'s run starts tainted', () => {
+  assert.equal(eventTrigger({ ...EVENT, url: 'https://far.com/' }, 'a', 'a\nnew', false)?.signedIn, false);
+  const on = eventTrigger(EVENT, 'a', 'a\nnew', true)!;
+  assert.equal(claim(routine(EVENT, { nextDue: 0 }), [], 0, on).newRun?.tainted, true);
 });
 
 test('the word think\'s data starts with what changed on the event page', () => {
@@ -130,11 +125,12 @@ test('the word think\'s data starts with what changed on the event page', () => 
 });
 
 test('the event fetch: an error status or a signed-in redirect fails the check, so no snapshot is written', async () => {
+  Object.assign(globalThis, { chrome: { i18n: { getUILanguage: () => 'en' } } }); // monitors.ts reads the UI language at load
+  const { checkFetch } = await import('../../src/background/monitors.ts');
   const inits: RequestInit[] = [];
   const answer = (res: Partial<Response>) => (async (_: unknown, init?: RequestInit) => (inits.push(init!), { ok: true, status: 200, type: 'basic', text: async () => 'page', ...res })) as unknown as typeof fetch;
   await assert.rejects(checkFetch('https://a.com/', 'omit', answer({ ok: false, status: 503 })), /503/);
   await assert.rejects(checkFetch('https://shop.com/', 'include', answer({ ok: false, status: 0, type: 'opaqueredirect' })), /redirected/);
   assert.equal(await checkFetch('https://a.com/', 'omit', answer({})), 'page');
   assert.deepEqual(inits.map((i) => [i.credentials, i.redirect, i.signal instanceof AbortSignal]), [['omit', 'follow', true], ['include', 'manual', true], ['omit', 'follow', true]]);
-  await assert.rejects(eventCheck(EVENT, [], 'a', () => checkFetch('https://shop.com/p', 'omit', answer({ ok: false, status: 429 }))), /429/);
 });

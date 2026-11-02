@@ -141,9 +141,7 @@ li.empty-row { align-items: center; gap: 10px; background: none; box-shadow: non
 .toggle input { margin-top: 3px; }
 #translateTo { flex: 1; }
 .keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
-.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); }
-.theme-switch button { height: 24px; width: 28px; padding: 0; box-shadow: none; background: transparent; color: var(--muted); }
-.theme-switch button[aria-pressed=true] { background: var(--chip-hover); color: var(--fg); }
+.theme-switch button { height: 24px; width: 28px; }
 
 /* library */
 .segmented { display: flex; gap: 2px; padding: 2px; background: var(--chip); border-radius: var(--r-sm); }
@@ -200,10 +198,7 @@ footer b { color: var(--muted); font-weight: 600; }
 #garden-runs .step button, #garden-runs .created button, #garden-runs .run-view .row button { height: 24px; padding: 0 8px; flex: none; }
 #garden-runs img.live { width: 100%; max-width: 480px; border-radius: var(--r-sm); background: var(--chip); }
 #garden-runs .how .result { white-space: pre-wrap; }
-/* Memory (plan T7): folders and files as ghost rows; a file opens in place. */
-#memory-tree details > summary { cursor: pointer; padding: 4px 0; font-size: var(--t-sm); }
-#memory-tree details details { margin-left: var(--s3); }
-#memory-tree .file .stack { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+#memory-tree summary { font-size: var(--t-sm); }
 #garden-runs .draft textarea.text { width: 100%; }
 #garden .remember { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 #garden .remember button { height: 24px; padding: 0 8px; }

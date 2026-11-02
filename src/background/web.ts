@@ -1,9 +1,9 @@
 // Web reading for search, research, claim checks, related reading and link previews, from the service worker.
-import { ask } from './engine.ts';
+import { ask, measured } from './engine.ts';
 import { htmlToText, parseBing, parseDuckDuckGo, decode } from '../domain/html.ts';
 import { defang, hostOf } from '../domain/text.ts';
 import { moveCited, reportPrompt, termQuery, termReport, TERM_LIMITS } from '../domain/research.ts';
-import { measured, saveArtifact } from './outputs.ts';
+import { saveArtifact } from './outputs.ts';
 import type { SearchResult } from '../domain/mission/types.ts';
 
 type Sender = chrome.runtime.MessageSender | undefined;

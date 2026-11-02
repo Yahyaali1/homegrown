@@ -1,15 +1,15 @@
-// Skills end to end (plan T8). No model: a skill made in Garden → Skills with 2 cases is "Not tested yet"; "Test on
+// Skills end to end. No model: a skill made in Garden → Skills with 2 cases is "Not tested yet"; "Test on
 // cases" is refused while no model plans; an off skill is refused by /name in chat; deleting a skill pauses the routine
 // that follows it. @slow, real model: no model has `plan` yet, so the test runs and a routine's run are planted pinned
 // with it and their plan already approved (as plan.spec does); one case passes by `expect`, one fails, and the routine's
 // run follows the method.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, engine, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, engine, launch, plannedRun, put, ROOT } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const PAGES = { '/fern': '<!doctype html><title>Ferns</title><h1>Ferns</h1><p>Boston fern: £12.</p>' };
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -18,11 +18,8 @@ test.beforeAll(async () => {
   await ctx.route(`${SHOP}/**`, (r) => r.fulfill({ contentType: 'text/html; charset=utf-8', body: PAGES[new URL(r.request().url()).pathname] ?? '<!doctype html><title>Not found</title>' }));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   for (const s of await bg('skillList')) await bg('skillDelete', { id: s.id });
   g = await bg('gardenerSave', { gardener: { name: 'Pricer', instructions: 'Answer briefly.', sites: ['shop.garden.test'], minutes: 10 } });
 });
@@ -31,19 +28,6 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
-
-const put = (store, value) => panel.evaluate(async ([store, value]) => {
-  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-  const t = d.transaction(store, 'readwrite');
-  t.objectStore(store).put(value);
-  await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-  d.close();
-}, [store, value]);
 
 test('a skill with 2 cases is made in Garden → Skills; Test is refused without a plan model; off, /name is refused; delete pauses its routine', async () => {
   await panel.click('.tabs [data-tab=garden]');
@@ -90,17 +74,14 @@ test('test on cases @slow: one case passes by expect, one fails; a routine\'s ru
   const m = await engine(sw, 'resolve', {});
   const t0 = Date.now();
   // As skillTest makes them, but pinned with `plan` and its plan approved: one read of the fern page, then the sum think.
-  const planted = (runId, request, extra = {}) => ({
-    v: 1, id: runId, gardenerId: g.id, work: { kind: 'plan', request, skillId: s.id }, status: 'queued', queuedAt: t0, usedMs: 0,
-    model: m.name, maxTokens: m.maxTokens, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan: [{ tool: 'read_page', args: { url: `${SHOP}/fern` } }],
-    turns: [], steps: [], requests: [], seen: [], tainted: false, ...extra,
-  });
+  const planted = (id, request, extra = {}) => plannedRun({ id, gardenerId: g.id, work: { kind: 'plan', request, skillId: s.id }, queuedAt: t0,
+    model: m.name, maxTokens: m.maxTokens, plan: [{ tool: 'read_page', args: { url: `${SHOP}/fern` } }], ...extra });
   const ids = [`skilltest-1-${t0}`, `skilltest-2-${t0}`];
-  for (const [k, c] of s.cases.entries()) await put('runs', { ...planted(ids[k], c.input), queuedAt: t0 + k });
-  await put('skills', { ...s, cases: s.cases.map((c, k) => ({ ...c, runId: ids[k] })) });
+  for (const [k, c] of s.cases.entries()) await put(panel, 'runs', { ...planted(ids[k], c.input), queuedAt: t0 + k });
+  await put(panel, 'skills', { ...s, cases: s.cases.map((c, k) => ({ ...c, runId: ids[k] })) });
   const rt = await bg('routineSave', { routine: { gardenerId: g.id, name: 'Fern price', when: { kind: 'daily', at: '08:00' }, work: { kind: 'plan', request: 'How much is the Boston fern?' }, skillId: s.id, paused: true } });
   const routineRun = `${rt.id}@${t0}`;
-  await put('runs', { ...planted(routineRun, 'How much is the Boston fern?', { routineId: rt.id }), queuedAt: t0 + 2 });
+  await put(panel, 'runs', { ...planted(routineRun, 'How much is the Boston fern?', { routineId: rt.id }), queuedAt: t0 + 2 });
   await sw.evaluate(() => self.gardenFire('none'));
 
   let skill;

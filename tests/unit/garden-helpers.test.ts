@@ -192,3 +192,13 @@ test('prune keeps the newest runs by parent: helpers don’t count, and go with 
   assert.deepEqual(pruneIds(runs, 2).sort(), ['C', 'C.h1', 'X.h1']);
   assert.deepEqual(pruneIds(runs, 30), ['X.h1']);
 });
+
+test('Resume all and Retry step reset a run alike: no end, no retry wait, a fresh budget, no deadline', () => {
+  const { p, kids } = split();
+  for (const k of kids) finish(k);
+  Object.assign(kids[0]!, { status: 'failed', why: 'x', endedAt: 9, retryAt: 99, usedMs: 5000, deadline: 50 });
+  kids[0]!.steps[1] = { ...kids[0]!.steps[1]!, state: 'failed', error: 'x' };
+  assert.ok(Array.isArray(resumeAll(p, kids, 'h2')));
+  const k = kids[0]!;
+  assert.deepEqual([k.status, k.why, k.endedAt, k.retryAt, k.usedMs, k.deadline], ['queued', undefined, undefined, undefined, 0, undefined]);
+});

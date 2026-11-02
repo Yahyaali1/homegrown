@@ -1,4 +1,4 @@
-// The seam that keeps Homegrown model-agnostic (docs/architecture.md, ADR-9). The engine picks an adapter by the
+// The seam that keeps Homegrown model-agnostic (docs/architecture.md). The engine picks an adapter by the
 // model's `runtime`; features only ever send neutral turns.
 import type { ModelSpec, RuntimeId, Sampling, Turn } from '../domain/model.ts';
 

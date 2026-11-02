@@ -1,5 +1,5 @@
 // Olivia's workflow cases (see rosa.mjs). Calendar and mail are fake apps (apps.mjs); meeting notes are planted as her
-// own documents, standing in for T10 meeting docs. Labels are app calls the bench approves (not sensitive).
+// own documents, standing in for meeting docs. Labels are app calls the bench approves (not sensitive).
 import { SHOP } from '../garden-fixtures.mjs';
 import { calendar, mail } from './apps.mjs';
 

@@ -4,7 +4,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { launch, engine, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, engine, launch, plant, put, ROOT } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const PAGES = {
@@ -13,7 +13,7 @@ const PAGES = {
   '/lichen': '<!doctype html><title>Lichen</title><h1>Lichen</h1><p>Map lichen: £7.</p>',
 };
 const FAILS = { '/moss': 1, '/lichen': 2 }; // document loads refused before a page is served
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 const loads = {};
 
 test.describe.configure({ mode: 'serial' });
@@ -28,11 +28,8 @@ test.beforeAll(async () => {
   });
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   g = await bg('gardenerSave', { gardener: { name: 'Pricer', instructions: 'Say briefly what each page sells and its price.', sites: ['shop.garden.test'], minutes: 10 } });
 });
 
@@ -40,11 +37,6 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
 
 async function settled(runId) {
   let run;
@@ -101,13 +93,7 @@ test('Ask a follow-up: refused in words with no plan model; a planted follow-up 
     model: m.name, maxTokens: m.maxTokens, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan: [{ tool: 'read_page', args: { url: `${SHOP}/moss` } }],
     requests: [{ id: 'p', kind: 'plan', calls: [{ tool: 'read_page', args: { url: `${SHOP}/moss` } }], text: 'plan', sensitive: false, answer: { value: 'yes', at: Date.now() } }],
     seen: [{ url: `${SHOP}/moss`, from: 'approved' }] };
-  await panel.evaluate(async (runs) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    for (const run of runs) t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, [earlier]);
+  await put(panel, 'runs', earlier);
 
   // By hand: the earlier run's box asks the worker, which says in words that no model can plan yet.
   await panel.reload();
@@ -117,14 +103,7 @@ test('Ask a follow-up: refused in words with no plan model; a planted follow-up 
   await row.getByRole('button', { name: 'Ask', exact: true }).click();
   await expect(row.locator('.err', { hasText: /plans|open requests/ })).toBeVisible();
 
-  await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, follow);
-  await sw.evaluate(() => self.gardenFire('none'));
+  await plant(panel, sw, follow);
   const run = await settled(follow.id);
   expect(run.status).toBe('done');
   expect(run.turns.map((t) => t.purpose)).toEqual(['sum']);

@@ -3,11 +3,11 @@
 // at its edge (ADR-14).
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, launch, ROOT } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const PLANTS = ['fern', 'moss', 'lichen', 'ivy', 'sage', 'mint', 'thyme', 'basil', 'dill', 'rue', 'tansy', 'yarrow'];
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 
 test.beforeAll(async () => {
   ({ ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') }));
@@ -18,11 +18,8 @@ test.beforeAll(async () => {
   });
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   g = await bg('gardenerSave', { gardener: { name: 'Pricer', instructions: 'List every plant you read about by name.', sites: ['shop.garden.test'], minutes: 10 } });
 });
 
@@ -30,11 +27,6 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
 
 test('a routine reads 12 pages with 3 helpers, at most 3 run tabs at once, and leaves no tab @slow', async () => {
   // Run tabs are the grouped ones; counted every 50 ms in the worker.

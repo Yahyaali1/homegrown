@@ -6,7 +6,7 @@ import { actOf, alwaysOk, approveAllOk, argsKey, decide, taintsAfter, type Grant
 import { TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { newRun, parseGardener, type Gardener, type GardenRun, type Request, type Work } from '../../src/domain/garden/records.ts';
 import { trimmed } from '../../src/domain/garden/report.ts';
-import { argsText, callText, checkArgs, factsOf, parseConnector, replyOf, rpcReply, serverTools, sseSplit, toolFrom, tokenFor, type Connector, type ServerTool } from '../../src/domain/mcp.ts';
+import { argsText, callText, checkArgs, factsOf, parseConnector, replyOf, serverTools, sseSplit, toolFrom, tokenFor, type Connector, type ServerTool } from '../../src/domain/mcp.ts';
 import { appNamed, appOpen } from '../../src/domain/apps.ts';
 
 const g: Gardener = { v: 1, id: 'g1', name: 'Clerk', instructions: 'Be brief.', sites: ['shop.com'], minutes: 10, createdAt: 0 };
@@ -25,16 +25,30 @@ const call = (tool: string, args: Record<string, unknown> = { q: 'Ann' }) => ({ 
 const grantFor = (c: { tool: string; args: Record<string, unknown> }): Grant => ({ gardenerId: 'g1', tool: 'app_call', host: 'mcp.crm.com', argsKey: argsKey(c.args), at: 0 });
 
 test('an SSE reply with two events parses to the last JSON-RPC result for its id', () => {
-  const body = 'event: message\ndata: {"jsonrpc":"2.0","id":2,"result":{"n":1}}\n\nevent: message\ndata: {"jsonrpc":"2.0","id":2,\ndata: "result":{"n":2}}\n\n';
-  assert.deepEqual(rpcReply(body, 2, true), { result: { n: 2 } });
-  assert.equal(rpcReply(body, 3, true), null, 'no reply to that id yet');
-  assert.deepEqual(rpcReply('{"jsonrpc":"2.0","id":1,"error":{"message":"nope"}}', 1, false), { error: 'The server said: nope' });
+  const { messages } = sseSplit('event: message\ndata: {"jsonrpc":"2.0","id":2,"result":{"n":1}}\n\nevent: message\ndata: {"jsonrpc":"2.0","id":2,\ndata: "result":{"n":2}}\n\n');
+  assert.deepEqual(replyOf(messages, 2), { result: { n: 2 } });
+  assert.equal(replyOf(messages, 3), null, 'no reply to that id yet');
+  assert.deepEqual(replyOf([{ jsonrpc: '2.0', id: 1, error: { message: 'nope' } }], 1), { error: 'The server said: nope' });
   assert.equal(callText({ content: [{ type: 'text', text: 'a' }, { type: 'image' }] }), 'a\n[image]');
   assert.throws(() => callText({ isError: true, content: [{ type: 'text', text: 'bad' }] }), /The app said: bad/);
   // A stream is parsed event by event: a partial event waits for the rest.
   const a = sseSplit('data: {"id":1,"result":1}\n\ndata: {"id":2,');
   assert.deepEqual([a.messages, a.rest], [[{ id: 1, result: 1 }], 'data: {"id":2,']);
   assert.deepEqual(replyOf(sseSplit(`${a.rest}"result":2}\r\n\r\n`).messages, 2), { result: 2 });
+});
+
+test('a reply is read up to a byte cap; a stream only until its events have the answer', async () => {
+  const stub: unknown = new Proxy(() => stub, { get: () => stub, apply: () => stub }); // the worker's modules touch chrome on import
+  Object.assign(globalThis, { chrome: stub });
+  const { capped } = await import('../../src/background/mcp.ts');
+  assert.equal(await capped(new Response('{"a":1}'), 100, 'too long'), '{"a":1}');
+  await assert.rejects(capped(new Response('é'.repeat(60)), 100, 'too long'), /too long/, '120 bytes in 60 chars');
+  await assert.rejects(capped(new Response('x', { headers: { 'content-length': '5000' } }), 100, 'too long'), /too long/);
+  await assert.rejects(capped(new Response(null), 100, 'too long'), /empty reply/);
+  const open = new ReadableStream({ start: (c) => c.enqueue(new TextEncoder().encode('data: {"id":1,"result":1}\n\n')) }); // never closes
+  let got: unknown[] = [];
+  assert.equal(await capped(new Response(open), 100, 'too long', (m) => (got = m).length > 0), '');
+  assert.deepEqual(got, [{ id: 1, result: 1 }]);
 });
 
 test('a kept token goes only to the origin it was given for', () => {

@@ -1,13 +1,14 @@
 // Memory: answer history, highlights, a small knowledge base of pages tasks ran on, page snapshots for "changed
-// since your last visit", the gardeners' notebook, typed memory and Documents (plan T7), and the savings meter. Everything stays in this browser (IndexedDB 'eg-memory',
-// chrome.storage.local 'savings').
+// since your last visit", the gardeners' notebook, typed memory and Documents, asking across meetings, and the
+// savings meter. Everything stays in this browser (IndexedDB 'eg-memory', chrome.storage.local 'savings').
 import { engine, ask } from './engine.ts';
+import { pagesOnly } from './pagerequest.ts';
+import * as idb from '../shared/idb.ts';
 import { cosine, diffLines, keywordScore } from '../domain/compare.ts';
 import { defang } from '../domain/text.ts';
 import { forGardener, MEMORY_VERSION, NOTE_CHARS, parseNote, upgradeMemory, type Note } from '../domain/garden/notes.ts';
-import { docWriteRefused, ENTITY_TYPES, MEM, parseDoc, parseEntity, pathOk, type Doc, type Entity } from '../domain/memory.ts';
-import { isExtensionPage } from './pagerequest.ts';
-import { isMeetingPath, MEETINGS_ASK, newestChunks } from '../domain/meeting.ts';
+import { docWriteRefused, ENTITY_TYPES, MEM, parseDoc, parseEntity, pathOk, type Doc, type Entity, type HistoryEntry } from '../domain/memory.ts';
+import { isMeetingPath, leftOut, meetingOf, meetingsAsk, newestChunks } from '../domain/meeting.ts';
 import { chunks } from '../domain/reading.ts';
 
 const HISTORY_CAP = 2000;
@@ -17,7 +18,6 @@ const SNAPSHOT_CHARS = 50000;
 const SIMILAR = 0.6; // cosine for "same topic"; calibrated on MiniLM: related pages ~0.72, unrelated < 0.1
 const RATE = { inPerM: 0.5, outPerM: 1.5 }; // ponytail: rough cloud price (USD per 1M tokens) for the estimate
 
-interface HistoryEntry { id?: number; url: string; title: string; ask: string; answer: string; time: number }
 interface Embedded { id?: number; url: string; title: string; embedText: string; vec: number[] | null; time: number }
 interface KbEntry extends Embedded { summary: string }
 interface Highlight extends Embedded { text: string; note: string }
@@ -25,15 +25,13 @@ interface Snapshot { url: string; text: string; time: number }
 interface Stores { history: HistoryEntry; highlights: Highlight; kb: KbEntry; snapshots: Snapshot; notes: Note; entities: Entity; docs: Doc }
 type StoreName = keyof Stores;
 
-const db = new Promise<IDBDatabase>((resolve, reject) => {
-  const r = indexedDB.open('eg-memory', MEMORY_VERSION);
-  r.onupgradeneeded = (e) => upgradeMemory(r.result, e.oldVersion);
-  r.onsuccess = () => resolve(r.result);
-  r.onerror = () => reject(r.error);
-});
-const done = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => ((r.onsuccess = () => resolve(r.result)), (r.onerror = () => reject(r.error))));
-const store = async (name: StoreName, mode: IDBTransactionMode = 'readonly') => (await db).transaction(name, mode).objectStore(name);
-const all = async <N extends StoreName>(name: N) => (await done((await store(name)).getAll())) as Stores[N][];
+const db = idb.open('eg-memory', MEMORY_VERSION, upgradeMemory);
+const all = async <N extends StoreName>(name: N) => idb.all<Stores[N]>(await db, name);
+const get = async (name: StoreName, key: IDBValidKey) => idb.get<unknown>(await db, name, key);
+const put = async (name: StoreName, value: unknown) => void (await idb.put(await db, name, value));
+const del = async (name: StoreName, key: IDBValidKey) => void (await idb.del(await db, name, key));
+/** One read-write transaction on `name`, committed before it resolves. */
+const write = async <T>(name: StoreName, body: (s: IDBObjectStore) => Promise<T>) => idb.tx(await db, name, 'readwrite', (t) => body(t.objectStore(name)));
 
 async function embed(texts: string[]): Promise<number[][]> {
   const r = await engine<{ vectors?: number[][] } | number[][]>('embed', { texts });
@@ -50,8 +48,7 @@ async function withVectors<N extends 'kb' | 'highlights' | 'notes'>(name: N, par
   if (missing.length) {
     try {
       const vecs = await embed(missing.map((i) => ('embedText' in i ? i.embedText : i.text)));
-      const s = await store(name, 'readwrite');
-      missing.forEach((i, k) => ((i.vec = Array.from(vecs[k] ?? [])), s.put(i)));
+      await write(name, async (s) => missing.forEach((i, k) => ((i.vec = Array.from(vecs[k] ?? [])), s.put(i))));
     } catch {} // still not ready: callers fall back to keywords
   }
   return items;
@@ -76,7 +73,7 @@ export async function notesFor(gardenerId: string, query: string): Promise<Note[
 export async function addNote(n: Pick<Note, 'gardenerId' | 'text' | 'by'>): Promise<Note> {
   const note = parseNote({ v: 1, id: crypto.randomUUID(), at: Date.now(), ...n, text: n.text.trim() });
   if (!note) throw new Error(`A note is 1–${NOTE_CHARS} characters.`);
-  await done((await store('notes', 'readwrite')).add(note));
+  await put('notes', note);
   if (note.gardenerId) {
     const mine = (await notes()).filter((x) => x.gardenerId === note.gardenerId);
     const extra = mine.filter((x) => x.by !== 'person').sort((a, b) => a.at - b.at).slice(0, Math.max(0, mine.length - NOTES_CAP));
@@ -86,8 +83,7 @@ export async function addNote(n: Pick<Note, 'gardenerId' | 'text' | 'by'>): Prom
 }
 
 async function deleteIds(ids: string[]): Promise<void> {
-  const s = await store('notes', 'readwrite');
-  await Promise.all(ids.map((id) => done(s.delete(id))));
+  await write('notes', async (s) => ids.forEach((id) => s.delete(id)));
 }
 
 /** Every note of a deleted gardener, a newer build's too (by the raw record's gardenerId). */
@@ -110,14 +106,13 @@ export async function listNotes(gardenerId?: string): Promise<Omit<Note, 'vec'>[
 const entities = async () => (await all('entities')).flatMap((e) => parseEntity(e) ?? []);
 const docs = async () => (await all('docs')).flatMap((d) => parseDoc(d) ?? []);
 const bare = <T extends { vec?: unknown }>({ vec: _, ...x }: T) => x;
-const put = async (name: 'entities' | 'docs', value: Entity | Doc) => void (await done((await store(name, 'readwrite')).put(value)));
 
 /** The entities a prompt may hold: confirmed ones only. */
 export const confirmedEntities = async (): Promise<Entity[]> => (await entities()).filter((e) => e.confirmed);
 
 /** A memory file a gardener proposes: unconfirmed, by the model. Its id is the run's step, so a re-run stores it once. */
 export async function rememberEntity(e: Pick<Entity, 'id' | 'type' | 'name' | 'body' | 'gardenerId'>): Promise<Entity> {
-  const old = parseEntity(await done((await store('entities')).get(e.id)));
+  const old = parseEntity(await get('entities', e.id));
   if (old) return old;
   const x = parseEntity({ v: 1, aliases: [], fields: {}, ...e, by: 'model', confirmed: false, at: Date.now() });
   if (!x) throw new Error('That memory file isn’t valid.');
@@ -143,45 +138,40 @@ export async function writeDoc(gardenerId: string | undefined, path: string, tex
   return doc;
 }
 
-/** Every document whose path is under Meetings/ (plan T10). */
+/** The person's documents under Meetings/: the transcripts. */
 export const meetingDocs = async (): Promise<Doc[]> => (await docs()).filter((d) => !d.gardenerId && isMeetingPath(d.path));
-export const entityById = async (id: string): Promise<Entity | null> => parseEntity(await done((await store('entities')).get(id)));
+export const entityById = async (id: string): Promise<Entity | null> => parseEntity(await get('entities', id));
 /** Stores a checked entity as it is (its `by` and `confirmed` kept). */
 export async function putEntity(e: Entity): Promise<void> {
   if (!parseEntity(e)) throw new Error('That memory file isn’t valid.');
   await put('entities', e);
 }
-export const deleteRecord = async (name: 'entities' | 'docs', id: string) => void (await done((await store(name, 'readwrite')).delete(id)));
+export const deleteRecord = (name: 'entities' | 'docs', id: string) => del(name, id);
 
 /** Every document of a deleted gardener. */
 export async function deleteDocs(gardenerId: string): Promise<void> {
-  const s = await store('docs', 'readwrite');
-  for (const d of (await done(s.getAll())) as { id: string; gardenerId?: unknown }[]) if (d.gardenerId === gardenerId) s.delete(d.id);
+  await write('docs', async (s) => {
+    for (const d of (await idb.req(s.getAll())) as { id: string; gardenerId?: unknown }[]) if (d.gardenerId === gardenerId) s.delete(d.id);
+  });
 }
-
-const mine = (sender?: chrome.runtime.MessageSender) => {
-  if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
-};
 
 const words = (x: unknown) => (Array.isArray(x) ? x : String(x ?? '').split(',')).map((a) => String(a).trim()).filter(Boolean);
 
 async function addHistory(entry: HistoryEntry): Promise<void> {
-  const s = await store('history', 'readwrite');
-  await done(s.add(entry));
-  let extra = (await done(s.count())) - HISTORY_CAP;
-  if (extra <= 0) return;
-  const cur = s.openCursor(); // oldest first (autoIncrement keys)
-  cur.onsuccess = () => {
-    if (cur.result && extra-- > 0) (cur.result.delete(), cur.result.continue());
-  };
+  await write('history', async (s) => {
+    await idb.req(s.add(entry));
+    const extra = (await idb.req(s.count())) - HISTORY_CAP;
+    if (extra > 0) for (const k of await idb.req(s.getAllKeys(null, extra))) s.delete(k); // oldest first (autoIncrement keys)
+  });
 }
 
 async function addKb(url: string, title: string, summary: string): Promise<void> {
   const embedText = `${title}\n${summary}`.slice(0, 1500);
   const vec = await embed([embedText]).then((v) => Array.from(v[0] ?? []), () => null);
-  const s = await store('kb', 'readwrite');
-  for (const old of (await done(s.index('url').getAll(url))) as KbEntry[]) s.delete(old.id!);
-  s.add({ url, title, summary, embedText, vec, time: Date.now() } satisfies KbEntry);
+  await write('kb', async (s) => {
+    for (const old of (await idb.req(s.index('url').getAll(url))) as KbEntry[]) s.delete(old.id!);
+    s.add({ url, title, summary, embedText, vec, time: Date.now() } satisfies KbEntry);
+  });
 }
 
 // ---- page snapshots: "changed since your last visit" ----
@@ -189,10 +179,11 @@ const pageKey = (url: string) => url.split('#')[0]!;
 
 async function saveSnapshot(url: string, text: string | undefined): Promise<void> {
   if (!url.startsWith('http') || !text) return;
-  const s = await store('snapshots', 'readwrite');
-  s.put({ url: pageKey(url), text: text.slice(0, SNAPSHOT_CHARS), time: Date.now() } satisfies Snapshot);
-  const items = (await done(s.getAll())) as Snapshot[];
-  if (items.length > SNAPSHOT_CAP) items.sort((a, b) => a.time - b.time).slice(0, items.length - SNAPSHOT_CAP).forEach((i) => s.delete(i.url));
+  await write('snapshots', async (s) => {
+    s.put({ url: pageKey(url), text: text.slice(0, SNAPSHOT_CHARS), time: Date.now() } satisfies Snapshot);
+    const items = (await idb.req(s.getAll())) as Snapshot[];
+    if (items.length > SNAPSHOT_CAP) items.sort((a, b) => a.time - b.time).slice(0, items.length - SNAPSHOT_CAP).forEach((i) => s.delete(i.url));
+  });
 }
 
 /** Snapshots the tab's main text (what the in-page UI reads as the page) when a task ran on a selection. */
@@ -242,12 +233,9 @@ export async function onAnswer(raw: unknown, r: { text: string; userText?: strin
   }
 }
 
-// ---- ask across meetings (plan T10) ----
+// ---- ask across meetings ----
 
 const MEETING_CHUNKS = 400; // ponytail: transcripts are embedded per ask; store vectors on docs if this gets slow
-
-/** "Meetings/2026-10-30 14:05 Sync (part 2).md" → "2026-10-30 14:05 Sync". */
-const meetingOf = (path: string) => path.replace(/^Meetings\//, '').replace(/( \(part \d+\))?\.md$/, '');
 
 /** The transcript parts closest to a question, numbered for citing by meeting and time; '' when there are none. */
 async function meetingPassages(question: string): Promise<{ data: string; sources: { n: number; title: string; at: string; id: string }[]; left: number }> {
@@ -263,17 +251,27 @@ async function meetingPassages(question: string): Promise<{ data: string; source
     left,
   };
 }
-const NO_MEETINGS = 'No meetings yet. Record a call or transcribe a file first.';
 
-export const handlers = {
-  // Typed memory and Documents: private, so extension pages only. A person's save makes the file theirs and confirmed.
-  async entityList(_: unknown, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
+/**
+ * Ask across meetings: the closest transcript parts as data, for chat's `/meetings` to answer with the chat's model;
+ * with `answer`, the background model answers here (Library). Transcripts are private: they go in the data part only.
+ */
+async function meetAsk({ question, answer }: { question: string; answer?: boolean }) {
+  const p = await meetingPassages(String(question));
+  if (!p.data) throw new Error('No meetings yet. Record a call or transcribe a file first.');
+  const note = leftOut(p.left);
+  if (!answer) return { data: p.data, sources: p.sources, note };
+  const text = await ask(meetingsAsk(String(question)), p.data);
+  return { answer: [text, note].filter(Boolean).join('\n\n'), sources: p.sources };
+}
+
+// Typed memory, Documents and meetings are private: extension pages only. A person's save makes the file theirs and confirmed.
+const pages = pagesOnly({
+  async entityList() {
     return (await entities()).sort((a, b) => b.at - a.at).map(bare);
   },
-  async entitySave({ entity }: { entity: Partial<Entity> }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
-    const old = entity.id ? parseEntity(await done((await store('entities')).get(entity.id))) : null;
+  async entitySave({ entity }: { entity: Partial<Entity> }) {
+    const old = entity.id ? parseEntity(await get('entities', entity.id)) : null;
     const e = parseEntity({ v: 1, fields: {}, body: '', ...old, ...entity, aliases: words(entity.aliases ?? old?.aliases), id: old?.id ?? crypto.randomUUID(),
       type: ENTITY_TYPES.includes(entity.type as Entity['type']) ? entity.type : old?.type ?? 'person', by: 'person', confirmed: true, at: Date.now() });
     if (!e) throw new Error(`A memory file needs a name of up to ${MEM.name} characters, and a body of up to ${MEM.body}.`);
@@ -282,65 +280,50 @@ export const handlers = {
     return bare(e);
   },
   /** Keep a proposed file (a gardener's or a pack's) as it is: confirmed, `by` unchanged, so a model's template stays data. */
-  async entityKeep({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
-    const e = parseEntity(await done((await store('entities')).get(String(id))));
+  async entityKeep({ id }: { id: string }) {
+    const e = parseEntity(await get('entities', String(id)));
     if (!e) throw new Error('That memory file is gone.');
     await put('entities', { ...e, confirmed: true });
     return true;
   },
-  async entityDelete({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
-    await done((await store('entities', 'readwrite')).delete(String(id)));
-    return true;
-  },
-  async docList({ gardenerId }: { gardenerId?: string } = {}, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
+  entityDelete: async ({ id }: { id: string }) => (await del('entities', String(id)), true),
+  async docList({ gardenerId }: { gardenerId?: string } = {}) {
     return (await docs()).filter((d) => !gardenerId || d.gardenerId === gardenerId).sort((a, b) => a.path.localeCompare(b.path));
   },
-  async docGet({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
-    return parseDoc(await done((await store('docs')).get(String(id))));
-  },
-  async docSave({ doc }: { doc: Partial<Doc> }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
+  docGet: async ({ id }: { id: string }) => parseDoc(await get('docs', String(id))),
+  async docSave({ doc }: { doc: Partial<Doc> }) {
     if (!pathOk(doc.path)) throw new Error('That isn’t a valid document path.');
     return writeDoc(doc.gardenerId, doc.path, String(doc.text ?? ''), 'person', doc.id);
   },
-  async docDelete({ id }: { id: string }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
-    await done((await store('docs', 'readwrite')).delete(String(id)));
-    return true;
-  },
-  /** Chat's `/meetings question`: the closest transcript parts as data, for the chat's own model. */
-  async meetPassages({ question }: { question: string }, sender?: chrome.runtime.MessageSender) {
-    mine(sender);
-    const p = await meetingPassages(String(question));
-    return p.data ? p : { ...p, empty: NO_MEETINGS };
-  },
+  docDelete: async ({ id }: { id: string }) => (await del('docs', String(id)), true),
+  meetAsk,
+  meetPassages: meetAsk, // the name tests/meetings.spec.mjs still calls
+});
+
+export const handlers = {
+  ...pages,
   async memHistory({ q = '', limit = 200 }: { q?: string; limit?: number }) {
     const ql = q.toLowerCase();
     return (await all('history')).reverse().filter((h) => !ql || `${h.title} ${h.ask} ${h.answer} ${h.url}`.toLowerCase().includes(ql)).slice(0, limit);
   },
   async memClearHistory() {
-    await done((await store('history', 'readwrite')).clear());
+    await write('history', (s) => idb.req(s.clear()));
   },
   async memHighlightSave({ text, url, title, wantNote }: { text: string; url: string; title: string; wantNote?: boolean }, sender?: chrome.runtime.MessageSender) {
     const item: Highlight = { text, url, title, note: '', embedText: `${title}\n${text}`.slice(0, 1500), vec: null, time: Date.now() };
-    item.id = (await done((await store('highlights', 'readwrite')).add(item))) as number;
+    item.id = (await write('highlights', (s) => idb.req(s.add(item)))) as number;
     void snapshotTab(sender?.tab?.id, url);
     if (wantNote) {
       item.note = await ask('In one sentence, say why this passage might matter to the reader later. Reply with the sentence only.', text).catch(() => '');
-      (await store('highlights', 'readwrite')).put(item);
+      await put('highlights', item);
     }
     return item;
   },
   async memHighlights({ url }: { url?: string }) {
-    if (!url) return all('highlights');
-    return done((await store('highlights')).index('url').getAll(url));
+    return url ? idb.all<Highlight>(await db, 'highlights', 'url', url) : all('highlights');
   },
   async memHighlightDelete({ id }: { id: number }) {
-    await done((await store('highlights', 'readwrite')).delete(id));
+    await del('highlights', id);
   },
   /** "Have I read this before?": the closest past page on the same topic, or null. */
   async memSimilar({ text, url }: { text: string; url: string }) {
@@ -350,15 +333,8 @@ export const handlers = {
     const best = items.map((i) => ({ url: i.url, title: i.title, score: cosine(q, i.vec!) })).sort((a, b) => b.score - a.score)[0];
     return best && best.score > SIMILAR ? best : null;
   },
-  /** Ask your library: an answer from saved pages and highlights, citing them. `scope: 'meetings'` asks the transcripts. */
-  async memAsk({ question, scope }: { question: string; scope?: 'meetings' }, sender?: chrome.runtime.MessageSender) {
-    if (scope === 'meetings') {
-      mine(sender); // transcripts are private; they go in the data part only
-      const p = await meetingPassages(question);
-      if (!p.data) return { answer: NO_MEETINGS, sources: [] };
-      const answer = await ask(`${MEETINGS_ASK}\nQuestion: ${question}`, p.data);
-      return { answer: p.left ? `${answer}\n\n(Only the newest meetings were searched; ${p.left} older ${p.left === 1 ? 'one was' : 'ones were'} left out.)` : answer, sources: p.sources };
-    }
+  /** Ask your library: an answer from saved pages and highlights, citing them. */
+  async memAsk({ question }: { question: string }) {
     const items: (KbEntry | Highlight)[] = [...(await withVectors('kb')), ...(await withVectors('highlights'))];
     if (!items.length) return { answer: 'Your library is empty. Run a task on a page or save a highlight first.', sources: [] };
     const scored = (await rank(question, items, (i) => i.embedText)).slice(0, 5);
@@ -368,7 +344,7 @@ export const handlers = {
     return { answer, sources };
   },
   async memChanged({ url, text }: { url: string; text: string }) {
-    const snap = (await done((await store('snapshots')).get(pageKey(url)))) as Snapshot | undefined;
+    const snap = (await get('snapshots', pageKey(url))) as Snapshot | undefined;
     if (!snap) return null;
     const d = diffLines(snap.text, text);
     return d && { ...d, since: snap.time };

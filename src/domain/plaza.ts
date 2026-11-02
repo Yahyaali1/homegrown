@@ -1,4 +1,4 @@
-// Companion Plaza (plan T13, decision 14): one line a day per gardener, from its own notes and recent run answers only;
+// Companion Plaza: one line a day per gardener, from its own notes and recent run answers only;
 // the person's history titles join only with the `plazaHistory` setting on. Data-only prompt; the reply is shown as text.
 import { defang } from './text.ts';
 

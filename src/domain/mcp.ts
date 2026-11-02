@@ -1,6 +1,4 @@
-// Remote MCP connectors (ADR-17): the JSON-RPC shapes, the reply parser, the connector record, and the checks on what
-// a server sends. Server text is untrusted: a tool's name must be a plain name, its description only pre-fills a field
-// the person confirms, and a call's arguments are checked against the tool's schema before it is asked.
+// Remote MCP connectors (ADR-17): the connector record, JSON-RPC and sign-in shapes, and checks on all server text.
 import { site } from './garden/records.ts';
 
 export type Scope = 'off' | 'ask' | 'read';
@@ -45,12 +43,14 @@ export function unusable(name: unknown, schema: unknown): string | null {
   return bad(schema) ? 'an argument’s name isn’t a plain name' : null;
 }
 
+export const isLocal = (url: string) => ['localhost', '127.0.0.1'].includes(new URL(url).hostname);
+export const sameOrigin = (a: string, b: string) => new URL(a).origin === new URL(b).origin;
+
 /** A server URL: https, or http on this machine (a local test server). */
 export function serverUrl(raw: unknown): string | null {
   try {
     const u = new URL(String(raw));
-    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-    return u.protocol === 'https:' || (u.protocol === 'http:' && local) ? u.href : null;
+    return u.protocol === 'https:' || (u.protocol === 'http:' && isLocal(u.href)) ? u.href : null;
   } catch {
     return null;
   }
@@ -153,39 +153,19 @@ export function argsText(s: Schema): string {
 export function tokenFor(kept: { url: string; token?: string | undefined } | undefined, url: string, typed: string | undefined): string | undefined {
   if (typed) return typed;
   if (!kept?.token) return undefined;
-  if (new URL(kept.url).origin === new URL(url).origin) return kept.token;
+  if (sameOrigin(kept.url, url)) return kept.token;
   throw new Error('The server moved to another address: type its token again, or sign in again.');
 }
-
-/** The body as text, failing once it passes `max` chars (or its length says it will): a server can't fill memory. */
-export async function capped(res: Response, max: number, tooLong: string): Promise<string> {
-  if (Number(res.headers.get('content-length')) > max) {
-    void res.body?.cancel().catch(() => {});
-    throw new Error(tooLong);
-  }
-  if (!res.body) return '';
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let text = '';
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) return text;
-      if ((text += value).length > max) throw new Error(tooLong);
-    }
-  } finally {
-    void reader.cancel().catch(() => {});
-  }
-}
-
-/** A reply larger than this fails: a server can't fill the worker's memory. */
-export const MAX_REPLY = 1_000_000;
 
 export const rpcBody = (id: number | undefined, method: string, params?: Record<string, unknown>): string =>
   JSON.stringify({ jsonrpc: '2.0', ...(id !== undefined && { id }), method, ...(params && { params }) });
 
-/** The `data:` payloads of a `text/event-stream` body, each parsed; a broken or partial event is skipped. */
-export function sseMessages(text: string): unknown[] {
-  return text.split(/\r?\n\r?\n/).flatMap((ev) => {
+/** The complete events at the front of a stream's buffer, their `data:` parsed (a broken one skipped), and the partial one left. */
+export function sseSplit(buf: string): { messages: unknown[]; rest: string } {
+  const lf = buf.lastIndexOf('\n\n'), crlf = buf.lastIndexOf('\r\n\r\n');
+  const cut = Math.max(lf < 0 ? -1 : lf + 2, crlf < 0 ? -1 : crlf + 4);
+  if (cut < 0) return { messages: [], rest: buf };
+  const messages = buf.slice(0, cut).split(/\r?\n\r?\n/).flatMap((ev) => {
     const data = ev.split(/\r?\n/).filter((l) => l.startsWith('data:')).map((l) => l.slice(5).replace(/^ /, '')).join('\n');
     try {
       return data ? [JSON.parse(data) as unknown] : [];
@@ -193,26 +173,10 @@ export function sseMessages(text: string): unknown[] {
       return [];
     }
   });
+  return { messages, rest: buf.slice(cut) };
 }
 
-/** The complete events at the front of a stream's buffer, parsed, and the partial one left. */
-export function sseSplit(buf: string): { messages: unknown[]; rest: string } {
-  const lf = buf.lastIndexOf('\n\n'), crlf = buf.lastIndexOf('\r\n\r\n');
-  const cut = Math.max(lf < 0 ? -1 : lf + 2, crlf < 0 ? -1 : crlf + 4);
-  return cut < 0 ? { messages: [], rest: buf } : { messages: sseMessages(buf.slice(0, cut)), rest: buf.slice(cut) };
-}
-
-/** The reply to request `id` in a body (JSON or an event stream): the last message with that id. null: none yet. */
-export function rpcReply(body: string, id: number, stream: boolean): Reply | null {
-  if (stream) return replyOf(sseMessages(body), id);
-  try {
-    return replyOf([JSON.parse(body) as unknown].flat(), id);
-  } catch {
-    return { error: 'The server’s reply isn’t JSON.' };
-  }
-}
-
-type Reply = { result: unknown } | { error: string };
+export type Reply = { result: unknown } | { error: string };
 /** The last message for `id` among these, or null. */
 export function replyOf(messages: unknown[], id: number): Reply | null {
   const m = messages.filter(isObj).findLast((x) => x.id === id);
@@ -233,11 +197,10 @@ export function callText(result: unknown): string {
 // ---- Sign-in: the MCP authorization flow (OAuth 2.1 with PKCE, RFC 9728 and 8414 discovery, RFC 7591 registration) ----
 // Every endpoint, id and reply here comes from a server, so each is checked; an endpoint must pass `serverUrl` (https).
 
-const local = (u: string) => ['localhost', '127.0.0.1'].includes(new URL(u).hostname);
 /** An address a server named: https, and on this machine only when the connector itself is (a test server). */
 export const found = (raw: unknown, server: string): string | null => {
   const u = serverUrl(raw);
-  return u && (!local(u) || local(server)) ? u : null;
+  return u && (!isLocal(u) || isLocal(server)) ? u : null;
 };
 
 export interface OAuth { tokenUrl: string; clientId: string; clientSecret?: string; refresh?: string; resource: string; expiresAt?: number }
@@ -265,7 +228,7 @@ export function resourceMetaUrls(server: string, wwwAuthenticate: string | null)
 export function parseResourceMeta(raw: unknown, server: string): { resource: string; issuer: string; scopes?: string[] } {
   const m = isObj(raw) ? raw : {};
   const resource = m.resource === undefined ? server : found(m.resource, server);
-  if (!resource || new URL(resource).origin !== new URL(server).origin) throw new Error('The server’s sign-in details are for another server.');
+  if (!resource || !sameOrigin(resource, server)) throw new Error('The server’s sign-in details are for another server.');
   const first: unknown = Array.isArray(m.authorization_servers) ? m.authorization_servers[0] : null;
   const issuer = typeof first === 'string' && found(first, server) ? first : null;
   if (!issuer) throw new Error('The server names no https sign-in server.');

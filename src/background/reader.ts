@@ -18,9 +18,7 @@ export function menus(): void {
   chrome.contextMenus.create({ id: 'reader:page', title: 'Open in Homegrown reader', contexts: ['page'], documentUrlPatterns: PDF }, () => chrome.runtime.lastError);
 }
 
-export function init(): void {
-  chrome.contextMenus.onClicked.addListener((info) => {
-    const url = info.linkUrl || info.pageUrl;
-    if (String(info.menuItemId).startsWith('reader:') && url) void chrome.tabs.create({ url: readerUrl(url) });
-  });
-}
+export const onMenu = (info: chrome.contextMenus.OnClickData) => {
+  const url = info.linkUrl || info.pageUrl;
+  if (String(info.menuItemId).startsWith('reader:') && url) void chrome.tabs.create({ url: readerUrl(url) });
+};

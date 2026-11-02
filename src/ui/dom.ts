@@ -1,4 +1,4 @@
-// One typed way to build DOM (docs/architecture.md, ADR-7). Text always goes in as text; there is no innerHTML path
+// One typed way to build DOM (docs/architecture.md). Text always goes in as text; there is no innerHTML path
 // for data. Trusted static markup (the flower SVG, a component's own template) goes through `fromHtml`.
 export type Props<K extends keyof HTMLElementTagNameMap> = Partial<Omit<HTMLElementTagNameMap[K], 'style' | 'dataset'>> & {
   style?: Partial<CSSStyleDeclaration> | string;

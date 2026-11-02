@@ -139,7 +139,7 @@ test('an automatic plan yes (Approve plans for this test) pre-approves nothing: 
     assert.equal(seen, !auto);
     if (auto) {
       assert.equal(decide(r, g, calls[0]!, ctx), 'ask');
-      assert.ok(!r.requests.some((x) => x.fromPlan));
+      assert.ok(!r.requests.some((x) => x.origin === 'plan'));
     }
   }
 });

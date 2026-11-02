@@ -9,7 +9,7 @@ import { TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { parseEntity } from '../../src/domain/memory.ts';
 import type { Ability } from '../../src/domain/model.ts';
 import { actOf } from '../../src/domain/garden/policy.ts';
-import { sensitiveWord } from '../../src/domain/garden/classify.ts';
+import { classify, sensitiveWord } from '../../src/domain/garden/classify.ts';
 import { plazaLine, plazaThink } from '../../src/domain/plaza.ts';
 import { parseSettings } from '../../src/domain/settings.ts';
 
@@ -156,8 +156,10 @@ test('no pack offers act_my_tab or propose_routine; write-heavy packs write only
   const known = { connectors: [{ id: 'c', name: 'Stripe', url: 'https://mcp.stripe.test/', tools: [{ name: 'create_refund', describe: 'refund', scope: 'ask' as const, schema: {} }, { name: 'send_reply', describe: 'reply', scope: 'ask' as const, schema: {} }], guidelines: '' }] };
   assert.ok(actOf({ tool: 'app_call', args: { connector: 'c', tool: 'create_refund', args: {} } }, known as never)?.why);
   assert.ok(actOf({ tool: 'app_call', args: { connector: 'c', tool: 'send_reply', args: {} } }, known as never)?.why);
-  for (const w of ['reply_to_conversation', 'chat_postMessage', 'add_replies', 'posted', 'Pay', 'pay_invoice', 'Pay now']) assert.ok(sensitiveWord(w), w);
-  for (const w of ['postal code', 'postcode', 'Messages', 'read_conversation', 'get_payment', 'list_payments', 'Payment history']) assert.equal(sensitiveWord(w), null, w);
+  for (const w of ['reply_to_conversation', 'chat_postMessage', 'add_replies', 'posted', 'Pay', 'pay_invoice', 'Pay now', 'create_payment', 'make_payment', 'get_payment {"then":"refund"}']) assert.ok(sensitiveWord(w), w);
+  for (const w of ['postal code', 'postcode', 'Messages', 'read_conversation', 'get_payment', 'list_payments', 'searchPayouts']) assert.equal(sensitiveWord(w), null, w);
+  // A page's button is classified by the same words, as a prefix: "Complete payment" is sensitive.
+  for (const text of ['Complete payment', 'Payment', 'Pay now']) assert.ok(classify({ action: 'click', found: true, pageUrl: 'https://shop.com/', text }), text);
 });
 
 test('a seed that watches a page the person chooses ships with no page and stays paused', () => {

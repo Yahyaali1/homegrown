@@ -1,13 +1,11 @@
 // Library: history, highlights, "Ask your library", flashcard review, Memory and the savings meter. Data from the worker's
 // memory and chrome.storage.local 'flashcards'. Also runs inside the side panel's Library tab.
 import { $, busyButton, errLine, fail, tryIt } from './shell.ts';
-import { ENTITY_TYPES, type Doc, type Entity, type EntityType } from '../domain/memory.ts';
+import { ENTITY_TYPES, type Doc, type Entity, type EntityType, type HistoryEntry } from '../domain/memory.ts';
 import { h } from '../ui/dom.ts';
-import { bg } from '../shared/protocol.ts';
+import { bg, engineCall } from '../shared/protocol.ts';
 import { savingsLine, type Savings } from './savings.ts';
-import { audible, isCaption } from '../domain/audio.ts';
-import { clock } from '../domain/captions.ts';
-import { fileRefused, isMeetingPath, itemsOf, WINDOW_MS, type Line } from '../domain/meeting.ts';
+import { docsOfMeeting, fileRefused, isMeetingPath, itemsOf, meetingOf, notesOf, type Recording } from '../domain/meeting.ts';
 
 // Scoped to .lib-tabs / .lib-panel: the side panel has tabs of its own.
 for (const b of document.querySelectorAll<HTMLElement>('.lib-tabs [role=tab]')) {
@@ -22,7 +20,6 @@ const link = (url: string, text?: string) => h('a', { href: /^(https?|file):/.te
 bg<Savings>('memSavings').then((s) => ($('#lib-savings').textContent = savingsLine(s, true)), () => {});
 
 // ---- history ----
-interface HistoryEntry { url: string; title: string; ask: string; answer: string; time: number }
 let timer: ReturnType<typeof setTimeout> | undefined;
 async function renderHistory(): Promise<void> {
   const items = await bg<HistoryEntry[]>('memHistory', { q: $<HTMLInputElement>('#history-q').value });
@@ -53,22 +50,27 @@ async function renderHighlights(): Promise<void> {
 void renderHighlights();
 
 // ---- ask ----
-$<HTMLFormElement>('#ask-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const question = $<HTMLInputElement>('#ask-q').value.trim();
-  if (!question) return;
-  const answer = $('#ask-answer');
-  answer.hidden = false;
-  answer.textContent = 'Thinking on this device…';
-  $('#ask-sources').replaceChildren();
-  try {
-    const r = await bg<{ answer: string; sources: { url: string; title: string }[] }>('memAsk', { question });
-    answer.textContent = r.answer;
-    $('#ask-sources').replaceChildren(...r.sources.map((s) => h('li', {}, link(s.url, s.title))));
-  } catch (err) {
-    answer.textContent = (err as Error).message;
-  }
-};
+/** A question form: `#<id>-q` asked through `cmd`, the answer in `#<id>-answer` and its sources in `#<id>-sources`. */
+function askForm<S>(id: string, cmd: string, args: object, source: (s: S) => Node | string): void {
+  $<HTMLFormElement>(`#${id}-form`).onsubmit = async (e) => {
+    e.preventDefault();
+    const question = $<HTMLInputElement>(`#${id}-q`).value.trim();
+    if (!question) return;
+    const answer = $(`#${id}-answer`);
+    answer.hidden = false;
+    answer.textContent = 'Thinking on this device…';
+    $(`#${id}-sources`).replaceChildren();
+    try {
+      const r = await bg<{ answer: string; sources: S[] }>(cmd, { question, ...args });
+      answer.textContent = r.answer;
+      $(`#${id}-sources`).replaceChildren(...r.sources.map((s) => h('li', {}, source(s))));
+    } catch (err) {
+      answer.textContent = (err as Error).message;
+    }
+  };
+}
+askForm('ask', 'memAsk', {}, (s: { url: string; title: string }) => link(s.url, s.title));
+askForm('meet', 'meetAsk', { answer: true }, (s: { title: string; at: string }) => `${s.title}${s.at ? ` at ${s.at}` : ''}`);
 
 // ---- flashcards (spaced repetition) ----
 interface Flashcard { id: string; q: string; a: string; url?: string; title?: string; due?: number | string; interval?: number }
@@ -104,7 +106,7 @@ for (const b of document.querySelectorAll<HTMLElement>('[data-grade]')) {
 }
 void nextCard();
 
-// ---- memory: typed files in folders by type, then each gardener's Documents (plan T7) ----
+// ---- memory: typed files in folders by type, then each gardener's Documents; meetings have their own tab ----
 const FOLDERS: Record<EntityType, string> = { person: 'People', project: 'Projects', event: 'Events', research: 'Research', preference: 'Preferences' };
 const openIds = new Set<string>(); // folders and files left open survive a re-render
 type Listed = Omit<Entity, 'vec'>;
@@ -131,7 +133,7 @@ function entityFile(e: Listed): HTMLElement {
   }), 'primary');
   const del = busyButton(e.confirmed ? 'Delete' : 'Discard', tryIt(err, async () => (await bg('entityDelete', { id: e.id }), await renderMemory())), 'ghost');
   const keep = !e.confirmed && busyButton('Keep', tryIt(err, async () => (await bg('entityKeep', { id: e.id }), await renderMemory())), 'secondary');
-  const by = e.confirmed ? (e.correction ? 'your correction' : e.by === 'person' ? '' : 'kept from a gardener') : e.fields.meeting ? 'meeting notes by the model, off until you keep them' : e.by === 'person' ? 'from a companion pack, off until you keep it' : 'proposed by a gardener, off until you keep it';
+  const by = e.confirmed ? (e.correction ? 'your correction' : e.by === 'person' ? '' : 'kept from a gardener') : e.by === 'person' ? 'from a companion pack, off until you keep it' : 'proposed by a gardener, off until you keep it';
   return kept(h('details', { className: 'file' }, h('summary', {}, e.name, by && h('span', { className: 'muted small', textContent: ` · ${by}` })),
     h('div', { className: 'stack' }, aliases, fields, template, body, err, h('div', { className: 'row' }, keep, save, del))), e.id);
 }
@@ -145,16 +147,17 @@ function docFile(d: Doc): HTMLElement {
       busyButton('Delete', tryIt(err, async () => (await bg('docDelete', { id: d.id }), await renderMemory())), 'ghost')))), d.id);
 }
 
+const isMeeting = (d: Doc) => !d.gardenerId && isMeetingPath(d.path);
+
 async function renderMemory(): Promise<void> {
   const [list, docs, gardeners] = await Promise.all([bg<Listed[]>('entityList'), bg<Doc[]>('docList'), bg<{ id: string; name: string }[]>('gardenerList').catch(() => [])]);
-  const byType = ENTITY_TYPES.map((t) => folder(t, FOLDERS[t], list.filter((e) => e.type === t).map(entityFile)));
-  const meetings = docs.filter((d) => !d.gardenerId && isMeetingPath(d.path));
-  const others = docs.filter((d) => !meetings.includes(d));
+  const byType = ENTITY_TYPES.map((t) => folder(t, FOLDERS[t], list.filter((e) => e.type === t && !e.fields.meeting).map(entityFile)));
+  const others = docs.filter((d) => !isMeeting(d));
   const groups = Map.groupBy(others, (d) => d.gardenerId ?? '');
   const docFolders = [...groups].map(([id, ds]) => folder(`docs/${id}`, gardeners.find((g) => g.id === id)?.name ?? 'No gardener', ds.map(docFile)));
   const documents = folder('docs', 'Documents', docFolders);
   documents.firstElementChild!.textContent = `Documents (${others.length})`;
-  $('#memory-tree').replaceChildren(...byType, documents, folder('meetings', 'Meetings', meetings.map(docFile)));
+  $('#memory-tree').replaceChildren(...byType, documents);
 }
 
 const newType = $<HTMLSelectElement>('#memory-type');
@@ -172,21 +175,21 @@ $<HTMLFormElement>('#memory-new').onsubmit = (e) => {
 };
 void renderMemory().catch((e) => fail($('#memory-err'), e));
 
-/** Shows a memory file or document (a run's created card): the Memory tab, its folders and the file open. */
+/** Shows a memory file or document (a run's created card): its tab (Memory, or Meetings), its folders and the file open. */
 export async function openMemory(id: string): Promise<void> {
   document.querySelector<HTMLElement>('.tabs [data-tab=library]')?.click(); // the side panel's own tab, when inside it
-  document.querySelector<HTMLElement>('.lib-tabs [data-tab=memory]')?.click();
   const [list, docs] = await Promise.all([bg<Listed[]>('entityList'), bg<Doc[]>('docList')]);
-  const e = list.find((x) => x.id === id), d = docs.find((x) => x.id === id);
-  for (const k of e ? [e.type, id] : d ? (isMeetingPath(d.path) && !d.gardenerId ? ['meetings', id] : ['docs', `docs/${d.gardenerId ?? ''}`, id]) : []) openIds.add(k);
-  await renderMemory();
-  document.querySelector(`#memory-tree [data-key="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
+  const d = docs.find((x) => x.id === id);
+  const e = list.find((x) => x.id === id || (d && isMeeting(d) && x.fields.meeting && x.name === meetingOf(d.path)));
+  const meeting = !!e?.fields.meeting;
+  document.querySelector<HTMLElement>(`.lib-tabs [data-tab=${meeting ? 'meetings' : 'memory'}]`)?.click();
+  for (const k of e ? [e.type, e.id] : d ? ['docs', `docs/${d.gardenerId ?? ''}`, id] : []) openIds.add(k);
+  await (meeting ? renderMeetings() : renderMemory());
+  document.querySelector(`[data-key="${CSS.escape(e?.id ?? id)}"]`)?.scrollIntoView({ block: 'nearest' });
 }
 
-// ---- meetings (plan T10): record the call's tab with the mic, transcribe a file, ask across them, and the list ----
+// ---- meetings: record the call's tab with the mic, transcribe a file, ask across them, and the list ----
 const meetErr = $('#meet-err');
-const meetOpen = new Set<string>();
-interface Recording { tabId: number; title: string; started: number; mic: boolean }
 
 async function showRecording(): Promise<void> {
   const r = ((await chrome.storage.session.get('meeting')).meeting as Recording | undefined) ?? null;
@@ -198,7 +201,10 @@ async function showRecording(): Promise<void> {
   $('#meet-mic').hidden = !mic || mic.state === 'granted';
 }
 chrome.storage.session.onChanged.addListener((c) => c.meeting && (void showRecording(), !c.meeting.newValue && void renderMeetings()));
-chrome.runtime.onMessage.addListener((m: { type?: string }) => void (m?.type === 'meeting-notes' && renderMeetings().catch((e) => fail(meetErr, e))));
+chrome.runtime.onMessage.addListener((m: { source?: string; type?: string; text?: string }) => {
+  if (m?.type === 'meeting-notes') void showRecording().then(renderMeetings).catch((e) => fail(meetErr, e));
+  if (m?.source === 'engine' && m.type === 'meeting-progress') $('#meet-state').textContent = m.text ?? '';
+});
 void showRecording();
 
 // Chrome shares a tab's sound only after a click on the extension: the stream id is asked for here, in the click.
@@ -215,13 +221,7 @@ $('#meet-mic').onclick = tryIt(meetErr, async () => {
   await showRecording();
 });
 
-const b64 = (f: Float32Array) => {
-  const bytes = new Uint8Array(f.buffer, f.byteOffset, f.byteLength);
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-};
-// A file: decoded here, 16 kHz, 20 s windows through the speech model; no speaker labels.
+// A file goes to the recorder as a blob URL, decoded and transcribed there; the worker saves it and the list redraws.
 $<HTMLInputElement>('#meet-file').onchange = (e) => {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -229,76 +229,39 @@ $<HTMLInputElement>('#meet-file').onchange = (e) => {
   void tryIt(meetErr, async () => {
     const big = fileRefused(file.size);
     if (big) throw new Error(big);
-    // Decoded straight to 16 kHz (the speech model's rate), so a long file takes a quarter of the memory.
-    const audio = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(await file.arrayBuffer());
-    const long = fileRefused(file.size, audio.duration * 1000);
-    if (long) throw new Error(long);
-    const pcm = audio.getChannelData(0); // ponytail: first channel only
-    const step = (16000 * WINDOW_MS) / 1000;
-    const lines: Line[] = [];
-    for (let i = 0; i < pcm.length; i += step) {
-      $('#meet-state').textContent = `Transcribing ${file.name}: ${clock(i / 16)} of ${clock(pcm.length / 16)}…`;
-      const w = pcm.subarray(i, i + step);
-      if (!audible(w)) continue;
-      const { text } = await bg<{ text: string }>('transcribe', { audio: b64(w), sampleRate: 16000 });
-      if (isCaption(text.trim())) lines.push({ at: i / 16, end: (i + w.length) / 16, text: text.trim() });
+    const url = URL.createObjectURL(file);
+    try {
+      await engineCall('meetFile', { url, title: file.name.replace(/\.[^.]+$/, '') });
+    } finally {
+      URL.revokeObjectURL(url);
+      input.value = '';
     }
-    const m = await bg<Listed>('meetSave', { title: file.name.replace(/\.[^.]+$/, ''), lines });
-    meetOpen.add(m.id);
-    input.value = '';
-    await showRecording();
-    await renderMeetings();
   })();
-};
-
-$<HTMLFormElement>('#meet-ask').onsubmit = async (e) => {
-  e.preventDefault();
-  const question = $<HTMLInputElement>('#meet-q').value.trim();
-  if (!question) return;
-  const answer = $('#meet-answer');
-  answer.hidden = false;
-  answer.textContent = 'Thinking on this device…';
-  $('#meet-sources').replaceChildren();
-  try {
-    const r = await bg<{ answer: string; sources: { title: string; at: string; id: string }[] }>('memAsk', { question, scope: 'meetings' });
-    answer.textContent = r.answer;
-    $('#meet-sources').replaceChildren(...r.sources.map((s) => h('li', { textContent: `${s.title}${s.at ? ` at ${s.at}` : ''}` })));
-  } catch (err) {
-    answer.textContent = (err as Error).message;
-  }
 };
 
 function meetingEl(e: Listed, docs: Doc[]): HTMLElement {
   const err = errLine();
   const name = h('input', { value: e.name, maxLength: 80, attrs: { 'aria-label': `Name of ${e.name}` } });
   const items = itemsOf(e.body);
-  const notes = e.body.split('\n').filter((l) => !/^- \[( |x)\] /.test(l)).join('\n').trim();
   const list = h('ul', { className: 'items checklist' }, ...items.map((it, n) => h('li', {}, h('label', { className: 'check' },
     h('input', { type: 'checkbox', checked: it.done, onchange: (ev) => void tryIt(err, () => bg('meetCheck', { id: e.id, n, done: (ev.target as HTMLInputElement).checked }))() }), ` ${it.text}`))));
   const transcript = docs.map((d) => d.text).join('\n');
   const off = !e.confirmed && h('span', { className: 'muted small', textContent: ' · notes by the model, off until you keep them' });
-  const d = h('details', { className: 'file' }, h('summary', {}, e.name, h('span', { className: 'muted small', textContent: ` · ${e.fields.length ?? ''}${e.fields.meeting === 'file' ? ' · file' : ''}` }), off || ''),
+  return kept(h('details', { className: 'file' }, h('summary', {}, e.name, h('span', { className: 'muted small', textContent: ` · ${e.fields.length ?? ''}${e.fields.meeting === 'file' ? ' · file' : ''}` }), off || ''),
     h('div', { className: 'stack' },
-      h('div', { className: 'answer', textContent: notes }), items.length ? list : '',
+      h('div', { className: 'answer', textContent: notesOf(e.body) }), items.length ? list : '',
       h('details', {}, h('summary', { textContent: 'Transcript' }), h('div', { className: 'answer small', textContent: transcript || '(empty)' })),
       h('div', { className: 'row' }, name, busyButton('Rename', tryIt(err, async () => (await bg('meetRename', { id: e.id, name: name.value }), await renderMeetings())), 'secondary')),
       err,
       h('div', { className: 'row' },
         !e.confirmed && busyButton('Keep', tryIt(err, async () => (await bg('entityKeep', { id: e.id }), await renderMeetings())), 'secondary'),
-        busyButton('Delete', tryIt(err, async () => (await bg('meetDelete', { id: e.id }), await renderMeetings())), 'ghost'))));
-  d.open = meetOpen.has(e.id);
-  d.dataset.key = e.id;
-  d.ontoggle = () => (d.open ? meetOpen.add(e.id) : meetOpen.delete(e.id));
-  return d;
+        busyButton('Delete', tryIt(err, async () => (await bg('meetDelete', { id: e.id }), await renderMeetings())), 'ghost')))), e.id);
 }
 
-const partNo = (path: string) => Number(/\(part (\d+)\)\.md$/.exec(path)?.[1] ?? 1);
 async function renderMeetings(): Promise<void> {
   const [list, docs] = await Promise.all([bg<Listed[]>('entityList'), bg<Doc[]>('docList')]);
   const meetings = list.filter((e) => e.type === 'event' && e.fields.meeting).sort((a, b) => (b.fields.started ?? '').localeCompare(a.fields.started ?? ''));
-  const ofIt = (e: Listed) => docs.filter((d) => !d.gardenerId && (d.path === `Meetings/${e.name}.md` || d.path.startsWith(`Meetings/${e.name} (part `)))
-    .sort((a, b) => partNo(a.path) - partNo(b.path));
-  $('#meet-list').replaceChildren(...meetings.map((e) => meetingEl(e, ofIt(e))));
+  $('#meet-list').replaceChildren(...meetings.map((e) => meetingEl(e, docsOfMeeting(docs, e.name))));
   if (!meetings.length) $('#meet-list').append(h('p', { className: 'muted', textContent: 'No meetings yet.' }));
 }
 document.querySelector<HTMLElement>('.lib-tabs [data-tab=meetings]')?.addEventListener('click', () => void renderMeetings().catch((e) => fail(meetErr, e)));

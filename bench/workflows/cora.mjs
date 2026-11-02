@@ -1,4 +1,4 @@
-// Cora's workflow cases (see rosa.mjs). Calls and client notes are planted as her own documents (standing in for T10
+// Cora's workflow cases (see rosa.mjs). Calls and client notes are planted as her own documents (standing in for
 // meeting docs); the timesheet reads a fake calendar app (apps.mjs).
 import { KEW, SHOP } from '../garden-fixtures.mjs';
 import { calendar } from './apps.mjs';

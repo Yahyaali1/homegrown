@@ -74,6 +74,8 @@ export const MODELS: readonly ModelSpec[] = [
 export const modelById = (id: string): ModelSpec | undefined => MODELS.find((m) => m.id === id);
 /** Was this model measured for the ability? No entry means it cannot. */
 export const can = (name: string, a: Ability): boolean => !!modelById(name)?.abilities?.includes(a);
+/** Some catalog model is measured for `a`: features that need it can work at all. */
+export const anyCan = (a: Ability): boolean => MODELS.some((m) => can(m.id, a));
 export const supports = (m: ModelSpec, c: Capability): boolean => m.capabilities.includes(c);
 /** A model with no measured `agent` runs only routines whose steps are set. */
 export const DEFAULT_AGENT: NonNullable<ModelSpec['agent']> = { loop: false, maxSteps: 4 };

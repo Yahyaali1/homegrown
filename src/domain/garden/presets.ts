@@ -1,4 +1,4 @@
-// Companion packs (plan T12, decision 12): data only. Hire makes a gardener from one, with its skills and routines
+// Companion packs: data only. Hire makes a gardener from one, with its skills and routines
 // switched off and its template files unkept. A preset can narrow tools, never widen them, and never adds a site.
 // Every seed except direct reads needs `workflow:<preset>/<id>`, which only that preset's bench suite can earn.
 import type { Ability } from '../model.ts';
@@ -117,7 +117,7 @@ export const PRESETS: Preset[] = [
         work: { kind: 'plan', request: 'Read the new bug reports, try each one\'s steps on staging, and for each one that reproduces, file a bug in the connected tracker with steps, expected and actual.' },
       },
     ],
-    // `act` only in its own tabs; never `act_my_tab`. Filing is an `app_call`, asked each time (ADR-17).
+    // `act` only in its own tabs; never `act_my_tab`. Filing is an `app_call`, asked each time.
     tools: ['search', 'read_page', 'act', 'draft', 'note', 'notify', 'read_my_tab', 'app_call', 'remember', 'doc_read', 'doc_write'],
     templates: [
       { type: 'project', name: 'Bug report', template: 'Title, steps to reproduce, expected, actual, console errors, failed requests, page URL.' },

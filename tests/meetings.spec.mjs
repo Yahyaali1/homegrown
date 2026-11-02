@@ -1,12 +1,15 @@
-// Meetings end to end (plan T10). Chrome's fake microphone says tests/fixtures/speech.wav ("You"), and an audio file
+// Meetings end to end. Chrome's fake microphone says tests/fixtures/speech.wav ("You"), and an audio file
 // played in the recorder stands in for the call's tab ("Them"), as liveStartFile does for captions (ADR-14). Whisper
 // (the speech model, not a language model) is real, so the recording and file tests are @slow. The offer bar on a
 // call page needs no model. No model is measured for `notes`, so a meeting is its transcript only.
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
 import path from 'node:path';
-import { launch, serve, ROOT } from './harness.mjs';
+import { bgOn, launch, ROOT, serve } from './harness.mjs';
 
-let ctx, sw, id, panel, site;
+let ctx, sw, id, panel, bg, site;
+const wav = fs.readFileSync(path.join(ROOT, 'tests/fixtures/speech.wav'));
+const CLIP_MS = (1000 * wav.readUInt32LE(wav.indexOf('data') + 4)) / wav.readUInt32LE(28); // its data bytes over its byte rate
 
 test.describe.configure({ mode: 'serial' });
 
@@ -18,6 +21,7 @@ test.beforeAll(async () => {
   await ctx.route('https://meet.google.com/**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Weekly sync</title><h1>Call</h1>' }));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  bg = bgOn(panel);
   if (await bg('meetState')) await bg('meetStop').catch(() => {});
   for (const e of await bg('entityList')) if (e.fields.meeting) await bg('meetDelete', { id: e.id });
 });
@@ -26,12 +30,6 @@ test.afterAll(async () => {
   await ctx?.close();
   site?.server.close();
 });
-
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
 
 async function meetingsTab() {
   await panel.bringToFront();
@@ -69,7 +67,7 @@ test('a recorded call becomes a Meetings doc with "You:" and "Them:" lines, list
   expect(rec.mic).toBe(true);
   await meetingsTab();
   await expect(panel.locator('#meet-record')).toHaveText('■ Stop and save');
-  await panel.waitForTimeout(9000); // the tab's clip (5.6 s) plays out; the fake mic keeps talking
+  await panel.waitForTimeout(CLIP_MS + 3000); // real time: the tab's clip plays out while the fake mic keeps talking
   await panel.locator('#meet-record').click();
   await expect(panel.locator('#meet-record')).toHaveText('● Record this tab');
   await expect.poll(async () => (await bg('entityList')).some((e) => e.fields.meeting === 'call'), { timeout: 150_000 }).toBe(true);
@@ -87,7 +85,7 @@ test('a recorded call becomes a Meetings doc with "You:" and "Them:" lines, list
   await item.locator('summary', { hasText: 'Transcript' }).click();
   await expect(item.locator('.answer.small')).toContainText('Them:');
 
-  const p = await bg('meetPassages', { question: 'What do bees do?' });
+  const p = await bg('meetAsk', { question: 'What do bees do?' });
   expect(p.sources[0]?.title).toBe(meeting.name);
   expect(p.data).toContain(`[1] ${meeting.name}`);
   await page.close();

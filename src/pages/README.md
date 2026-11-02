@@ -45,9 +45,12 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - Schedules, monitors and missions (`schedule`, `runScheduleNow`, `unschedule`, `checkNow`, `unwatch`,
     `agentOpen`, `missionsLive`, `missionOpen`, `missionsList`, `missionDelete`).
   - Model pickers for each task, and the model manager.
-- `chat.ts` (the side panel's Chat tab, plan T6): `startChat(deps)`, `checkPending()`, `addMessage(role, text)`.
-  - Saved chats in IndexedDB `hg-chat` v1, store `chats` (`domain/chat.ts` `Chat`), opened from the side panel
-    itself. Each save reads, edits and writes in one transaction (`upsertTurns`, `dropFrom`, or a field patch), so
+- `chat.ts` (the side panel's Chat tab): `startChat(deps)`, `checkPending()`, `addMessage(role, text)`.
+  - What is typed goes through `domain/chat.ts` `route`: Connect form, an error, `/meetings` (`meetAsk` passages in
+    the data), a possible setting (only a message with a setting word reaches the model, `proposeSetting`), or a turn
+    built by `userTurn` (and `withLead` for a chat's first message).
+  - Saved chats in IndexedDB `hg-chat` v1, store `chats` (`domain/chat.ts` `Chat`), opened with `shared/idb.ts`
+    `openChats()`. Each save reads, edits and writes in one transaction (`upsertTurns`, `dropFrom`, or a field patch), so
     another panel's turns stay; a `BroadcastChannel('hg-chat')` ping reloads the list and an idle open chat. The
     timed save while streaming doesn't ping or redraw the list. The Chats list (newest first, with ×) has a search box: matches are `<mark>`s built from text nodes.
   - A model answer is saved every 1 s with `partial: true`. A reload stops it (`pagehide` cancels its id); the
@@ -64,7 +67,10 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     answer has Go and Run as a plan (`gardenRun` with `plan` work and a chosen gardener).
   - Also images, Prompt Lab, sampling, `proposeSetting` and right-click actions queued in `storage.session`
     (Open in chat's text arrives as the attachment).
-- `garden.ts` (the side panel's Garden tab): gardeners, routines (a paused routine with `by` other than `person`
+- `garden.ts` (the side panel's Garden tab; its sections are `garden-gardeners.ts` (gardeners, hire, the gardener
+  form), `garden-notes.ts` (notebook, allowed actions), `garden-routines.ts`, `garden-skills.ts`, `garden-connectors.ts`
+  and `garden-runs.ts` (requests and runs), sharing `garden-state.ts`; `garden.ts` re-exports `openConnect`,
+  `rememberOffer` and `showRequests`): gardeners, routines (a paused routine with `by` other than `person`
   says "Proposed by <name>. Turn on?" and its button is Turn on), runs in groups (Needs you, Unread, each routine,
   by hand). A run's Open view reads top to bottom: the request, each step (Retry step where `retryStep` allows),
   drafts, created cards with Open, "How it worked" (turns and outputs), and Report (`homegrown-report-<id>.json`,
@@ -83,7 +89,7 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   (the data part). Plan T8: Garden → Skills lists skills (on/off, Test on cases with "Approve plans for this test",
   cases with Pass / Fail marks where there is no `expect`, Improve with the evidence and a proposed edit as a
   `diffText` diff with Accept / Discard, History, Edit); the routine form's skill select ("Not tested yet" when no
-  case passed). Plan T12: Garden → "Hire a companion" (`#hire`, `#garden-hire`) has a card per pack with its
+  case passed). Garden → "Hire a companion" (`#hire`, `#garden-hire`) has a card per pack with its
   suggested sites as unchecked boxes; a hired gardener's row asks its interview once (`ui/questions.ts` with Skip),
   then saves `profile` and the instructions with `withProfile`. A read routine has "Change pages" ("Set the page",
   open, when it has none); an event routine watches the first page. A pack's `note` shows on its card. A routine or skill whose needs the gardens model
@@ -98,7 +104,7 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
 - `tray.ts`: `tray(host, deps)`, one list of the open requests across runs, in `#garden-requests` and
   `#chat-requests` (above the chat input). Approve, reach, did-it-happen, takeover, plan, help (Show me focuses its
   tab and window; Done, Skip) and question cards; an approve in the person's own tab, or for an app tool not marked Read (`alwaysOk` false), has no Always; an
-  approve for `act`, `act_my_tab` or `app_call` (`EDITABLE`) shows its args as fields, and Yes sends the edited `args`
+  approve `editOk` allows (`act`, `act_my_tab` or `app_call`, not an edit asked again) shows its args as fields, and Yes sends the edited `args`
   (Always is hidden while they differ). With two or more requests that `approveAllOk` allows, "Approve all" sends
   them to `requestAnswerAll`. A question with `questions` uses `ui/questions.ts`.
 - `mission.ts` (`agent.html`): Mission control.
@@ -127,18 +133,19 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     a saved mission ready to save again (from the "not confirmed for unattended runs" notification). An opened
     mission keeps its id through a run, so Save updates it.
 - `library.ts` (`library.html`, and the Library tab of the side panel): history, highlights, "Ask your
-  library", flashcard spaced repetition, Memory (plan T7: folders by type, then Documents/<gardener>; each file
-  edits in place; a gardener's proposed file shows Keep / Discard; `Meetings/` docs in their own folder), Meetings
-  (plan T10: Record / Stop for the active tab, Allow the microphone, Transcribe a file decoded here and sent in 20 s
-  windows through `transcribe`, Ask across meetings, and each meeting with its notes, checklist, transcript, Rename,
-  Keep and Delete; the list redraws when the worker says notes are written, `meeting-notes`) and the savings meter. Chat's `/meetings <question>` (no skill of that name) puts the closest
-  transcript parts in the data. Both pages link to
-  Outputs. `openMemory(id)` opens a file or document (a run's `doc` or `memory` card).
-- `plaza.ts` (`plaza.html`, plan T13): Companion Plaza. Each gardener's flower (`flower` with `lookOf`), still, with
+  library", flashcard spaced repetition, Memory (folders by type, then Documents/<gardener>; each file edits in
+  place; a gardener's proposed file shows Keep / Discard; meetings are left out, they have their own tab), Meetings
+  (Record / Stop for the active tab, Allow the microphone, Transcribe a file (handed to the recorder as a blob URL,
+  `engineCall('meetFile')`, progress from its `meeting-progress` broadcasts), Ask across meetings (`meetAsk` with
+  `answer`), and each meeting with its notes, checklist, transcript, Rename, Keep and Delete; the list redraws on the
+  worker's `meeting-notes`) and the savings meter. Both ask forms are `askForm(id, cmd, args, source)`. Both pages
+  link to Outputs. `openMemory(id)` opens a file or document (a run's `doc` or `memory` card), a meeting's in the
+  Meetings tab.
+- `plaza.ts` (`plaza.html`): Companion Plaza. Each gardener's flower (`flower` with `lookOf`), still, with
   its name; today's lines above (`bg('plazaLines')`, updated through `storage.local`). A click turns the flower one
   petal (not under Reduce Motion), opens the side panel and sets `pending` with `gardenerId`; chat then shows
   "Ask <name>…" and puts the gardener's instructions before the new chat's first message.
-- `outputs.ts` (`outputs.html`, plan T9): with `?id=`, one artifact from `bg('artifactGet')`; without, the list
+- `outputs.ts` (`outputs.html`): with `?id=`, one artifact from `bg('artifactGet')`; without, the list
   (`artifactList`, Delete), "Brand kit from a site" (`brandRead`) and "Write a brief".
   - Table or chart: Table · Bars · Line (`ui/chart.ts`, with KPI cards); cells edit in place, rows are added and
     deleted and sorted by header, each change saved (debounced 300 ms); Export CSV (`toCsv`), PNG (the chart

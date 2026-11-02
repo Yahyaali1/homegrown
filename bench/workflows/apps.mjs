@@ -1,7 +1,7 @@
-// The connected apps the workflow cases stand in for (bench/fake-mcp.mjs serves them). Scope as the person would set
+// The connected apps the workflow cases stand in for (tests/fake-mcp.mjs serves them). Scope as the person would set
 // it: 'read' for lookups (the bench says yes to those asks), 'ask' for writes (each case plants its answer; a sensitive
 // one is always answered no). Data is fixed; a lookup by an unknown key says so.
-import { arg, none } from '../fake-mcp.mjs';
+import { arg, none } from '../../tests/fake-mcp.mjs';
 
 const by = (rows, miss) => (a) => rows[String(Object.values(a)[0] ?? '').trim()] ?? miss;
 const read = (name, describe, schema, reply) => ({ name, describe, scope: 'read', schema, reply });

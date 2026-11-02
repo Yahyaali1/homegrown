@@ -19,16 +19,21 @@ runtime adapters and storage live outside `domain/`.
 - `html.ts`: `decode`, `htmlToText`, `parseDuckDuckGo`, `parseBing`, `jsonArray`. Regex HTML-to-text with no
   DOM, parsing of search result pages into `SearchResult[]`, and the first JSON array in a model reply.
   `parseDuckDuckGo` and `parseBing` return at most `n = 8` results by default.
-- `chat.ts` (plan T6): `Chat`, `ChatTurn`, `Mode`, `modeModel`, `isLong`, `parseChat`, `interrupted`,
-  `duplicate`, `upsertTurns`, `dropFrom`, `planFirst`, `titleOf`, `engineTurns`, `searchChats`, `highlightParts`, `questionBlock`, `splitThinking`,
-  `chatReport`. The saved-chat record and its pure rules.
-- `meeting.ts` (plan T10): `Line` (`who?: 'You' | 'Them'`, `at`, `end`, `text`), `MEETING_HOSTS`, `isMeetingHost`
+- `chat.ts`: `Chat`, `ChatTurn`, `Mode`, `Question` (a question block's item, asked by `ui/questions.ts`), `modeModel`,
+  `isLong`, `parseChat`, `interrupted`, `duplicate`, `upsertTurns`, `dropFrom`, `planFirst`, `titleOf`, `engineTurns`,
+  `searchChats`, `highlightParts`, `questionBlock`, `splitThinking`, `chatReport`, `excerpt`, `route(typed, ctx)`
+  (`connect` | `error` | `meetings` | `setting` | `send`: where a typed message goes), `userTurn` (text, label and
+  data part of the person's turn), `withLead` (plan mode's ask and a companion's instructions before a chat's first
+  message). The saved-chat record and its pure rules.
+- `meeting.ts`: `Line` (`who?: 'You' | 'Them'`, `at`, `end`, `text`), `MEETING_HOSTS`, `isMeetingHost`
   (a host or a `zoom.us` subdomain), `mergeLines` (time order; one speaker's lines within 2 s joined), `transcriptOf`
-  (`[m:ss] You: …`), `pieces` (≤ 20 000 chars at line ends), `meetingName`, `meetingPath`, `isMeetingPath`, `timeParts`
+  (`[m:ss] You: …`), `pieces` (≤ 20 000 chars at line ends), `meetingName`, `meetingPath`, `isMeetingPath`, `meetingOf(path)` (a doc path's meeting name), `docsOfMeeting(docs, name)` (the
+  person's parts, in order), `Recording` (the call being recorded, with the lines heard so far), `timeParts`
   (20 minutes), `NOTES_PROMPT`, `parseNotes` (drops an owner the transcript doesn't name; "You" is the mic; "Them"
-  is no owner), `mergeNotes`, `notesBody` (action items as `- [ ]`), `itemsOf`, `checkItem`, `NO_NOTES`, `MEETINGS_ASK`, `meetingText` (failed windows counted), `leftCall`,
-  `newestChunks` (newest meetings first, the rest counted), `fileRefused` (over 100 MB or 2 hours).
-- `memory.ts` (plan T7): `Entity`, `Doc`, `ENTITY_TYPES`, `MEM` (limits), `parseEntity`, `parseDoc`, `pathOk`,
+  is no owner), `mergeNotes`, `notesBody` (action items as `- [ ]`), `itemsOf`, `notesOf`, `checkItem`, `NO_NOTES`, `meetingsAsk(question)`, `leftOut(n)`, `meetingText` (failed windows counted), `leftCall`,
+  `newestChunks` (newest meetings first, the rest counted), `serial(max)` (one job at a time, refusing past `max`
+  waiting), `fileRefused` (over 100 MB or 2 hours).
+- `memory.ts`: `Entity`, `Doc`, `HistoryEntry`, `ENTITY_TYPES`, `MEM` (limits), `parseEntity`, `parseDoc`, `pathOk`,
   `docRefused` (`Meetings/` and `Documents/` paths), `anchorsIn` (`@Name` or alias, confirmed only, ≤ 3), `reference`,
   `memoryParts` (anchors as data; a routine entity's template is instruction only when the person wrote it),
   `correctionOf` (no / don't / never / always), `correctionEntity`.
@@ -38,19 +43,20 @@ runtime adapters and storage live outside `domain/`.
 - `markdown.ts`: `escapeHtml`, `markdown`, `markdownWithTables`. Render a small markdown subset to HTML.
   The text is escaped before any tags are added.
 - `model.ts`: `Role`, `Part`, `Turn`, `Sampling`, `Capability`, `RuntimeId`, `ModelSpec`, `MODELS`,
-  `modelById`, `supports`, `Ability`, `can` (a measured ability, ADR-18; no entry: cannot), `TASKS`, `TaskId`, `userText`, `instructionWithData`. Chat-turn types that do
+  `modelById`, `supports`, `Ability`, `can` (a measured ability; no entry: cannot), `anyCan` (some catalog model has it), `TASKS`, `TaskId`, `userText`, `instructionWithData`. Chat-turn types that do
   not depend on one model, the static catalog of Gemma 4 E2B/E4B LiteRT-LM models, capability lookup and
   prompt helpers. `RuntimeId` is `'litert-lm' | 'webllm' | 'prompt-api'`, but every `MODELS` entry uses
   `'litert-lm'`.
-- `reading.ts`: `OutlineNode`, `Question`, `parseOutline`, `parseQuiz`, `parseFlashcards`, `parseDialogue`,
-  `parseNumbered`, `chunks`, `sentences`, `bestPassages`, `fuzzy`, and for many files (plan T9) `DocFile`, `Passage`,
+- `reading.ts`: `OutlineNode`, `QuizQuestion`, `parseOutline`, `parseQuiz`, `parseFlashcards`, `parseDialogue`,
+  `parseNumbered`, `chunks`, `sentences`, `bestPassages`, `fuzzy`, and for many files `DocFile`, `Passage`,
   `READER_FILES` (10), `citeLabel` ("file p.N"), `filePassages` (each file's best passages by keyword overlap),
   `CITE_NOTE`, `CITE_ANSWER`, `keepCited` (drops a citation whose page doesn't hold the sentence's words, by
   `grounded`), `citeFiles(ask, question, files, budget)` (map per file, reduce, `keepCited`). Parsers for fixed-format model output,
   paragraph chunking and passage selection for retrieval, sentence splitting for read-aloud, and the
   palette's fuzzy match. Defaults: `chunks` uses `size = 800`; `bestPassages` uses `max = 6, within = 0.6`.
 - `settings.ts`: `Theme`, `SWITCHES`, `SwitchKey`, `Settings`, `DEFAULTS`, `parseSettings`,
-  `SettingChoice`, `chatSettings`, `checkChoice`, `changeFor`. The settings schema and its defaults, a
+  `SettingChoice`, `chatSettings`, `checkChoice`, `changeFor`, `mayBeSetting` (a setting word: only then does chat
+  ask the model), `settingPrompt`. The settings schema and its defaults, a
   type-checked merge of stored values, the list of settings that chat may change, and the patch to store.
 - `tasks.ts`: `TaskKind`, `Task`, `KINDS`, `parseTasks`, `importTasks`, `moveTask`. The task schema,
   validation of stored tasks, JSON import merged by id, and reordering.
@@ -80,19 +86,19 @@ runtime adapters and storage live outside `domain/`.
   pages see), `factsOf`, `AppTool` (`describe` the person confirmed, `scope` `off` / `ask` / `read`), `Schema`,
   `serverTools` (`tools/list` → `ServerTool` with `unusable`), `toolFrom` (the form's first choice: an empty line), `tokenFor`
   (a kept token only to its origin), `parseConnector`,
-  `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `rpcBody`, `sseMessages`, `sseSplit`, `rpcReply`, `replyOf`, `MAX_REPLY`,
+  `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `isLocal`, `sameOrigin`, `rpcBody`, `sseSplit`, `replyOf`,
   `callText`, `STDIO`. Sign-in (MCP authorization): `Connector.oauth?` (`OAuth`: token endpoint, client id and
   secret from registration, refresh token, resource; never in `factsOf`), `resourceMetaUrls` (the 401's
   `resource_metadata`, else RFC 9728 well-known paths), `parseResourceMeta` (same origin as the server, an https
   sign-in server), `asMetaUrls` and `parseAsMeta` (RFC 8414 then OpenID; issuer must match; S256 required),
   `signInRefusal` (no registration endpoint: paste a token), `registerBody`, `parseClient`, `challengeOf`,
   `randomCode`, `authorizeUrl` (with `resource`), `codeOf` (state checked), `parseTokens` (bearer only), `found` (a
-  discovered address: https, and on this machine only when the connector is), `capped` (a reply read up to a cap).
+  discovered address: https, and on this machine only when the connector is).
 - `apps.ts` (plan T11): `APPS` (known remote MCP servers: name, URL, docs, hosts), `appNamed` ("connect <name>",
   `fuzzy`), `appOpen(url, meta, connectors)` (a connected app, a known one, else the page's own name).
 - `zip.ts`: `Zip`, `unzip`, `zipWrite`, `crc32`. Reads the zip central directory and returns a lazy reader for each
   entry; `zipWrite(entries)` packs stored entries (CRC-32, UTF-8 names), which every unzip reads.
-- `outputs.ts` (plan T9): `Artifact` (`table`, `chart`, `deck`, `brief`, `onepager`, `brand`; `v: 1`), `Table`,
+- `outputs.ts`: `Artifact` (`table`, `chart`, `deck`, `brief`, `onepager`, `brand`; `v: 1`), `Table`,
   `Cell`, `Slide`, `Deck`, `Doc`, `Brand`, `parseArtifact` (per kind; null for a bad record or a newer `v`),
   `parseTable`, `parseDeckData`, `parseBrand` (colours must be `rgb()`/hex, fonts plain, a logo only as an image
   data URL), `DECK_MAX` (15), `deckFromBrief` (a title slide, then one per `##` heading with its lines as bullets),
@@ -107,74 +113,78 @@ runtime adapters and storage live outside `domain/`.
 - `garden/`: gardeners, the agents that tend recurring work ([plan](../../docs/plan/S-gardeners.md), ADR-15 and
   ADR-16 in [architecture.md](../../docs/architecture.md)). The worker wires it to Chrome in
   `background/garden.ts` and `background/gardentools.ts`.
-  - `records.ts`: `Gardener` (`preset?`, `profile?`, plan T12), `Routine` (`by?`, `needs?`; `noPage`/`NO_PAGE`: a
-    pack's read with no URL yet, which parses only paused), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`, `files?`), `RunFile`, `Gardener` (`devtools?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (kind `help`: yes reads the page again, no fails the step with `HELP_REFUSED`; `questions?`,
-    `editedFrom?`, `noEdit?`, `answer.args?`), `Seen`, `Look`, `Mention`, `PlannedCall`, `LIMITS`,
-    `PUBLIC_SUFFIXES`, `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
+  - `records.ts`: `Gardener` (`preset?`, `profile?`), `Routine` (`by?`, `needs?`; `noPage`/`NO_PAGE`: a
+    pack's read with no URL yet, which parses only paused), `GardenRun` (`inbox?`, `followUp?`, `seenAt?`, `created?`, `retry?`, `trigger?`, `deadline?`, `files?`), `Gardener` (`devtools?`), `When` (`every`, `daily`, `weekly`, `monthly`, `once`, `event`), `Trigger`, `Message`, `Created`, `Turn`, `Step` (`tries?`), `Request` (kind `help`: yes reads the page again, no fails the step with `HELP_REFUSED`; `questions?`,
+    `origin?`: `'plan'` or `{ edit }`, read from an older record's `fromPlan` / `editedFrom`; `answer.args?`), `Seen`,
+    `Look`, `Mention`, `PlannedCall`, `LIMITS`, `isEnded`, `isWorking`, `requestOf` (ask or plan work), `site`, `sitesOf`, `bare`, `parseGardener`, `parseRoutine`, `parseRun`, `parseWork`,
     `parseLook`, `lookOf`, `randomLook`, `personUrls`, `newRun`, `historyGroup` (Needs you, Unread: ended after `seenAt`,
     routine, by hand). Every record has `v: 1`; a parser returns `null` for
     a bad record or a newer `v`. A site is a bare host and matches its subdomains; a single label or a shared-hosting
     suffix is refused. A look never has 10 petals (the Homegrown mark's).
   - `schedule.ts`: `nextAfter(when, tz, prevDue, now)`, `nextRuns(when, tz, from, n = 5)` (the form's preview),
-    `localInstant`, `claim(routine, runs, now, trigger?)`, `eventCheck`, `expired`, `overdue`, `DEADLINE`,
+    `claim(routine, runs, now, trigger?)`, `eventTrigger(when, prev, now, signedIn)`, `busy`, `expired`, `overdue`, `DEADLINE`,
     `proposedRoutine` (paused, `by: 'model'`, so `claim` never runs it until the person turns it on).
     Daily, weekly, monthly and one-off times walk local dates: a time that doesn't exist moves forward by the gap, an
     ambiguous one is its first instant. A monthly date past the month's end is its last day. `event` checks every N
     minutes. `claim` moves `nextDue` on and queues a new run or (while one works) keeps the slot on `skipped` (last
     5). A waiting run doesn't block it; it fails only when its request expires (24 h). An event routine gets a run
-    only with the `trigger` its check found (`eventCheck`: signed in only on the gardener's sites; fires on added
-    lines, with `onlyIf` on one holding a word; code only). A one-off pauses when due ("Done"); its run carries
+    only with the `trigger` its check found (`eventTrigger`, pure: fires on added lines, with `onlyIf` on one holding
+    a word; the worker fetches the page, signed in only on the gardener's sites). A one-off pauses when due ("Done"); its run carries
     `deadline` (slot + minutes) and fails "Deadline passed." after it, and a slot missed by more never runs: its record ends failed `MISSED` (`missed`). A parent waiting on helpers (`helping`, records.ts) counts as working: its
-    slot is skipped, never failed. `nextBatch(runs, now)`: the queue's next pick, one run or up to `HELPERS` (3) queued
+    slot is skipped, never failed. `nextBatch(runs, now)`: the queue's next pick, one run or up to 3 queued
     helpers of the oldest parent; a run with `retryAt` in the future waits.
   - `policy.ts`: `decide(run, gardener, call, known) → 'allow' | 'ask' | 'deny'`, `argsKey`, `callKey`, `actOf`,
     `sensitiveSteps(run, steps, tool?)`, `onSites`, `addSeen`, `fromExtensionPage`, `approveAllOk`, `alwaysOk`,
-    `planCovers`, `SENSITIVE_WAIT` (8000 ms), `Grant`. `act_my_tab` (decision 6): `actOf` takes its host from the
-    named tab's URL; `decide` asks every call (never granted, denied for a tab not named); any fill in it is
-    sensitive whatever the taint; `alwaysOk` is false for it and `planCovers` (`act`, `collect`) never covers it.
-    Reach, taint, acts and grants (ADR-16). `approveAllOk(q, run)` refuses any reach in a tainted run.
+    `taintsAfter(tool, result, args, sites)` (after a call ran or threw), `SENSITIVE_WAIT` (8000 ms), `Grant`. What
+    differs per tool is one table, `tools.ts` `ruleOf`: `blanket` (a plan's yes or Approve all may cover it: `act`,
+    `collect`), `noAlways` (`act_my_tab`), `editable` (`act`, `act_my_tab`, `app_call`), `taints` (`always`:
+    `read_my_tab`, `act_my_tab`, `doc_read`, `app_call`; `sites`: `act`, by its URL or the final URL it ended on).
+    `decide` denies code steps once, before any tool. `act_my_tab`: `actOf` takes its host from the named tab's URL;
+    `decide` asks every call (never granted, denied for a tab not named); any fill in it is sensitive whatever the
+    taint. Reach, taint, acts and grants (ADR-16). `approveAllOk(q, run)` refuses any reach in a tainted run.
     `propose_routine` is denied in a tainted run, and allowed only when its work names no URL off the
-    gardener's sites (read pages or URLs in a request) and none of the person's tabs. Plan T7: `remember` and
-    `doc_read` are allowed (`privateRead('doc_read')`: the worker taints the run after it); `doc_write` is allowed
-    up to 20 000 characters, denied for a `Meetings/` or `Documents/` path (`docRefused`). Plan T11: `appOf` (a
+    gardener's sites (read pages or URLs in a request) and none of the person's tabs. `remember` and
+    `doc_read` are allowed; `doc_write` is allowed
+    up to 20 000 characters, denied for a `Meetings/` or `Documents/` path (`docRefused`). `appOf` (a
     connector's tool that isn't Off, args passing `checkArgs`); `actOf` makes an `app_call` an act on the server's
-    host, sensitive (`Act.why`) when the tool name or args hold a `sensitiveWord`; `decide` asks every `app_call`
-    unless the tool is Read, the run untainted and the exact call granted; `alwaysOk` is false for `noAlways`;
-    `approveAllOk` and `planCovers` never cover it; `taintsAfter` and `failTaints` hold for it.
+    host, sensitive (`Act.why`) when the tool name or args hold a `sensitiveWord` (a tool named for reading, `get_`,
+    `list_`, `read_`, `search_`, `fetch_`, `find_`, doesn't count `pay…` in its name); `decide` asks every `app_call`
+    unless the tool is Read, the run untainted and the exact call granted; `alwaysOk` is false for `noAlways`.
   - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
-    and has the page left the call's hosts. `CHALLENGE_HOSTS`, `isChallenge({ frames, title, text })`: a page that
+    and has the page left the call's hosts (its words match as prefixes: "Complete payment" is sensitive). `isChallenge({ frames, title, text })`: a page that
     stands between the run and its content: a title that says so, or a short page (< 600 characters) whose text says
-    so or that shows a visible reCAPTCHA, hCaptcha or Arkose frame (Turnstile left out). `policy.ts` `failTaints`: a
-    call that threw taints for `act_my_tab` always, and for `act` on the gardener's sites. Bundled into the in-page step runner (`content/scenario.ts`), so the
+    so or that shows a visible reCAPTCHA, hCaptcha or Arkose frame (Turnstile left out). Bundled into the in-page step runner (`content/scenario.ts`), so the
     check and the step run in one call on the same element.
   - `loop.ts`: `next(run, ctx) → Action`, `recover(runs, now)`, `answerFor`, `approveRequest`, `digest`, `said`,
-    `refusal`, `parsePlan`, `answerPlan`, `answeredBy`, `parseEdit`, `stopRequest`, `retryStep`, `autoRetry`,
+    `refusal`, `answerPlan`, `verdictFor` (one call's verdict, when picked and again when run), `editOk`, `parseEdit`,
+    `effectOf`, `failedStep`, `retryStep`, `autoRetry`,
     `AUTO_RETRY_MS`, `helpersOf`, `mergeHelpers`, `resumeAll`, `answerRefused`, `earlierOf`, `followUpRun`, `queuedFollowUp`, `OPEN_REFUSED`, `PLAN_REFUSED`,
-    `BAD_REPLY`, `TOO_LONG`, `HELP_REFUSED`. An answer with edited `args` makes the edited call a new call: a `noEdit` follow-up
-    (`editedFrom`) settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
+    `BAD_REPLY`, `TOO_LONG`, `HELP_REFUSED`. An answer with edited `args` makes the edited call a new call: a request with origin
+    `{ edit }` settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
     unless it is sensitive now. A read of more than 5 pages (up to 25) asks for `helpers`: helper runs of 5 pages each
     (`parentId`) read without a think and end; their steps, failed where unfinished, and their taint merge into the
     parent, which makes the one `word` think. Unused Steer messages end every think's instruction part ("The person adds: …"). Direct work
     (`read`, `mission`) issues fixed calls, then one `word` think; open work (`ask`, only with `agent.loop`) runs
     choose → repair → call … → answer → check; plan work (`plan`, only with the `plan` ability or `agent.loop`) runs
-    plan → repair → the person's yes → each planned call → one `sum` think (ADR-18). A plan's `fromPlan` yes counts
+    plan → repair → the person's yes → each planned call → one `sum` think (ADR-18). A plan's yes (origin `plan`) counts
     only where `decide` asks and the call isn't sensitive now. Notes go in the data, never the prompt. `answerPlan`
     changes the run it is given (as the worker's `updateRun` does), as does `retryStep`: an ended run of direct work
     loses the failed step, every later step, the turns after it and the requests about them (an act is asked again,
-    and only after a did-it-happen No), and is queued. `autoRetry(step)`: a `read_page` or `search` that failed on a
+    and only after a did-it-happen No), and is queued; it and `resumeAll` share one reset (`reopen`: a fresh time
+    budget, no end, no deadline). `autoRetry(step)`: a `read_page` or `search` that failed on a
     timeout or network error, not yet retried. A follow-up's data starts with `ctx.earlier` (`earlierOf`: the
     earlier answer and step digests, no page text); a follow-up of a tainted run starts tainted. Queued messages
     (`steer: false`) are in no think; `queuedFollowUp` turns the oldest into a follow-up run when the run ends.
-  - `skills.ts` (plan T8): `Skill` (`work: 'plan' | 'ask'`, `on`, `needs?`, `cases`, `history` of the last 10
+  - `skills.ts`: `Skill` (`work: 'plan' | 'ask'`, `on`, `needs?`, `cases`, `history` of the last 10
     versions, `proposed?`), `SKILL` (limits), `parseSkill`, `slashOf`, `skillWork`, `unmet`, `skillRefusal` (pin:
     deleted, off, another gardener's, or needs missing from `run.abilities`), `skillParts` (the method is the
     instruction unless a model wrote it; files are data), `revise`, `accept`, `casePassed` (case-insensitive
     contains), `verdict`, `tested`, `evidenceOf` (chat answers marked down, a correction after one by
-    `correctionOf`, failed cases), `improveThink`, `proposalOf`, `unlinked`, `upgradeGarden`, `needsRefusal` (plan T12: `NEEDS`
+    `correctionOf`, failed cases), `improveThink`, `proposalOf`, `unlinked`, `upgradeGarden`, `needsRefusal` (`NEEDS`
     while the model lacks a need of a skill or routine). `loop.ts` `think` puts a
     skill's files ahead of the data, at most a third of what memory left. `Work` `plan`/`ask` and `Routine` have
     `skillId?` (`routineWork`); `GardenRun.approvePlans?`; `ChatTurn.skillId?`.
-  - `presets.ts` (plan T12, decision 12): companion packs as data, `PRESETS` (Rosa, Dana; T13: Martin, Olivia, Cora, Sally, Theo, Sofia, and Ellis built from Sally, Theo and Olivia seeds by `reuse`, re-gated on `workflow:ellis/<id>`), `presetById`,
+  - `presets.ts`: companion packs as data, `PRESETS` (Rosa, Dana; T13: Martin, Olivia, Cora, Sally, Theo, Sofia, and Ellis built from Sally, Theo and Olivia seeds by `reuse`, re-gated on `workflow:ellis/<id>`), `presetById`,
     `Preset` (`look`, `instructions`, `interview` ≤ 8, suggested `sites`, `skills`/`routines` seeds with `needs`,
     `tools` that only narrow, `templates`, `note`; bench cases live in `bench/workflows/<preset>.mjs`), `presetProblems` (a non-read seed names
     `workflow:<preset>/<id>`), `direct`, `hireRecords` (gardener with `preset`, skills `by: 'preset'` off, routines
@@ -186,9 +196,9 @@ runtime adapters and storage live outside `domain/`.
     step outputs, turns and the answer only with `withText`. `trimmed(run)`: a run as broadcast and listed (outputs
     cut to 300).
   - `tools.ts`: `TOOLS` (`search`, `read_page`, `mission`, `draft`, `note`, `notify`, `act`, `collect`,
-    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `EDITABLE` (`act`, `act_my_tab`, `app_call`), `ToolSpec`, `Arg` (`record`: a value its parser takes),
+    `read_my_tab`, `act_my_tab`, `propose_routine`, `remember`, `doc_read`, `doc_write`, `app_call`), `ruleOf` (each tool's policy rule), `ToolSpec`,
     `parseArgs`, `toolsFor` (`allowed`: a hired gardener's pack tools, which only narrow; `read_my_tab` and `act_my_tab` only with named tabs; `propose_routine` and `remember` only with
-    `agent.loop` or in a plan; `app_call` only with a usable app tool, its describe built by `appLines` from the
+    `agent.loop` or in a plan; `app_call` only with a usable app tool, its describe built from the
     person's lines and guidelines; a tool without a line isn't offered), `mentionsOf`, `mentionedTab`, `pageLinks` (at most 50), `ownsTab` (a run's group or
     a borrowed tab), `devtoolsDigest` (≤ 20 console errors, ≤ 30 requests with status ≥ 400, no query strings, no
     bodies), `downloadRun` (a download's run by referrer; never one the person's tabs also have open, never a guess).

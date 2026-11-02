@@ -1,6 +1,10 @@
-// Saved chats (plan T6): the record kept in IndexedDB `hg-chat`, and the pure rules the side panel's chat uses.
+// Saved chats: the record kept in IndexedDB `hg-chat`, and the pure rules the side panel's chat uses.
 import { contextChars } from './text.ts';
 import { correctionOf } from './memory.ts';
+import { appNamed, type App } from './apps.ts';
+import { NEEDS, skillParts, slashOf, unmet, type Skill } from './garden/skills.ts';
+import { mayBeSetting } from './settings.ts';
+import type { Ability } from './model.ts';
 
 export type Mode = 'plan' | 'smart' | 'fast';
 export interface ChatTurn {
@@ -15,13 +19,13 @@ export interface ChatTurn {
   error?: string;
   /** Saved while it streamed; still set on load means it was cut off. */
   partial?: true;
-  /** A user turn sent as `/name …`: the skill it ran (plan T8), so feedback on the answer is that skill's evidence. */
+  /** A user turn sent as `/name …`: the skill it ran, so feedback on the answer is that skill's evidence. */
   skillId?: string;
 }
 export interface Chat { v: 1; id: string; title: string; mode: Mode; model: string; turns: ChatTurn[]; forkedFrom?: string; createdAt: number; updatedAt: number }
 
-/** The shape `ui/questions.ts` asks. */
-export interface Question { q: string; options?: string[] }
+/** One question of a question block (`ui/questions.ts` asks them). */
+export interface Question { q: string; options?: string[]; placeholder?: string }
 
 export const MODES: Mode[] = ['plan', 'smart', 'fast'];
 
@@ -124,5 +128,55 @@ export const chatReport = (c: Chat, version = '') => ({
   turns: c.turns.map((t) => ({ role: t.role, at: t.at, chars: t.text.length, ...(t.error && { error: t.error }), ...(t.partial && { partial: true }) })),
 });
 
-/** A message that corrects an earlier answer ("no", "don't", "never", "always"): offered as "Remember this?" (T7). */
+/** A message that corrects an earlier answer ("no", "don't", "never", "always"): offered as "Remember this?". */
 export const chatCorrection = (c: Chat, text: string): string | null => (c.turns.some((t) => t.role === 'model' && !t.error) ? correctionOf(text) : null);
+
+export const excerpt = (t: string, n = 140) => (t.length > n ? `${t.slice(0, n)}…` : t);
+
+type Hit = { skill: Skill; rest: string };
+export type Route =
+  | { kind: 'connect'; app: App }
+  | { kind: 'error'; why: string }
+  | { kind: 'meetings'; question: string }
+  /** A short plain message that may ask to change a setting: the model decides, the person confirms. */
+  | { kind: 'setting' }
+  | { kind: 'send'; skill?: Hit };
+
+/**
+ * Where a typed message goes. "connect <app>" opens the Connect form (no model); `/name rest` runs a skill that is on
+ * and whose needs the chat's model meets; `/meetings question` (no skill of that name) asks across meetings.
+ */
+export function route(typed: string, c: { template: boolean; image: boolean; attached: boolean; skills: Skill[]; can: (a: Ability) => boolean }): Route {
+  const plain = !c.template && !c.image;
+  const app = plain ? appNamed(/^connect\s+(.{1,60})$/i.exec(typed)?.[1] ?? '') : null;
+  if (app) return { kind: 'connect', app };
+  const hit = !c.template && typed.startsWith('/') ? slashOf(typed, c.skills) : null;
+  if (typeof hit === 'string') {
+    const question = /^\/meetings\s+([\s\S]+)$/.exec(typed)?.[1];
+    return question ? { kind: 'meetings', question } : { kind: 'error', why: hit };
+  }
+  if (hit) return unmet(hit.skill, c.can).length ? { kind: 'error', why: NEEDS } : { kind: 'send', skill: hit };
+  return plain && !c.attached && typed.length < 240 && mayBeSetting(typed) ? { kind: 'setting' } : { kind: 'send' };
+}
+
+const PLAN_FIRST = 'First write a short plan for this request as numbered steps, then stop and wait for me to say Go. Do not do the steps yet.';
+
+/**
+ * The person's turn: what the model gets, what the chat shows, and the data part (an attached selection, `@` memory
+ * files, a skill's files). A Prompt Lab template wraps the typed text.
+ */
+export function userTurn(typed: string, o: { at: number; template?: { title: string; build(t: string, option: string): string }; option?: string;
+  attached: string | null; image: boolean; refs?: string; skill?: Hit }): ChatTurn {
+  const skill = o.skill && { ...skillParts(o.skill.skill), rest: o.skill.rest || o.skill.skill.title };
+  const asked = typed || 'Describe this image.';
+  const text = skill ? [skill.instruction, skill.rest].filter(Boolean).join('\n\n') : o.template ? o.template.build(typed, o.option ?? '') : asked;
+  const label = [o.template ? `${o.template.title}: ${typed}` : asked, o.attached !== null ? `“${excerpt(o.attached)}”` : '', o.image ? '(image)' : ''].filter(Boolean).join('\n');
+  const data = [o.attached ?? '', o.refs ?? '', skill?.data ?? ''].filter(Boolean).join('\n\n');
+  return { role: 'user', text, label, at: o.at, ...((o.attached !== null || data) && { selection: data }), ...(o.skill && { skillId: o.skill.skill.id }) };
+}
+
+/** A chat's first message: plan mode's ask for a plan, then a companion's instructions, lead the text. */
+export function withLead(c: Chat, turn: ChatTurn, persona: string | null): ChatTurn {
+  const lead = [planFirst(c) ? PLAN_FIRST : null, persona].filter(Boolean);
+  return lead.length ? { ...turn, label: turn.label ?? turn.text, text: [...lead, turn.text].join('\n\n') } : turn;
+}

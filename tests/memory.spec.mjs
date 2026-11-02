@@ -1,11 +1,11 @@
-// Memory and Documents end to end, no model (plan T7). A memory file is made and edited in Library → Memory; a run
+// Memory and Documents end to end, no model. A memory file is made and edited in Library → Memory; a run
 // planted with an answered plan whose one call is doc_write ends with the file under Documents/<gardener> and a
 // `doc` card. The run then stops at its sum think (no engine has its model); everything checked happens before.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, launch, plannedRun, plant, ROOT } from './harness.mjs';
 
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -13,11 +13,8 @@ test.beforeAll(async () => {
   ({ ctx, sw, id } = await launch({ userDataDir: path.join(ROOT, '.profile-test') }));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   for (const e of await bg('entityList')) await bg('entityDelete', { id: e.id });
   for (const d of await bg('docList')) await bg('docDelete', { id: d.id });
   g = await bg('gardenerSave', { gardener: { name: 'Scribe', instructions: 'Keep a plan file.', sites: ['shop.garden.test'], minutes: 10 } });
@@ -27,11 +24,6 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
 
 async function memoryTab() {
   await panel.click('.tabs [data-tab=library]');
@@ -63,19 +55,7 @@ test('a person file "Maja" (alias "M.") is made in Library → Memory, edited in
 
 test('a planned doc_write ends with plan.md under Documents/Scribe and a doc card that opens it', async () => {
   const text = '1. Read the shop.\n2. Compare tea prices.';
-  const run = {
-    v: 1, id: 'doc-1', gardenerId: g.id, work: { kind: 'plan', request: 'Keep a plan for the tea hunt.' }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
-    model: 'no-model-here', maxTokens: 4096, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan: [{ tool: 'doc_write', args: { path: 'plan.md', text } }],
-    turns: [], steps: [], requests: [], seen: [], tainted: false,
-  };
-  await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, run);
-  await sw.evaluate(() => self.gardenFire('none'));
+  await plant(panel, sw, plannedRun({ id: 'doc-1', gardenerId: g.id, work: { kind: 'plan', request: 'Keep a plan for the tea hunt.' }, plan: [{ tool: 'doc_write', args: { path: 'plan.md', text } }] }));
 
   let r;
   await expect.poll(async () => (r = await bg('runGet', { id: 'doc-1' })).steps[0]?.state, { timeout: 60_000 }).toBe('done');
@@ -98,27 +78,19 @@ test('a planned doc_write ends with plan.md under Documents/Scribe and a doc car
 });
 
 test('a draft keeps the person’s unsaved edit when its run is broadcast again', async () => {
-  const run = {
-    v: 1, id: 'draft-1', gardenerId: g.id, work: { kind: 'plan', request: 'Draft a reply.' }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
-    model: 'no-model-here', maxTokens: 4096, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan: [{ tool: 'draft', args: { title: 'Reply', text: 'Hi Ann,' } }],
-    turns: [], steps: [], requests: [], seen: [], tainted: false,
-  };
-  await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, run);
-  await sw.evaluate(() => self.gardenFire('none'));
+  await plant(panel, sw, plannedRun({ id: 'draft-1', gardenerId: g.id, work: { kind: 'plan', request: 'Draft a reply.' }, plan: [{ tool: 'draft', args: { title: 'Reply', text: 'Hi Ann,' } }] }));
   await expect.poll(async () => (await bg('runGet', { id: 'draft-1' })).endedAt ?? 0, { timeout: 60_000 }).toBeGreaterThan(0);
   await panel.reload();
   await panel.click('.tabs [data-tab=garden]');
   const area = panel.getByLabel('Edit Reply');
   if (!(await area.isVisible())) await panel.locator('#garden-runs li summary', { hasText: 'Open · 1 step' }).first().click();
+  // Opening marks the run seen, which redraws it; type after that redraw, not into the textarea it replaces.
+  await expect.poll(async () => (await bg('runGet', { id: 'draft-1' })).seenAt ?? 0).toBeGreaterThan(0);
+  await panel.waitForFunction(() => document.querySelector('#garden-runs textarea[data-draft="draft-1:0"]')?.isConnected);
   await area.fill('Hi Ann,\nThanks for the tea.');
-  await bg('runSeen', { id: 'draft-1' }); // the worker broadcasts the run again
-  await expect.poll(() => bg('runGet', { id: 'draft-1' }).then((r) => r.seenAt ?? 0)).toBeGreaterThan(0);
-  await panel.waitForTimeout(300);
+  // The worker broadcasts the run again; the page's own listener (added first) has drawn it when this one hears it.
+  const drawn = panel.evaluate(() => new Promise((ok) => chrome.runtime.onMessage.addListener((m) => m?.type === 'garden-run' && m.run.id === 'draft-1' && m.run.seenAt && ok())));
+  await bg('runSeen', { id: 'draft-1' });
+  await drawn;
   await expect(panel.getByLabel('Edit Reply')).toHaveValue('Hi Ann,\nThanks for the tea.');
 });

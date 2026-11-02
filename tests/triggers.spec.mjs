@@ -3,11 +3,11 @@
 // sites, so it is read signed out.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, launch, put, ROOT } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const NEWS = 'https://news.garden.test';
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 let news = '<!doctype html><title>News</title><p>Spring sale soon.</p>';
 
 test.describe.configure({ mode: 'serial' });
@@ -18,11 +18,8 @@ test.beforeAll(async () => {
   await ctx.route(`${SHOP}/**`, (r) => r.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Shop</title><p>Tea</p>' }));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   g = await bg('gardenerSave', { gardener: { name: 'Watcher', instructions: 'Say what changed.', sites: ['shop.garden.test'], minutes: 10 } });
 });
 
@@ -30,26 +27,11 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
-
-const idbPut = (store, change, key) => panel.evaluate(async ([store, change, key]) => {
-  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-  const t = d.transaction(store, 'readwrite');
-  const os = t.objectStore(store);
-  const old = await new Promise((ok) => (os.get(key).onsuccess = (e) => ok(e.target.result)));
-  os.put({ ...old, ...change });
-  await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-  d.close();
-}, [store, change, key]);
 
 test('an event routine fires through gardenFire after the page changes, and not before', async () => {
   const r = await bg('routineSave', { routine: { gardenerId: g.id, name: 'Sale watch', when: { kind: 'event', url: `${NEWS}/`, every: 15, onlyIf: ['price'] }, work: { kind: 'read', urls: [`${SHOP}/tea`] } } });
   const fire = async () => {
-    await idbPut('routines', { nextDue: Date.now() - 1000 }, r.id);
+    await put(panel, 'routines', { nextDue: Date.now() - 1000 }, r.id);
     await sw.evaluate((rid) => self.gardenFire(rid), r.id);
     return bg('runList', { gardenerId: g.id });
   };

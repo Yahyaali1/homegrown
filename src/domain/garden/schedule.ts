@@ -1,9 +1,7 @@
 // When routines run. Daily, weekly, monthly and one-off times walk local calendar dates, not instants, so a fall-back
 // day can't run twice and a spring-forward day still runs once.
 import { diffText } from '../compare.ts';
-import { hostOf } from '../text.ts';
-import { onSites } from './policy.ts';
-import { dateOf, helping, LIMITS, newRun, routineWork, type GardenRun, type Routine, type Trigger, type When, type Work } from './records.ts';
+import { dateOf, helping, isWorking, LIMITS, newRun, routineWork, type GardenRun, type Routine, type Trigger, type When, type Work } from './records.ts';
 
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 
@@ -24,7 +22,7 @@ const localDate = (tz: string, t: number): number => {
  * The instant a local wall time happens. A time that doesn't exist (spring forward) moves forward by the gap; an
  * ambiguous one (fall back) is its first instant.
  */
-export function localInstant(tz: string, wall: number): number {
+function localInstant(tz: string, wall: number): number {
   const before = wall - offset(tz, wall - DAY), after = wall - offset(tz, wall + DAY);
   const real = [before, after].filter((t) => t + offset(tz, t) === wall).sort((a, b) => a - b);
   return real[0] ?? before;
@@ -69,37 +67,25 @@ export function nextRuns(when: When, tz: string, from: number, n = 5): number[] 
 }
 
 /**
- * An event routine's check, outside any transaction: the page is fetched signed in only on the gardener's sites, and
- * compared with the last snapshot (`prev`; none: this is the first look, which only sets it). It fires when lines were
- * added and, with `onlyIf`, one of them holds one of its words. Code only: page text can't start a run any other way.
+ * An event routine's check: the page's text now against the last snapshot (`prev`; none: this is the first look,
+ * which only sets it). It fires when lines were added and, with `onlyIf`, one of them holds one of its words. Code
+ * only: page text can't start a run any other way. `signedIn`: the page was fetched with the person's cookies.
  */
-export async function eventCheck(when: Extract<When, { kind: 'event' }>, sites: string[], prev: string | undefined,
-  text: (url: string, credentials: RequestCredentials) => Promise<string>): Promise<{ text: string; trigger: Trigger | null }> {
-  const signedIn = onSites(hostOf(when.url), sites);
-  const now = await text(when.url, signedIn ? 'include' : 'omit');
-  if (prev === undefined) return { text: now, trigger: null };
+export function eventTrigger(when: Extract<When, { kind: 'event' }>, prev: string | undefined, now: string, signedIn: boolean): Trigger | null {
+  if (prev === undefined) return null;
   const diff = diffText(prev, now);
   const added = diff.split('\n').filter((l) => l.startsWith('+ ')).map((l) => l.toLowerCase());
   const words = when.onlyIf?.map((w) => w.toLowerCase());
   const hit = added.length > 0 && (!words || added.some((l) => words.some((w) => l.includes(w))));
-  return { text: now, trigger: hit ? { url: when.url, diff: diff.slice(0, LIMITS.output), signedIn } : null };
+  return hit ? { url: when.url, diff: diff.slice(0, LIMITS.output), signedIn } : null;
 }
 
-export const CHECK_MS = 30_000;
-
-/**
- * The event check's fetch: at most 30 s. An error status fails the check (a 503 or a login wall must not become the
- * snapshot), and so does any redirect of a signed-in fetch, so cookies never follow it off the page's host.
- */
-export async function checkFetch(url: string, credentials: RequestCredentials, get: typeof fetch = fetch): Promise<string> {
-  const res = await get(url, { credentials, cache: 'no-store', redirect: credentials === 'include' ? 'manual' : 'follow', signal: AbortSignal.timeout(CHECK_MS) });
-  if (!res.ok) throw new Error(res.type === 'opaqueredirect' ? 'The page redirected.' : `The page answered ${res.status}.`);
-  return res.text();
-}
+/** A run still at work for its routine: queued, running, or a parent waiting on its helpers. */
+export const busy = (r: GardenRun): boolean => r.status === 'queued' || r.status === 'running' || helping(r);
 
 /** A run past its one-off deadline: not done by then, it fails. */
 export const overdue = (run: GardenRun, now: number): boolean =>
-  run.deadline !== undefined && run.deadline <= now && (run.status === 'queued' || run.status === 'running' || run.status === 'waiting');
+  run.deadline !== undefined && run.deadline <= now && isWorking(run);
 export const DEADLINE = 'Deadline passed.';
 export const MISSED = 'Missed: its deadline passed before it could start.';
 
@@ -107,7 +93,7 @@ export const MISSED = 'Missed: its deadline passed before it could start.';
 export const expired = (run: GardenRun, now: number): boolean =>
   run.status === 'waiting' && run.requests.some((q) => !q.answer && q.expiresAt !== undefined && q.expiresAt <= now);
 
-export const HELPERS = 3;
+const HELPERS = 3;
 
 /**
  * What the queue runs next: the oldest queued run (a helper counts from its parent's time), or up to 3 queued helpers
@@ -142,7 +128,7 @@ export function claim(routine: Routine, runs: GardenRun[], now: number, trigger?
   // Missed by more than its deadline: a record that never ran, so history and Report show it.
   if (deadline !== undefined && deadline <= now) return { routine: { ...next, missed: true, lastRunId: run.id }, newRun: { ...run, status: 'failed', endedAt: now, why: MISSED }, fail, missed: true };
   // A one-off's only slot never waits on a run of it by hand (Run now): it would be lost.
-  if (when.kind !== 'once' && mine.some((r) => r.status === 'queued' || r.status === 'running' || helping(r))) {
+  if (when.kind !== 'once' && mine.some(busy)) {
     next.skipped = [...(routine.skipped ?? []), routine.nextDue].slice(-LIMITS.skipped);
     return { routine: next, fail };
   }

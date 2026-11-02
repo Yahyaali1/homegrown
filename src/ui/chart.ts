@@ -1,4 +1,4 @@
-// Charts and KPI cards from a table (plan T9): hand-written SVG bars and lines, no library. Grays only, series told
+// Charts and KPI cards from a table: hand-written SVG bars and lines, no library. Grays only, series told
 // apart by gray steps and a legend; status colours only for a KPI's direction. Text goes in by textContent.
 import { h } from './dom.ts';
 import type { Cell, Table } from '../domain/outputs.ts';

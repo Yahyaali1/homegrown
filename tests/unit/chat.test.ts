@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, searchChats, splitThinking, type Chat } from '../../src/domain/chat.ts';
 import { sameSite } from '../../src/domain/links.ts';
+import type { Skill } from '../../src/domain/garden/skills.ts';
 import { contextChars } from '../../src/domain/text.ts';
 
 const chat = (over: Partial<Chat> = {}): Chat => ({ v: 1, id: 'c1', title: 'Bees', mode: 'fast', model: 'Gemma-4-E2B-it', createdAt: 1, updatedAt: 2,
@@ -97,4 +98,31 @@ test('a correction typed after an answer is offered as "Remember this?", in the 
   assert.equal(chatCorrection(answered, 'Never use bullet points.'), 'Never use bullet points.');
   assert.equal(chatCorrection(answered, 'Write it again'), null);
   assert.equal(chatCorrection(chat({ turns: [] }), 'Never use bullet points.'), null, 'nothing to correct yet');
+});
+
+test('route: connect, skills, /meetings, a maybe-setting, and everything else is sent', async () => {
+  const { route } = await import('../../src/domain/chat.ts');
+  const skill: Skill = { v: 1, id: 's1', name: 'brief', title: 'Decision brief', method: 'Pick one.', files: [], work: 'plan', version: 1, history: [], cases: [], by: 'person', on: true, createdAt: 0, needs: ['plan'] };
+  const ctx = { template: false, image: false, attached: false, skills: [skill], can: () => true };
+  assert.equal(route('connect github', ctx).kind, 'connect');
+  assert.equal(route('connect github', { ...ctx, image: true }).kind, 'send', 'an image goes to the model');
+  assert.deepEqual(route('/brief move?', ctx), { kind: 'send', skill: { skill, rest: 'move?' } });
+  assert.equal(route('/brief move?', { ...ctx, can: () => false }).kind, 'error', 'the chat model lacks the skill’s need');
+  assert.deepEqual(route('/nope x', ctx), { kind: 'error', why: 'No skill is called /nope.' });
+  assert.deepEqual(route('/meetings what was decided?', ctx), { kind: 'meetings', question: 'what was decided?' });
+  assert.equal(route('use E4B for missions', ctx).kind, 'setting');
+  assert.equal(route('use E4B for missions', { ...ctx, attached: true }).kind, 'send');
+  assert.equal(route('what do bees eat?', ctx).kind, 'send', 'no setting word: no model call');
+});
+
+test('userTurn: a template wraps the text, data rides in the selection, and a chat’s first message gets its lead', async () => {
+  const { userTurn, withLead } = await import('../../src/domain/chat.ts');
+  const t = userTurn('hi', { at: 5, template: { title: 'Tone', build: (x, o) => `${o}: ${x}` }, option: 'Formal', attached: 'some page text', image: true, refs: '@Maja' });
+  assert.deepEqual(t, { role: 'user', text: 'Formal: hi', label: 'Tone: hi\n“some page text”\n(image)', at: 5, selection: 'some page text\n\n@Maja' });
+  assert.deepEqual(userTurn('', { at: 1, attached: null, image: true }), { role: 'user', text: 'Describe this image.', label: 'Describe this image.\n(image)', at: 1 });
+  const fresh = chat({ mode: 'plan', turns: [] });
+  const led = withLead(fresh, { role: 'user', text: 'Trip', at: 1 }, 'Be Rosa.');
+  assert.match(led.text, /^First write a short plan[\s\S]*\n\nBe Rosa\.\n\nTrip$/);
+  assert.equal(led.label, 'Trip');
+  assert.equal(withLead(chat(), { role: 'user', text: 'More', at: 9 }, null).text, 'More');
 });

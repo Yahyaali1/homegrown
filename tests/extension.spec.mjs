@@ -99,7 +99,7 @@ test('chat streams an answer and shows stats', async () => {
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
   await panel.click('[data-tab=chat]'); // the panel reopens on the last tab used
-  await panel.click('#chat-clear'); // and on the last chat (plan T6)
+  await panel.click('#chat-clear'); // and on the last chat
   await panel.fill('#chat-input', 'What is the capital of France? Answer in one word.');
   await panel.click('#chat-send');
   const a = await answer();

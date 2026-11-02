@@ -2,7 +2,7 @@
 // the token reply are all server text, so each is checked before it is used.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { asMetaUrls, authorizeUrl, capped, challengeOf, found, codeOf, factsOf, parseAsMeta, parseClient, parseConnector, parseResourceMeta, parseTokens, resourceMetaUrls, signInRefusal, type Connector } from '../../src/domain/mcp.ts';
+import { asMetaUrls, authorizeUrl, challengeOf, found, codeOf, factsOf, parseAsMeta, parseClient, parseConnector, parseResourceMeta, parseTokens, resourceMetaUrls, signInRefusal, type Connector } from '../../src/domain/mcp.ts';
 
 const SERVER = 'https://mcp.crm.com/v1/mcp';
 
@@ -82,10 +82,4 @@ test('a remote server can’t point sign-in at this machine; a local test server
   assert.equal(found('http://localhost:5001/as', LOCAL), 'http://localhost:5001/as');
   assert.equal(found('http://localhost:5001/as', SERVER), null);
   assert.equal(parseResourceMeta({ authorization_servers: ['http://127.0.0.1:5000/as'] }, LOCAL).issuer, 'http://127.0.0.1:5000/as');
-});
-
-test('a sign-in reply is read only up to its cap', async () => {
-  assert.equal(await capped(new Response('{"a":1}'), 100, 'too long'), '{"a":1}');
-  await assert.rejects(capped(new Response('x'.repeat(200)), 100, 'too long'), /too long/);
-  await assert.rejects(capped(new Response('x', { headers: { 'content-length': '5000' } }), 100, 'too long'), /too long/);
 });

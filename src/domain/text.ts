@@ -1,4 +1,5 @@
-// Small, pure text utilities shared by the mission domain.
+// Small, pure text utilities.
+import { decode } from './html.ts';
 
 export const OUTPUT_RESERVE = 512; // tokens kept free for the answer
 // ponytail: runtimes expose no tokenizer, so a character estimate. Gemma averages ~4 chars/token in English; 3 is the
@@ -93,4 +94,12 @@ export function cleanContinuation(out: string, before: string): string {
   t = t.replace(/^["'“]|["'”]$/g, '').trim().split(/\s+/).slice(0, 15).join(' ');
   if (t && before && !/\s$/.test(before) && !/^[.,;:!?)]/.test(t)) t = ` ${t}`;
   return t;
+}
+
+// ponytail: regex tag strip, no DOM in the worker; good enough to diff text.
+/** A page's HTML as lines of text, at most 20,000 characters (what a page check keeps for the next diff). */
+export function htmlText(html: string): string {
+  return decode(html.replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, '\n'))
+    .split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')
+    .slice(0, 20_000);
 }

@@ -8,7 +8,7 @@ import { recipesList, scrapeRecipe } from './scrape.ts';
 import { tabPage } from './tabs.ts';
 import { addNote, docAt, rememberEntity, writeDoc } from './memory.ts';
 import { search as webSearch } from './web.ts';
-import * as idb from './idb.ts';
+import * as idb from '../shared/idb.ts';
 import * as trust from './trust.ts';
 import { callTool } from './mcp.ts';
 import { diffText } from '../domain/compare.ts';
@@ -38,7 +38,7 @@ export interface ToolCtx {
   /** The person's tab joins the run for this call (lock bar, Stop, Take over); the result gives it back. */
   borrow: (tabId: number) => Promise<() => Promise<void>>;
 }
-export interface ToolResult {
+interface ToolResult {
   output: string;
   n: number;
   unit: 'chars' | 'results' | 'rows';
@@ -210,11 +210,13 @@ async function act({ url, steps }: { url: string; steps: Scenario }, c: ToolCtx)
     return { played, ...(await where(tabId, url)) };
   }));
   const stop = stopped(guard, steps.instructions, r.played.report.filter((l) => l.ok).map((l) => l.step));
-  if (stop) throw stop instanceof NeedsYou ? stop : new Error(`${stop.message} Now at ${r.final}.`);
-  if (r.played.failed) throw new Error(`${r.played.failed}. Now at ${r.final}.${log ? `\n${log}` : ''}`);
-  const taint = [url, r.final].some((u) => onSites(hostOf(u), c.gardener.sites));
-  return { output: withLog(`Now at ${r.final}\n${report(r.played.report)}\n\n${r.text.slice(0, ACT_TEXT)}`, log), n: r.text.length, unit: 'chars', url: r.final, taint };
+  if (stop) throw stop instanceof NeedsYou ? stop : endedAt(stop.message, r.final);
+  if (r.played.failed) throw endedAt(`${r.played.failed}.`, r.final, log);
+  return { output: withLog(`Now at ${r.final}\n${report(r.played.report)}\n\n${r.text.slice(0, ACT_TEXT)}`, log), n: r.text.length, unit: 'chars', url: r.final };
 }
+
+/** An acting call that failed, saying where its tab ended: `url` is what taint follows. */
+const endedAt = (message: string, url: string, log = ''): Error & { url: string } => Object.assign(new Error(`${message} Now at ${url}.${log ? `\n${log}` : ''}`), { url });
 
 const report = (lines: { ok: boolean; step: string; error?: string }[]) => lines.map((l) => `${l.ok ? '✓' : '✗'} ${l.step}${l.error ? `: ${l.error}` : ''}`).join('\n');
 
@@ -225,8 +227,8 @@ async function where(tabId: number, url: string): Promise<{ final: string; text:
 }
 
 /**
- * Plays approved steps in a tab the person named, in place (decision 6). The tab is the run's for the call: the lock
- * bar shows there, and Stop and Take over from it work; it is never closed. The run is tainted after.
+ * Plays approved steps in a tab the person named, in place. The tab is the run's for the call: the lock bar shows
+ * there, and Stop and Take over from it work; it is never closed.
  */
 async function actMyTab({ tab, steps }: { tab: string; steps: Scenario }, c: ToolCtx): Promise<ToolResult> {
   const id = mentionedTab(mentionsOf(c.run), tab, await chrome.tabs.query({}));
@@ -245,9 +247,9 @@ async function actMyTab({ tab, steps }: { tab: string; steps: Scenario }, c: Too
     await give();
   }
   const stop = stopped(guard, steps.instructions, r.played.report.filter((l) => l.ok).map((l) => l.step));
-  if (stop) throw stop instanceof NeedsYou ? stop : new Error(`${stop.message} Now at ${r.final}.`);
-  if (r.played.failed) throw new Error(`${r.played.failed}. Now at ${r.final}.`);
-  return { output: `Now at ${r.final}\n${report(r.played.report)}\n\n${r.text.slice(0, ACT_TEXT)}`.slice(0, LIMITS.output), n: r.text.length, unit: 'chars', taint: true };
+  if (stop) throw stop instanceof NeedsYou ? stop : endedAt(stop.message, r.final);
+  if (r.played.failed) throw endedAt(`${r.played.failed}.`, r.final);
+  return { output: `Now at ${r.final}\n${report(r.played.report)}\n\n${r.text.slice(0, ACT_TEXT)}`.slice(0, LIMITS.output), n: r.text.length, unit: 'chars' };
 }
 
 /** A saved Collect recipe in the run's tabs, with its pinned model; acting steps are guarded like `act`. */
@@ -267,7 +269,7 @@ async function collect({ recipe: id }: { recipe: string }, c: ToolCtx): Promise<
   return { output: [...lines, ...out.notes].join('\n').slice(0, LIMITS.output), n: done.length, unit: 'rows', taint };
 }
 
-/** A tab the person named: read in place (never acted in), and the run is tainted, as after a signed-in read. */
+/** A tab the person named: read in place (never acted in). */
 async function readMyTab({ tab }: { tab: string }, c: ToolCtx): Promise<ToolResult> {
   const id = mentionedTab(mentionsOf(c.run), tab, await chrome.tabs.query({}));
   if (typeof id === 'string') throw new Error(id);
@@ -276,7 +278,7 @@ async function readMyTab({ tab }: { tab: string }, c: ToolCtx): Promise<ToolResu
   });
   // It may have moved between the check and the read: only the page the person named counts.
   if (url !== tab) throw new Error('The tab the person named is on another page now.');
-  return { output: text, n: text.length, unit: 'chars', taint: true };
+  return { output: text, n: text.length, unit: 'chars' };
 }
 
 /** A routine the model proposes: stored paused, by the model, so it runs only after the person turns it on. */
@@ -296,7 +298,7 @@ async function remember({ type, name, body }: { type: EntityType; name: string; 
   return { output: `Proposed “${e.name}”. It stays out of your work until the person keeps it.`, n: 1, unit: 'results', created: { kind: 'memory', title: e.name, ref: e.id } };
 }
 
-/** One of this gardener's documents; the worker taints the run after it (taintsAfter). */
+/** One of this gardener's documents. */
 async function docRead({ path }: { path: string }, c: ToolCtx): Promise<ToolResult> {
   const d = await docAt(c.gardener.id, path);
   if (!d) throw new Error(`No document at ${path}.`);
@@ -311,15 +313,14 @@ async function docWrite({ path, text }: { path: string; text: string }, c: ToolC
 }
 
 /**
- * A connected app's tool (ADR-17). Policy allowed it (or the person said yes); the tool is checked again here, as the
- * person may have turned it off since. The reply is the app's data: it taints the run (taintsAfter) and is defanged
- * where a prompt reads it.
+ * A connected app's tool. Policy allowed it (or the person said yes); the tool is checked again here, as the person
+ * may have turned it off since. The reply is the app's data, defanged where a prompt reads it.
  */
 async function appCall({ connector, tool, args }: { connector: string; tool: string; args: Record<string, unknown> }): Promise<ToolResult> {
   const c = (await trust.connectors()).find((x) => x.id === connector);
   if (!c?.tools.some((t) => t.name === tool && t.scope !== 'off')) throw new Error('That app tool is off or no longer connected.');
   const text = await callTool(c, tool, args);
-  return { output: text.slice(0, LIMITS.output), n: text.length, unit: 'chars', taint: true };
+  return { output: text.slice(0, LIMITS.output), n: text.length, unit: 'chars' };
 }
 
 // Args are already checked against their specs (parseArgs, or the routine's own work).

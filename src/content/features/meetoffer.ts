@@ -1,4 +1,4 @@
-// The record offer on call pages (plan T10): a small bar on Meet, Zoom and Teams that only says how to record. It
+// The record offer on call pages: a small bar on Meet, Zoom and Teams that only says how to record. It
 // never records: Chrome shares a tab's sound only after the person invokes the extension (Alt+Shift+M, the
 // right-click menu, or the side panel when the toolbar opened it on this tab). The worker's { type: 'meeting' } messages turn it into the recording line.
 import { ui } from '../core.ts';

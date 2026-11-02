@@ -1,6 +1,6 @@
 // The engine: lives in the offscreen document so a model stays loaded while the side panel is closed. It owns model
-// files, picks the runtime adapter for each model (ADR-9), and runs one generation at a time in priority lanes.
-// Built to offscreen.js; its commands and broadcasts are unchanged since the JS version (ADR-11).
+// files, picks the runtime adapter for each model, and runs one generation at a time in priority lanes.
+// Built to offscreen.js; its commands and broadcasts are unchanged since the JS version.
 import { MODELS, modelById, supports, type ModelSpec, type Turn } from '../domain/model.ts';
 import type { RuntimeId } from '../domain/model.ts';
 import { fitSelection, isTooLong } from './fit.ts';

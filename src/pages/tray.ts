@@ -5,13 +5,13 @@ import { h } from '../ui/dom.ts';
 import { flower, runStage } from '../ui/flower.ts';
 import { questions } from '../ui/questions.ts';
 import { alwaysOk, approveAllOk, SENSITIVE_WAIT } from '../domain/garden/policy.ts';
-import { EDITABLE } from '../domain/garden/tools.ts';
+import { editOk } from '../domain/garden/loop.ts';
 import type { GardenRun, Look, PlannedCall, Request } from '../domain/garden/records.ts';
 import { bg } from '../shared/protocol.ts';
 
 export type Open = { run: GardenRun; q: Request };
 type Row = HTMLLIElement & { sync?: (q: Request) => void };
-export interface TrayDeps {
+interface TrayDeps {
   nameOf: (run: GardenRun) => string;
   lookFor: (gardenerId: string) => Look;
   who: (gardenerId: string) => string;
@@ -53,7 +53,7 @@ function requestRow(run: GardenRun, q: Request, d: TrayDeps): Row {
   const answer = (value: string, more: { calls?: PlannedCall[]; args?: Record<string, unknown> } = {}) => bg('requestAnswer', { runId: run.id, requestId: q.id, value, ...more })
     .then(() => (value === 'always' ? d.granted(run.gardenerId) : undefined)).catch((e) => fail(err, e));
   const described = <T extends HTMLElement>(el: T) => (el.setAttribute('aria-describedby', textId), el);
-  const edit = q.kind === 'approve' && !q.noEdit && EDITABLE.includes(q.tool ?? '') ? argFields(q) : null;
+  const edit = editOk(q) ? argFields(q) : null;
   // An edited yes carries the args (or says why they can't be read).
   const yesNo = (...more: HTMLElement[]) => {
     const yes = described(busyButton('Yes', tryIt(err, async () => answer('yes', edit?.args() ? { args: edit.args()! } : {})), 'primary'));
@@ -97,7 +97,7 @@ function requestRow(run: GardenRun, q: Request, d: TrayDeps): Row {
     reply = h('div', { className: 'stack' }, ...(edit ? [edit.el] : []), bar, wait, el);
   } else if (q.kind === 'approve' && !alwaysOk(q)) {
     // In the person's own tab, or an app tool not marked Read: asked every time, so no Always.
-    lead.push(h('span', { className: 'p', textContent: q.tool === 'app_call' ? `Sends data to an app at ${q.host}: you are asked every time.` : `In your own tab on ${q.host}: you are asked every time.` }));
+    lead.push(h('span', { className: 'p', textContent: q.noAlways ? `Sends data to an app at ${q.host}: you are asked every time.` : `In your own tab on ${q.host}: you are asked every time.` }));
     reply = h('div', { className: 'stack' }, ...(edit ? [edit.el] : []), yesNo().el);
   } else if (q.kind === 'approve') {
     const hint = h('span', { className: 'muted small', id: `${textId}-always`, textContent: `Always: allow this exact action on ${q.host} without asking again. Revoke it under the gardener.` });

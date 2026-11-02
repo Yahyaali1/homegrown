@@ -1,4 +1,4 @@
-// Outputs (plan T9): the zip writer, the PPTX parts, the evidence check, chart scale, model-free decks and passages.
+// Outputs: the zip writer, the PPTX parts, the evidence check, chart scale, model-free decks and passages.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

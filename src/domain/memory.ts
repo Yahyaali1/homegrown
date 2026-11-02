@@ -1,4 +1,4 @@
-// Typed memory and Documents (plan T7), kept in eg-memory's `entities` and `docs` stores by background/memory.ts.
+// Typed memory and Documents, kept in eg-memory's `entities` and `docs` stores by background/memory.ts.
 // A model's entity is off (`confirmed: false`) until the person keeps it; only confirmed ones reach a prompt, and only
 // in the data part, except a template the person wrote. Docs are private: reading one taints a run, as notes do.
 import { defang } from './text.ts';
@@ -27,6 +27,8 @@ export interface Entity {
 }
 
 export interface Doc { v: 1; id: string; gardenerId?: string; path: string; text: string; by: 'person' | 'model'; at: number }
+/** An answer a person got on a page (eg-memory `history`). */
+export interface HistoryEntry { id?: number; url: string; title: string; ask: string; answer: string; time: number }
 
 export const MEM = { name: 80, aliases: 10, fields: 20, field: 500, body: 8000, template: 8000, path: 120, doc: 20_000, docs: 50, anchors: 3 } as const;
 

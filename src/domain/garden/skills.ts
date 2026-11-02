@@ -1,10 +1,10 @@
-// Skills (plan T8): a method the person wrote or accepted, with files, run by slash command, by a routine or as a batch
+// Skills: a method the person wrote or accepted, with files, run by slash command, by a routine or as a batch
 // test. A model never changes a method: it only proposes one, which stays off until the person accepts it. Files are data.
 import type { Ability } from '../model.ts';
 import { defang } from '../text.ts';
 import { correctionOf } from '../memory.ts';
 import type { Chat } from '../chat.ts';
-import type { GardenRun, Mention, Routine, Work } from './records.ts';
+import { requestOf, type GardenRun, type Mention, type Routine, type Work } from './records.ts';
 
 export interface SkillFile { name: string; text: string }
 /** A test case. `runId`: its last test run; `pass`: code's verdict on `expect`, or the person's mark without one. */
@@ -85,12 +85,12 @@ export const skillWork = (s: Skill, request: string, tabs?: Mention[]): Work =>
 /** The needs a model lacks. */
 export const unmet = (s: Pick<Skill, 'needs'>, has: (a: Ability) => boolean): Ability[] => (s.needs ?? []).filter((a) => !has(a));
 
-/** A skill or routine can't be turned on, or a run of it start, while the model lacks a need (plan T12). */
+/** A skill or routine can't be turned on, or a run of it start, while the model lacks a need. */
 export const needsRefusal = (x: Pick<Skill, 'needs'> | null | undefined, has: (a: Ability) => boolean): string | null => (x && unmet(x, has).length ? NEEDS : null);
 
 /** Why a run of `skill` can't start (checked at pin, against the run's pinned abilities); null when it can. */
 export function skillRefusal(run: GardenRun, skill: Skill | null | undefined): string | null {
-  const id = run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.skillId : undefined;
+  const id = requestOf(run.work)?.skillId;
   if (!id) return null;
   if (!skill) return 'Its skill was deleted.';
   if (!skill.on) return `The skill /${skill.name} is off.`;

@@ -27,11 +27,19 @@ const host = (u: string | undefined): string => {
   }
 };
 
-const WORDS = /\b(pay\b|buy|order|purchase|check ?out|delete|remove|send|transfer|refund|repl(y|ies)|post(s|ed|ing)?\b|(un)?subscribe|confirm|password)/i;
+const WORDS = /\b(pay|buy|order|purchase|check ?out|delete|remove|send|transfer|refund|repl(y|ies)|post(s|ed|ing)?\b|(un)?subscribe|confirm|password)/i;
+const READS = /^(get|list|read|search|fetch|find)\b/i;
+const split = (s: string) => s.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
 
-/** The first sensitive word in a name or text (`delete_contact`, `sendEmail` split into words), or null. */
-export const sensitiveWord = (text: string): string | null =>
-  WORDS.exec(text.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2'))?.[0] ?? null;
+/**
+ * The first sensitive word in an app call (its tool name, then its args; `delete_contact`, `sendEmail` split into
+ * words), or null. A tool named for reading (`get_payment`, `list_payouts`) only reads about payments.
+ */
+export function sensitiveWord(text: string): string | null {
+  const [name = '', ...rest] = text.split(' ');
+  const head = split(name);
+  return WORDS.exec(`${READS.test(head) ? head.replace(/\bpay\w*/gi, '') : head} ${split(rest.join(' '))}`)?.[0] ?? null;
+}
 
 /** Why this step is sensitive (always asked, never granted), or null: it may be granted. */
 export function classify(t: Target): string | null {
@@ -73,7 +81,7 @@ export function verdict(t: Target, c: Check): { stop?: string; host?: true; pass
  * Where check-for-humans widgets load from (reCAPTCHA, hCaptcha, Arkose): host, then a path prefix. Turnstile is left
  * out: its widget sits on ordinary forms and mostly passes alone; Cloudflare's interstitial is known by its title.
  */
-export const CHALLENGE_HOSTS = ['google.com/recaptcha/', 'recaptcha.net/recaptcha/', 'hcaptcha.com/', 'arkoselabs.com/', 'funcaptcha.com/'];
+const CHALLENGE_HOSTS = ['google.com/recaptcha/', 'recaptcha.net/recaptcha/', 'hcaptcha.com/', 'arkoselabs.com/', 'funcaptcha.com/'];
 const HUMAN = /verify (that )?you(’|')?re (a )?human|verify (that )?you are (a )?human|are you a robot|checking (if the site connection is secure|your browser)/i;
 /** Below this much page text, a page is little more than what it shows (an interstitial). */
 const SHORT = 600;

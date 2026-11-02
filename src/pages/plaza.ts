@@ -1,4 +1,4 @@
-// Companion Plaza (plan T13, decision 14): each gardener's flower standing still in a bed, with today's line above.
+// Companion Plaza: each gardener's flower standing still in a bed, with today's line above.
 // A click turns the flower one petal and opens the side panel's chat with that gardener.
 import { $, emptyPot } from './shell.ts';
 import { h } from '../ui/dom.ts';

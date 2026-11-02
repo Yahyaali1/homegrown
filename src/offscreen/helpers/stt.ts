@@ -1,10 +1,12 @@
 // Speech to text: Whisper base (not gated) on WASM, about 80 MB on first use. Dictation sends recorded audio; live
 // captions tap a tab's audio in 5 s chunks and send each caption on as an engine event (the worker translates it);
-// a meeting (plan T10) taps the mic and the tab in 20 s windows and keeps the lines until it stops.
+// a meeting taps the mic and the tab in 20 s windows, sending each line to the worker as it is heard; a meeting file
+// is decoded here and goes through the same 20 s windows.
 import { pipeline } from '@huggingface/transformers';
 import { audible, isCaption, resample, samplesOf } from '../../domain/audio.ts';
+import { clock } from '../../domain/captions.ts';
 import { broadcast } from '../broadcast.ts';
-import type { Line, Who } from '../../domain/meeting.ts';
+import { fileRefused, serial, WINDOW_MS, type Line, type Who } from '../../domain/meeting.ts';
 import { lazily } from './hf.ts';
 
 const ID = 'onnx-community/whisper-base';
@@ -97,25 +99,35 @@ function liveStop(): boolean {
   return true;
 }
 
-// ---- meetings (plan T10): the mic as "You" and the tab as "Them", each in 20 s windows, kept here until stop ----
+// ---- meetings: the mic as "You" and the tab as "Them", each in 20 s windows ----
 
-const MEET_S = 20;
-interface Meet { ctx: AudioContext; streams: MediaStream[]; el?: HTMLAudioElement; taps: { flush(): void; stop(): void }[]; lines: Line[]; queue: Promise<unknown>; mic: boolean; failed: number }
+const MEET_S = WINDOW_MS / 1000;
+const BACKLOG = 6; // windows waiting for Whisper, both sides together: about a minute of the call
+interface Meet { ctx: AudioContext; streams: MediaStream[]; el?: HTMLAudioElement; taps: { flush(): void; stop(): void }[]; lines: Line[]; queue: ReturnType<typeof serial>; mic: boolean; failed: number }
 let meet: Meet | null = null;
 
 async function meetStart({ streamId, audioUrl, mic = true }: { streamId?: string; audioUrl?: string; mic?: boolean }): Promise<{ mic: boolean }> {
   if (meet) throw new Error('A meeting is already being recorded.');
   let asr: Asr;
   const ctx = new AudioContext();
-  const me: Meet = { ctx, streams: [], taps: [], lines: [], queue: Promise.resolve(), mic: false, failed: 0 };
-  // One Whisper call at a time for both sides; a window waits its turn (at 16 kHz, so a long queue stays small).
+  const me: Meet = { ctx, streams: [], taps: [], lines: [], queue: serial(BACKLOG), mic: false, failed: 0 };
+  // One Whisper call at a time for both sides. Each line goes to the worker at once, so a closed recorder loses
+  // only the windows in the queue; past the backlog a window counts as failed.
   const heard = (who: Who) => (raw: Float32Array, at: number) => {
     if (!audible(raw)) return;
     const pcm = resample(raw, ctx.sampleRate, 16000);
-    me.queue = me.queue.then(async () => {
-      const text = ((await asr(pcm, { task: 'transcribe', chunk_length_s: 30 })).text ?? '').trim();
-      if (isCaption(text)) me.lines.push({ who, at, end: at + Math.round(pcm.length / 16), text });
-    }).catch(() => void me.failed++);
+    const ok = me.queue.add(async () => {
+      try {
+        const text = ((await asr(pcm, { task: 'transcribe', chunk_length_s: 30 })).text ?? '').trim();
+        if (!isCaption(text)) return;
+        const line = { who, at, end: at + Math.round(pcm.length / 16), text };
+        me.lines.push(line);
+        void broadcast({ type: 'meeting-heard', line, failed: me.failed });
+      } catch {
+        me.failed++;
+      }
+    });
+    if (!ok) me.failed++;
   };
   try {
     const tab = await tabSource(ctx, streamId, audioUrl);
@@ -151,9 +163,35 @@ async function meetStop(): Promise<{ lines: Line[]; failed: number } | null> {
   me.taps.forEach((t) => (t.flush(), t.stop()));
   me.streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
   me.el?.pause();
-  await me.queue;
+  await me.queue.idle();
   void me.ctx.close();
   return { lines: me.lines, failed: me.failed };
+}
+
+/**
+ * Transcribe a file a page holds as a blob URL: decoded here at 16 kHz, then 20 s windows with no speaker. Resolves
+ * once it is decoded; progress and the lines (`meeting-file`) follow as broadcasts, which the worker saves.
+ */
+async function meetFile({ url, title }: { url: string; title: string }): Promise<true> {
+  const audio = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(await (await fetch(url)).arrayBuffer());
+  const long = fileRefused(0, audio.duration * 1000);
+  if (long) throw new Error(long);
+  const asr = await loadAsr();
+  const pcm = audio.getChannelData(0); // ponytail: first channel only
+  const step = 16 * WINDOW_MS;
+  void (async () => {
+    const lines: Line[] = [];
+    let failed = 0;
+    for (let i = 0; i < pcm.length; i += step) {
+      void broadcast({ type: 'meeting-progress', text: `Transcribing ${title}: ${clock(i / 16)} of ${clock(pcm.length / 16)}…` });
+      const w = pcm.subarray(i, i + step);
+      if (!audible(w)) continue;
+      const text = await asr(w, { chunk_length_s: 30 }).then((r) => (r.text ?? '').trim(), () => void failed++);
+      if (text && isCaption(text)) lines.push({ at: i / 16, end: (i + w.length) / 16, text });
+    }
+    void broadcast({ type: 'meeting-file', title, lines, failed });
+  })();
+  return true;
 }
 
 export const handlers = {
@@ -167,5 +205,6 @@ export const handlers = {
   livePause: ({ paused }: { paused: boolean }) => (live ? ((live.paused = !!paused), true) : false),
   meetStart,
   meetStop,
+  meetFile,
   meetState: () => (meet ? { recording: true, mic: meet.mic, lines: meet.lines.length } : { recording: false }),
 };

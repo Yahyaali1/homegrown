@@ -1,5 +1,5 @@
 // Theo's workflow cases (see rosa.mjs). The ATS is a fake app (apps.mjs); its notes are approved app calls. The
-// interview is planted as his own document, standing in for a T10 meeting doc.
+// interview is planted as his own document, standing in for a meeting doc.
 import { SHOP } from '../garden-fixtures.mjs';
 import { ats } from './apps.mjs';
 

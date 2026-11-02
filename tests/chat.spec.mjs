@@ -82,11 +82,18 @@ test('openLink follows a same-site link in the active tab and opens another site
 test('chat @slow: an answer cut off by a reload shows Interrupted and Retry, and Retry answers again', async () => {
   await panel.bringToFront();
   await panel.click('#chat-clear');
+  const t0 = Date.now();
   await panel.fill('#chat-input', 'Write a story of about 300 words about a bee who learns to dance.');
   await panel.click('#chat-send');
   const streaming = panel.locator('#messages li.model .text').last();
   await expect.poll(async () => (await streaming.innerText()).length, { timeout: 120000 }).toBeGreaterThan(60);
-  await panel.waitForTimeout(1500); // the partial answer is saved every second
+  // The partial answer is saved every second.
+  await expect.poll(() => panel.evaluate(async (t0) => {
+    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-chat'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
+    const chats = await new Promise((ok) => (d.transaction('chats').objectStore('chats').getAll().onsuccess = (e) => ok(e.target.result)));
+    d.close();
+    return chats.some((c) => c.updatedAt >= t0 && c.turns.at(-1)?.partial && c.turns.at(-1).text);
+  }, t0)).toBe(true);
   await panel.reload();
   await expect(panel.locator('#messages .turn-actions .warn')).toHaveText('Interrupted');
   await expect(panel.locator('#messages li.model .text').last()).not.toBeEmpty();

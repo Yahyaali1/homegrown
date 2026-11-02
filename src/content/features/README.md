@@ -170,7 +170,7 @@ or page guards. "Page action" means `ui.actions.page` (launcher and palette), "t
     text size, Transcript, Copy, Download and Stop (`liveStop`).
   - Gates: `captionLang` selects the caption language.
   - Guard: top frame only.
-- `meetoffer.ts` (plan T10)
+- `meetoffer.ts`
   - On Meet, Zoom (`*.zoom.us`) and Teams pages (`isMeetingHost`), a small bar: "Record this call? Press
     Alt+Shift+M, or right-click the page → Record this meeting." Text only; it never records.
   - The worker's `{type:'meeting'}` messages turn it into the recording line, the saved line or an error, on any page.

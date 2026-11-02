@@ -2,11 +2,11 @@
 // Playwright answers https://shop.garden.test with pages the test can change, and counts the form posts it receives.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, engine, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, engine, launch, plant, put, ROOT } from './harness.mjs';
 
 const HOST = 'shop.garden.test';
 const SHOP = `https://${HOST}`;
-let ctx, sw, id, port, panel;
+let ctx, sw, id, port, panel, bg;
 const pages = {};
 const posts = []; // paths of form posts the shop received
 
@@ -21,35 +21,13 @@ test.beforeAll(async () => {
   });
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  // The test profile is reused: start from an empty garden.
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const g of await bg('gardenerList')) await bg('gardenerDelete', { id: g.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
 });
 
 test.afterAll(async () => {
   await ctx?.close();
 });
-
-/** A garden handler, called from an extension page as the Garden tab calls it. */
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
-
-/** Changes one record in the worker's own store (hg-garden) from an extension page. */
-const idbPut = (store, change, key) => panel.evaluate(async ([store, change, key]) => {
-  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-  const t = d.transaction(store, 'readwrite');
-  const os = t.objectStore(store);
-  const old = key ? await new Promise((ok) => (os.get(key).onsuccess = (e) => ok(e.target.result))) : {};
-  os.put({ ...old, ...change });
-  await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-  d.close();
-}, [store, change, key]);
 
 const runOf = (runId) => bg('runGet', { id: runId });
 async function settled(runId, statuses = ['done', 'failed', 'stopped']) {
@@ -77,12 +55,11 @@ async function plantAct(g, url, instructions) {
   const m = await engine(sw, 'resolve', {});
   const runId = `act-${Date.now()}`;
   const reply = JSON.stringify({ tool: 'act', args: { url, steps: { instructions } } });
-  await idbPut('runs', {
+  await plant(panel, sw, {
     v: 1, id: runId, gardenerId: g.id, work: { kind: 'ask', request: 'Do it on the shop.' }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
     model: m.name, maxTokens: m.maxTokens, agent: { loop: true, maxSteps: 2 },
     turns: [{ purpose: 'choose', reply, at: Date.now() }], steps: [], requests: [], seen: [], tainted: false,
   });
-  await sw.evaluate(() => self.gardenFire('none')); // no such routine: the claim does nothing, the queue drains
   return runId;
 }
 
@@ -98,7 +75,7 @@ test('gardeners @slow: a routine reads two pages, and its second run says what c
   const r = await bg('routineSave', { routine: { gardenerId: g.id, name: 'Prices', when: { kind: 'every', hours: 1 }, work: { kind: 'read', urls: [`${SHOP}/ferns`, `${SHOP}/moss`] } } });
   // As if its alarm fired: due now, then the claim.
   const fire = async () => {
-    await idbPut('routines', { nextDue: Date.now() - 1000 }, r.id);
+    await put(panel, 'routines', { nextDue: Date.now() - 1000 }, r.id);
     await sw.evaluate((rid) => self.gardenFire(rid), r.id);
     return (await bg('routineList', { gardenerId: g.id }))[0].lastRunId ?? (await bg('runList', { gardenerId: g.id }))[0].id;
   };

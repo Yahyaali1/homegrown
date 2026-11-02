@@ -1,11 +1,8 @@
-// Hands in your tabs end to end, no model (plan T5): runs are planted pinned, with a plan the person approved and a
-// model no engine has, so each stops at its first think. Sites are faked at their edge (ADR-14). This copy of the
-// extension has `debugger` and `downloads` at install: Chrome asks for an optional permission in a prompt a test can't click.
+// Hands in your tabs end to end, no model: runs are planted pinned, with a plan the person approved and a model no
+// engine has, so each stops at its first think. Sites are faked at their edge (ADR-14). The extension has `debugger`
+// and `downloads` at install.
 import { test, expect } from '@playwright/test';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { EXT, launch } from './harness.mjs';
+import { bgOn, launch, plannedRun, plant as plantOn } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const MINE = 'https://mail.garden.test';
@@ -15,18 +12,13 @@ const NOISY = `<!doctype html><title>Item</title><p>Item 1</p><script>
   console.error('boom at https://shop.garden.test/app.js?token=secret');
   fetch('/api/item/1?key=secret', { method: 'PATCH', body: '{}' });
 </script>`;
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 const loads = [];
 
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
-  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'hg-tabs-'));
-  fs.cpSync(EXT, copy, { recursive: true });
-  const manifest = JSON.parse(fs.readFileSync(path.join(copy, 'manifest.json'), 'utf8'));
-  manifest.permissions.push('debugger', 'downloads');
-  fs.writeFileSync(path.join(copy, 'manifest.json'), JSON.stringify(manifest));
-  ({ ctx, sw, id } = await launch({ ext: copy }));
+  ({ ctx, sw, id } = await launch({ permissions: ['debugger', 'downloads'] }));
   const html = (body) => ({ contentType: 'text/html; charset=utf-8', body });
   await ctx.route(`${MINE}/**`, (r) => {
     const u = new URL(r.request().url());
@@ -43,6 +35,7 @@ test.beforeAll(async () => {
   await ctx.route('https://www.google.com/recaptcha/**', (r) => r.fulfill(html('<!doctype html><p>I’m not a robot</p>')));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
+  bg = bgOn(panel);
   g = await bg('gardenerSave', { gardener: { name: 'Clerk', instructions: 'Help in my tabs.', sites: ['shop.garden.test'], minutes: 10, devtools: true } });
 });
 
@@ -50,29 +43,11 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
-
-async function plant(run) {
-  await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, run);
-  await sw.evaluate(() => self.gardenFire('none'));
-}
-
-const planned = (runId, plan, work = {}) => ({
-  v: 1, id: runId, gardenerId: g.id, work: { kind: 'plan', request: 'Do it.', ...work }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
-  model: 'no-model-here', maxTokens: 4096, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan,
-  turns: [], steps: [], requests: [], seen: [], tainted: false,
-});
+const plant = (run) => plantOn(panel, sw, run);
+const planned = (id, plan, work = {}) => plannedRun({ id, gardenerId: g.id, work: { kind: 'plan', request: 'Do it.', ...work }, plan });
 const waiting = (runId) => expect.poll(async () => (await bg('runGet', { id: runId })).status, { timeout: 60_000 }).toBe('waiting');
+/** A sensitive yes is refused until 8 s after the card was shown: answered as soon as the worker takes it. */
+const yesOnceAllowed = (runId, requestId) => expect.poll(() => bg('requestAnswer', { runId, requestId, value: 'yes' }).then(() => 'taken', (e) => e.message), { timeout: 15_000, intervals: [500] }).toBe('taken');
 
 test('act_my_tab: an approved plan fills a form in the person\'s own tab, only after its own yes', async () => {
   const mine = await ctx.newPage();
@@ -83,12 +58,11 @@ test('act_my_tab: an approved plan fills a form in the person\'s own tab, only a
   await waiting('mine-1');
   const [q] = (await bg('runGet', { id: 'mine-1' })).requests;
   // The plan's yes covered nothing in the person's tab; any fill there is sensitive, untainted or not.
-  expect([q.kind, q.tool, q.sensitive, !!q.fromPlan]).toEqual(['approve', 'act_my_tab', true, false]);
+  expect([q.kind, q.tool, q.sensitive, q.origin === 'plan']).toEqual(['approve', 'act_my_tab', true, false]);
   expect(loads).not.toContain('/sent?to=ann%40example.com');
   await expect(bg('requestAnswer', { runId: 'mine-1', requestId: q.id, value: 'always' })).rejects.toThrow(/yes or no/);
   await bg('requestShown', { runId: 'mine-1', requestId: q.id });
-  await panel.waitForTimeout(8500);
-  await bg('requestAnswer', { runId: 'mine-1', requestId: q.id, value: 'yes' });
+  await yesOnceAllowed('mine-1', q.id);
   let run;
   await expect.poll(async () => (run = await bg('runGet', { id: 'mine-1' })).steps[0]?.state ?? 'started', { timeout: 60_000 }).not.toBe('started');
   expect(run.steps[0].error ?? '').toBe('');
@@ -153,12 +127,10 @@ test('act_my_tab: the card is editable; the edited fill is asked once more (sens
   await card.getByRole('button', { name: 'Yes', exact: true }).click();
   // The edit is a new call: its fill in the person's tab is sensitive, so it is asked again and can't be edited.
   let q;
-  await expect.poll(async () => (q = (await bg('runGet', { id: 'mine-2' })).requests.find((x) => x.editedFrom))?.sensitive ?? false, { timeout: 30_000 }).toBe(true);
-  expect(q.noEdit).toBe(true);
+  await expect.poll(async () => (q = (await bg('runGet', { id: 'mine-2' })).requests.find((x) => typeof x.origin === 'object'))?.sensitive ?? false, { timeout: 30_000 }).toBe(true);
   expect(loads).not.toContain('/sent?to=bob%40example.com');
   await bg('requestShown', { runId: 'mine-2', requestId: q.id });
-  await panel.waitForTimeout(8500);
-  await bg('requestAnswer', { runId: 'mine-2', requestId: q.id, value: 'yes' });
+  await yesOnceAllowed('mine-2', q.id);
   await expect.poll(async () => (await bg('runGet', { id: 'mine-2' })).steps[0]?.state ?? 'started', { timeout: 60_000 }).toBe('done');
   expect(loads).toContain('/sent?to=bob%40example.com');
   await mine.close();

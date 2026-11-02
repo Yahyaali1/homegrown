@@ -2,10 +2,10 @@
 import type { Effect } from './policy.ts';
 import { parseScenario, type Scenario } from '../scrape/scenario.ts';
 import { ENTITY_TYPES, MEM } from '../memory.ts';
-import { LIMITS, bare, parseWhen, parseWork, type GardenRun, type Mention } from './records.ts';
+import { LIMITS, bare, parseWhen, parseWork, requestOf, type GardenRun, type Mention } from './records.ts';
 import { argsText, unusable, type ConnectorFacts } from '../mcp.ts';
 
-export type Arg =
+type Arg =
   | { type: 'string'; max: number }
   | { type: 'number'; min: number; max: number }
   | { type: 'enum'; values: string[] }
@@ -57,11 +57,11 @@ export const TOOLS: ToolSpec[] = [
   { name: 'read_page', describe: 'read a web page; gives its text and links', args: { url: { type: 'string', max: 2000 } }, effect: 'read' },
   { name: 'mission', describe: 'find and compare things across many pages, e.g. "cheapest 27-inch 4k monitor"', args: { goal: { type: 'string', max: 300 } }, effect: 'read' },
   { name: 'draft', describe: 'save a draft for the person to copy', args: { title: { type: 'string', max: 80 }, text: { type: 'string', max: 4000 } }, effect: 'read' },
-  // Kept in Homegrown only (eg-memory); a later run that reads it is tainted, and sees it as data with its source.
+  // Kept in Homegrown only; a later run that reads it is tainted, and sees it as data with its source.
   { name: 'note', describe: 'save a short note for your later runs', args: { text: { type: 'string', max: 500 } }, effect: 'read' },
   { name: 'notify', describe: 'send the person one short notification', args: { text: { type: 'string', max: 200 } }, effect: 'read' },
   { name: 'act', describe: 'open a page and click or type in it, after the person approves; steps: {"instructions": [{"click": "css"}, {"fill": ["css", "text"]}, {"wait_for": "css"}, {"wait": ms}]}', args: { url: { type: 'string', max: 2000 }, steps: { type: 'scenario' } }, effect: 'act' },
-  // Read, unless the recipe's steps act: then policy treats the call as an act (actOf).
+  // Read, unless the recipe's steps act: then policy treats the call as an act.
   { name: 'collect', describe: 'run one of the person\'s saved Collect recipes by its id; gives its rows', args: { recipe: { type: 'string', max: 200 } }, effect: 'read' },
   // Offered only when the person named tabs (toolsFor).
   { name: 'read_my_tab', describe: 'read one of the person\'s open tabs they named; tab: its URL exactly as listed', args: { tab: { type: 'string', max: 2000 } }, effect: 'read' },
@@ -71,18 +71,32 @@ export const TOOLS: ToolSpec[] = [
   { name: 'propose_routine', describe: 'propose a routine the person may turn on; when: {"kind": "daily", "at": "08:00"}, {"kind": "every", "hours": 6} or {"kind": "weekly", "days": [1], "at": "08:00"}; work: {"kind": "read", "urls": ["…"]}', args: { name: { type: 'string', max: 80 }, when: { type: 'record', parse: parseWhen }, work: { type: 'record', parse: parseWork } }, effect: 'read' },
   // Stored unconfirmed: never an anchor or in a prompt until the person keeps it. Offered like propose_routine.
   { name: 'remember', describe: 'propose a memory file the person may keep; type: person, project, event, research or preference', args: { type: { type: 'enum', values: [...ENTITY_TYPES] }, name: { type: 'string', max: MEM.name }, body: { type: 'string', max: MEM.body } }, effect: 'read' },
-  // The gardener's own Documents, kept in Homegrown only; a read taints the run (taintsAfter).
+  // The gardener's own Documents, kept in Homegrown only.
   { name: 'doc_read', describe: 'read one of your documents by its path, e.g. plan.md', args: { path: { type: 'string', max: MEM.path } }, effect: 'read' },
   { name: 'doc_write', describe: 'write (or replace) one of your documents, e.g. a plan file for a long task', args: { path: { type: 'string', max: MEM.path }, text: { type: 'string', max: MEM.doc } }, effect: 'read' },
-  // A connected app's tool (ADR-17); offered only when one is usable, with its lines in place of this describe (toolsFor).
+  // A connected app's tool; offered only when one is usable, with its lines in place of this describe (toolsFor).
   { name: 'app_call', describe: 'call a tool of an app the person connected, after they approve', args: { connector: { type: 'string', max: 200 }, tool: { type: 'string', max: 41 }, args: { type: 'record', parse: (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null) } }, effect: 'act' },
 ];
 
-/** Tools whose approve card shows the args as fields the person may edit before Yes (draft and notify are never asked). */
-export const EDITABLE = ['act', 'act_my_tab', 'app_call'];
+/**
+ * What policy treats differently per tool; a tool not listed has none of it. `blanket`: a plan's yes or Approve all
+ * may cover its approve (an act in the gardener's own tabs). `noAlways`: never granted. `editable`: its approve card
+ * shows the args as fields to edit before Yes. `taints`: its result always taints the run (`always`), or when it or
+ * its final page is on the gardener's sites (`sites`); also when it threw, as it may have shown the data.
+ */
+interface Rule { blanket?: true; noAlways?: true; editable?: true; taints?: 'always' | 'sites' }
+const POLICY: Record<string, Rule> = {
+  act: { blanket: true, editable: true, taints: 'sites' },
+  collect: { blanket: true },
+  act_my_tab: { noAlways: true, editable: true, taints: 'always' },
+  read_my_tab: { taints: 'always' },
+  app_call: { editable: true, taints: 'always' },
+  doc_read: { taints: 'always' },
+};
+export const ruleOf = (tool: string | undefined): Rule => (tool && Object.hasOwn(POLICY, tool) ? POLICY[tool]! : {});
 
 /** The tabs the person named for this run. */
-export const mentionsOf = (run: GardenRun): Mention[] => (run.work.kind === 'ask' || run.work.kind === 'plan' ? run.work.tabs ?? [] : []);
+export const mentionsOf = (run: GardenRun): Mention[] => requestOf(run.work)?.tabs ?? [];
 
 /**
  * The tools offered to this run: the person's tabs only when they named some, `propose_routine` and `remember` only
@@ -102,7 +116,7 @@ export const toolsFor = (run: GardenRun, tools: ToolSpec[] = TOOLS, connectors: 
  * Each usable app tool as one line, then the app's guidelines: only what the person wrote or confirmed, and names and
  * types that passed the name check. A tool set to Off never appears. '' when none is usable.
  */
-export function appLines(connectors: ConnectorFacts[]): string {
+function appLines(connectors: ConnectorFacts[]): string {
   return connectors.flatMap((c) => {
     // A tool the person hasn't described yet isn't offered: its only text would be the server's.
     const tools = c.tools.filter((t) => t.scope !== 'off' && t.describe.trim() && !unusable(t.name, t.schema));

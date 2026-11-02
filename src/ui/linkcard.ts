@@ -1,4 +1,4 @@
-// Links in answers (plan T6): web addresses in model text become links, a link opens by the worker's link rules
+// Links in answers: web addresses in model text become links, a link opens by the worker's link rules
 // (`openLink`), and resting on one for 600 ms shows a small card with its host and the local phishing check. "Read
 // the page" (a click) fetches its title and read time; "Key points" then runs the X-ray summary. The in-page Link X-ray
 // (content/features/links.ts) shares `KEY_POINTS` and `readMinutes`.

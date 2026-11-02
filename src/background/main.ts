@@ -1,5 +1,5 @@
-// Service worker: keeps the offscreen engine alive, runs requests from the in-page UI over a port, owns the
-// right-click menu and shortcuts, and hands PDF and browser-page actions to the side panel. Built to background.js.
+// Service worker: registers the feature modules, keeps the offscreen engine alive, runs requests from the in-page UI
+// over a port, and owns the task menu items and shortcuts (the side panel takes PDF and browser-page tasks).
 import { DEFAULT_TASKS, getTasks } from '../shared/actions.ts';
 import type { PageRequest } from '../shared/protocol.ts';
 import { MODELS } from '../domain/model.ts';
@@ -18,10 +18,8 @@ import * as garden from './garden.ts';
 import * as outputs from './outputs.ts';
 import * as meetings from './meetings.ts';
 import * as mcp from './mcp.ts';
-import { tabText } from './tabs.ts';
-import { isExtensionPage } from './pagerequest.ts';
-import { sameSite } from '../domain/links.ts';
-import { parseSettings } from '../domain/settings.ts';
+import * as chat from './chat.ts';
+import * as plaza from './plaza.ts';
 
 type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
 /** A feature module: its handlers become bg commands; the hooks are optional. */
@@ -30,10 +28,12 @@ interface BackgroundModule {
   init?(): void;
   /** Adds its own right-click items (the menu is rebuilt from scratch). */
   menus?(): void;
+  /** A right-click item was chosen (any module's: each checks its own ids). Called in the click, for sidePanel.open. */
+  onMenu?(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): unknown;
   /** Called after every answer to a page request. */
   onAnswer?(req: unknown, result: { text: string }, sender?: chrome.runtime.MessageSender): unknown;
 }
-const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs, meetings, mcp];
+const modules: BackgroundModule[] = [reader, web, capture, tabs, monitors, memory, livecaptions, missions, scrape, garden, outputs, meetings, mcp, chat, plaza];
 const handlers: Record<string, Handler> = Object.assign({}, ...modules.map((m) => m.handlers ?? {}));
 // The side panel's page buttons: send to the active tab's in-page UI (re-injecting it if needed).
 handlers.toPage = async ({ msg }: { msg: object }) => {
@@ -42,21 +42,6 @@ handlers.toPage = async ({ msg }: { msg: object }) => {
   await toTab(tab.id, msg);
   return true;
 };
-// A link in an answer: the active tab follows it when it's on the same site (settings.linksInActiveTab), else a new
-// tab opens beside it.
-handlers.openLink = async ({ url }: { url: string }, sender?: chrome.runtime.MessageSender) => {
-  if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
-  const u = new URL(String(url));
-  if (!/^https?:$/.test(u.protocol)) throw new Error('Only web links open.');
-  const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null);
-  const [tab] = win?.id === undefined ? [] : await chrome.tabs.query({ active: true, windowId: win.id });
-  const host = tab?.url && /^https?:/.test(tab.url) ? new URL(tab.url).hostname : '';
-  if (tab?.id !== undefined && host && sameSite(host, u.hostname) && parseSettings(await chrome.storage.sync.get('linksInActiveTab')).linksInActiveTab) {
-    await chrome.tabs.update(tab.id, { url: u.href });
-  } else await chrome.tabs.create({ url: u.href, ...(tab && { windowId: tab.windowId, index: tab.index + 1 }) });
-  return true;
-};
-
 // ---- tasks ----
 
 async function seedTasks(): Promise<void> {
@@ -148,8 +133,6 @@ async function rebuildMenus(): Promise<void> {
     for (const t of tasks.filter((x) => x.kind === kind)) chrome.contextMenus.create({ id: `task:${t.id}`, parentId: `root-${kind}`, title: t.title, contexts });
     chrome.contextMenus.create({ id: `ask:${kind}`, parentId: `root-${kind}`, title: 'Ask…', contexts });
   }
-  chrome.contextMenus.create({ id: 'chat:page', title: 'Open in chat', contexts: ['page'] });
-  chrome.contextMenus.create({ id: 'chat:link', title: 'Open in chat', contexts: ['link'] });
   for (const m of modules) m.menus?.(); // modules' own items (removeAll above dropped them)
 }
 
@@ -164,40 +147,25 @@ chrome.runtime.onInstalled.addListener(async () => {
   for (const tab of await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'], discarded: false })) injectInto(tab).catch(() => {});
 });
 
-const CHAT_TEXT = 15000;
-/** Open in chat: the page (read like `read_my_tab`, no debugger) or the link (fetched signed out) becomes the attachment. */
-async function chatAttach(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) {
-  const url = info.menuItemId === 'chat:link' ? info.linkUrl ?? '' : info.pageUrl ?? tab?.url ?? '';
-  if (!/^https?:/.test(url)) throw new Error('Only web pages open in chat.');
-  const read = info.menuItemId === 'chat:page' && tab?.id !== undefined
-    ? { title: tab.title ?? '', text: await tabText(tab.id, CHAT_TEXT).catch(() => '') } : { title: '', text: '' };
-  const page = read.text ? read : await web.handlers.fetchText({ url });
-  return { kind: 'text', title: 'Open in chat', selection: `${page.title}\n${url}\n\n${page.text.slice(0, CHAT_TEXT)}` };
-}
-
-async function handleMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): Promise<void> {
+/** A task or Ask… item: the in-page card where content.js runs, else the side panel (selected text in PDFs, browser pages). */
+async function taskClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): Promise<void> {
   const [type, id] = String(info.menuItemId).split(':');
-  if (type === 'chat') {
-    const pending = await chatAttach(info, tab).catch((e: Error) => ({ kind: 'text', title: 'Open in chat', error: e.message }));
-    return void (await chrome.storage.session.set({ pending: { ...pending, at: Date.now() } }));
-  }
+  if (type !== 'task' && type !== 'ask') return;
+  if (!inPage(info) && tab?.windowId !== undefined) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {}); // before any await
   const task = type === 'task' ? (await getTasks()).find((t) => t.id === id) ?? null : null;
   if (inPage(info) && tab?.id !== undefined) {
     await toTab(tab.id, { type: 'menu', task, ask: type === 'ask' ? id : null, srcUrl: info.srcUrl }, { frameId: info.frameId ?? 0 });
     return;
   }
-  // Side panel fallback (selected text in PDFs, and pages content scripts can't reach).
   const pending = task?.kind === 'text'
     ? { kind: 'text', title: task.title, prompt: task.prompt, selection: info.selectionText }
     : { kind: 'text', title: 'Ask…', selection: info.selectionText ?? '' };
   await chrome.storage.session.set({ pending: { ...pending, at: Date.now() } });
 }
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (!/^(task|ask|chat):/.test(String(info.menuItemId))) return; // other modules' items (reader:…) handle themselves
-  if ((!inPage(info) || String(info.menuItemId).startsWith('chat:')) && tab?.windowId !== undefined) chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-  handleMenuClick(info, tab).catch((e) => console.warn('menu action failed', e));
-});
+const handleMenuClick = (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) =>
+  Promise.all([taskClick(info, tab), ...modules.map((m) => m.onMenu?.(info, tab))]);
+chrome.contextMenus.onClicked.addListener((info, tab) => void handleMenuClick(info, tab).catch((e) => console.warn('menu action failed', e)));
 
 // Keyboard shortcuts: open the on-page launcher, or run the first page task.
 chrome.commands.onCommand.addListener(async (command, tab) => {
@@ -226,12 +194,6 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
-// Companion Plaza (decision 14): with the setting on, a new blank tab goes to plaza.html. Only that exact URL is touched.
-// ponytail: the default page may flash first; a manifest override can't be switched off at run time.
-chrome.tabs.onCreated.addListener(async (tab) => {
-  if (tab.id === undefined || tab.incognito || tab.pendingUrl !== 'chrome://newtab/') return;
-  if (parseSettings(await chrome.storage.sync.get('plaza')).plaza) await chrome.tabs.update(tab.id, { url: chrome.runtime.getURL('plaza.html') }).catch(() => {});
-});
 chrome.runtime.onStartup.addListener(ensureEngine);
 chrome.runtime.onInstalled.addListener(ensureEngine);
 // Seeding is idempotent, so it runs on every worker start: onInstalled isn't guaranteed to fire (an unpacked reload

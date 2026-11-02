@@ -306,7 +306,7 @@ implementation plans: [`docs/plan/`](docs/plan/README.md).
 - `bench`: [./bench/README.md](./bench/README.md) - engine speed comparisons and the mission benchmarks (brief reading, page extraction).
 - `demo`: [./demo/README.md](./demo/README.md) - records the README demo from the real extension and cuts it into `docs/demo/`.
 - `static`: manifest, HTML, CSS and icons, copied as they are into `extension/`.
-- `tests`: unit tests (`tests/unit`, no browser), the browser suite on the real model (`extension.spec.mjs`, `harness.mjs`, configured by `playwright.config.mjs` in the repo root), the GPU typing check `typing.mjs` (run with `./scripts/gpu.sh node tests/typing.mjs`) and test pages and files in `tests/fixtures/`.
+- `tests`: unit tests (`tests/unit`, no browser), the browser suite on the real model (`extension.spec.mjs`, `harness.mjs` with the shared page helpers, `fake-mcp.mjs` (a fake MCP server the bench uses too), configured by `playwright.config.mjs` in the repo root), the GPU typing check `typing.mjs` (run with `./scripts/gpu.sh node tests/typing.mjs`) and test pages and files in `tests/fixtures/`.
 
 ### Global Invariants
 

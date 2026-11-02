@@ -1,7 +1,7 @@
-// Hands in your tabs (plan T5): acting in the person's own tab, help with checks for humans, DevTools reads, downloads.
+// Hands in your tabs: acting in the person's own tab, help with checks for humans, DevTools reads, downloads.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alwaysOk, approveAllOk, decide, failTaints, type Grant } from '../../src/domain/garden/policy.ts';
+import { alwaysOk, approveAllOk, decide, taintsAfter, type Grant } from '../../src/domain/garden/policy.ts';
 import { answerPlan, HELP_REFUSED, next, parseEdit, type Ctx } from '../../src/domain/garden/loop.ts';
 import { isChallenge } from '../../src/domain/garden/classify.ts';
 import { devtoolsDigest, downloadRun, mentionedTab, ownsTab, TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
@@ -42,11 +42,11 @@ test('a click-only act_my_tab in an approved plan still raises its own request; 
   r.requests.push(q);
   r.status = 'waiting';
   assert.equal(answerPlan(r, ctx, q, 'yes', undefined, 3), null);
-  assert.deepEqual(r.requests.filter((x) => x.fromPlan).map((x) => x.tool), ['act']);
+  assert.deepEqual(r.requests.filter((x) => x.origin === 'plan').map((x) => x.tool), ['act']);
   const a = next(r, ctx);
   assert.ok('request' in a && a.request.kind === 'approve' && a.request.tool === 'act_my_tab');
-  // Even a forged fromPlan yes for it doesn't count.
-  r.requests.push({ ...a.request, id: 'forged', shownAt: 3, answer: { value: 'yes', at: 3 }, fromPlan: true });
+  // Even a forged plan yes for it doesn't count.
+  r.requests.push({ ...a.request, id: 'forged', shownAt: 3, answer: { value: 'yes', at: 3 }, origin: 'plan' });
   const b = next(r, ctx);
   assert.ok('request' in b && b.request.kind === 'approve', JSON.stringify(b));
 });
@@ -88,11 +88,11 @@ test('isChallenge: true for a reCAPTCHA iframe or a "verify you are human" page,
 });
 
 test('a failed call taints when it may have shown signed-in data: the person\'s tab always, an act on the sites', () => {
-  assert.equal(failTaints('act_my_tab', fill, 'not found', ['shop.com']), true);
-  assert.equal(failTaints('act', { url: 'https://shop.com/a' }, 'x failed', ['shop.com']), true);
-  assert.equal(failTaints('act', { url: 'https://far.com/a' }, 'x failed. Now at https://my.shop.com/account.', ['shop.com']), true);
-  assert.equal(failTaints('act', { url: 'https://far.com/a' }, 'x failed. Now at https://far.com/b.', ['shop.com']), false);
-  assert.equal(failTaints('read_page', { url: 'https://shop.com/a' }, 'timeout', ['shop.com']), false);
+  assert.equal(taintsAfter('act_my_tab', {}, fill, ['shop.com']), true);
+  assert.equal(taintsAfter('act', {}, { url: 'https://shop.com/a' }, ['shop.com']), true);
+  assert.equal(taintsAfter('act', { url: 'https://my.shop.com/account' }, { url: 'https://far.com/a' }, ['shop.com']), true);
+  assert.equal(taintsAfter('act', { url: 'https://far.com/b' }, { url: 'https://far.com/a' }, ['shop.com']), false);
+  assert.equal(taintsAfter('read_page', {}, { url: 'https://shop.com/a' }, ['shop.com']), false);
 });
 
 test('a help request answered no fails the step; yes reads it again', () => {
@@ -142,7 +142,7 @@ test('the act_my_tab card is editable: an edit is a new call, so an added fill i
   assert.ok(typeof edit !== 'string' && edit.args, String(edit));
   r.requests.push({ ...q, answer: { value: 'yes', at: 2, ...edit } });
   const again = next(r, ctx);
-  assert.ok('request' in again && again.request.sensitive && again.request.noEdit && again.request.editedFrom === 'q1', JSON.stringify(again));
+  assert.ok('request' in again && again.request.sensitive && (again.request.origin as { edit?: string })?.edit === 'q1', JSON.stringify(again));
   r.requests.push({ ...again.request, id: 'q2', shownAt: 10_000, answer: { value: 'yes', at: 18_001 } });
   assert.deepEqual(next(r, ctx), { call: { i: 0, tool: 'act_my_tab', args: fill, answered: 'q2' } });
 });

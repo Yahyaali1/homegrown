@@ -1,5 +1,5 @@
-// Outputs (plan T9): artifacts a person keeps, and decks built from a brief or a table. A model writes a deck only
-// when it is measured for `deck` (ADR-18); otherwise code builds it from the brief's headings or the table.
+// Outputs: artifacts a person keeps, and decks built from a brief or a table. A model writes a deck only
+// when it is measured for `deck`; otherwise code builds it from the brief's headings or the table.
 import { defang } from './text.ts';
 import type { Ask } from './mission/ports.ts';
 

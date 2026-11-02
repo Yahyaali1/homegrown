@@ -20,10 +20,10 @@ export function parseOutline(text: string): OutlineNode[] {
   return root;
 }
 
-export interface Question { q: string; opts: { key: string; text: string }[]; answer: string }
+export interface QuizQuestion { q: string; opts: { key: string; text: string }[]; answer: string }
 
 /** "1. Question? / A) … / Answer: B" blocks; questions without options or an answer are dropped. */
-export function parseQuiz(text: string): Question[] {
+export function parseQuiz(text: string): QuizQuestion[] {
   return text.split(/^\s*\d+[.)]\s+/m).slice(1).map((b) => ({
     q: b.split('\n')[0]!.trim(),
     opts: [...b.matchAll(/^\s*([A-D])[).]\s*(.+)$/gm)].map((m) => ({ key: m[1]!, text: m[2]!.trim() })),
@@ -137,7 +137,7 @@ export function keepCited(answer: string, files: DocFile[]): { text: string; dro
 
 /**
  * One cited answer across files: each file's best passages noted (map), then one answer from the notes (reduce),
- * each cut to `budget` characters; then `keepCited`. For a model measured for `cite` only (ADR-18).
+ * each cut to `budget` characters; then `keepCited`. For a model measured for `cite` only.
  */
 export async function citeFiles(ask: Ask, question: string, files: DocFile[], budget: number): Promise<{ text: string; dropped: number }> {
   const q = `Question: ${defang(question).slice(0, 500)}`;

@@ -7,7 +7,8 @@ import { riskOf } from '../scrape/tools.ts';
 import { docRefused, MEM } from '../memory.ts';
 import { checkArgs, unusable, type AppTool, type ConnectorFacts } from '../mcp.ts';
 import { sensitiveWord } from './classify.ts';
-import { LIMITS, bare, parseWork, personUrls, type Gardener, type GardenRun, type Request, type Seen, type Step } from './records.ts';
+import { mentionsOf, ruleOf } from './tools.ts';
+import { LIMITS, bare, parseWork, personUrls, requestOf, type Gardener, type GardenRun, type Request, type Seen, type Step } from './records.ts';
 
 export type Effect = Step['effect'];
 export type Verdict = 'allow' | 'ask' | 'deny';
@@ -81,12 +82,14 @@ export const recipeHosts = (r: RecipeFacts): string[] => [...new Set(r.urls.map(
 /** The key an answer to this call binds to: a recipe's always covers the whole recipe, so an edit needs a new yes. */
 export const callKey = (call: Call, known: Known = {}): string => recipeOf(call, known)?.key ?? actOf(call, known)?.key ?? argsKey(call.args);
 
+const runsCode = (steps: Instruction[] | undefined): boolean => !!steps?.some((i) => 'evaluate' in i);
+
 /**
  * Why these steps are sensitive before any page is seen, or null: code, typing after a signed-in read, or typing in
  * the person's own tab (signed in everywhere; taint comes only after the call).
  */
 export function sensitiveSteps(run: GardenRun, steps: Instruction[], tool?: string): string | null {
-  if (steps.some((i) => 'evaluate' in i)) return 'it runs code';
+  if (runsCode(steps)) return 'it runs code';
   if (tool === 'act_my_tab' && steps.some((i) => 'fill' in i)) return 'it types into your own signed-in tab';
   if (run.tainted && steps.some((i) => 'fill' in i)) return 'it types into a page after reading your signed-in pages';
   return null;
@@ -110,6 +113,10 @@ const trusted = (run: GardenRun, g: Gardener, s: Seen): boolean =>
   s.from === 'person' || s.from === 'approved' || (s.from === 'link' && onSites(hostOf(run.steps.find((x) => x.i === s.step)?.url), g.sites));
 
 export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Known = {}): Verdict {
+  const act = actOf(call, known);
+  // The model never runs code (parseArgs refuses it too); a recipe's code steps are the person's alone, and a recipe
+  // sits where a page's content script could plant one.
+  if (runsCode(call.tool === 'collect' ? recipeOf(call, known)?.scenario?.instructions : act?.steps)) return 'deny';
   switch (call.tool) {
     case 'read_page': {
       const url = bare(String(call.url ?? call.args.url ?? ''));
@@ -123,40 +130,34 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
       return run.tainted ? 'ask' : 'allow';
     case 'draft':
     case 'note':
+    // Stores an unconfirmed entry only: it reaches no prompt until the person keeps it.
+    case 'remember':
+    // The run's own gardener's documents (the worker scopes them).
+    case 'doc_read':
       return 'allow';
-    case 'act': {
-      const a = actOf(call, known);
-      // The model never runs code (parseArgs refuses it too).
-      if (!a || a.steps.some((i) => 'evaluate' in i)) return 'deny';
-      return granted(run, gardener, call.tool, a, known) ? 'allow' : 'ask';
-    }
+    case 'act':
+      return !act ? 'deny' : granted(run, gardener, call.tool, act, known) ? 'allow' : 'ask';
     case 'collect': {
       const r = recipeOf(call, known);
-      // Code steps are the person's alone, and a recipe sits where a page's content script could plant one.
-      if (!r || r.scenario?.instructions.some((i) => 'evaluate' in i)) return 'deny';
+      if (!r) return 'deny';
       // Reach applies to each of the recipe's URLs, as if read.
       const reach = r.urls.map((url) => decide(run, gardener, { tool: 'read_page', args: { url } }));
       if (reach.includes('deny')) return 'deny';
-      const a = actOf(call, known);
       if (reach.includes('ask')) return 'ask';
-      return !a || granted(run, gardener, call.tool, a, known) ? 'allow' : 'ask';
+      return !act || granted(run, gardener, call.tool, act, known) ? 'allow' : 'ask';
     }
     // Acting in a tab the person named: asked every time, never granted, never pre-approved by a plan.
-    case 'act_my_tab': {
-      const a = actOf(call, known);
-      if (!a || a.steps.some((i) => 'evaluate' in i)) return 'deny';
-      return decide(run, gardener, { tool: 'read_my_tab', args: { tab: call.args.tab } }) === 'allow' ? 'ask' : 'deny';
-    }
-    // Carries data off the device (ADR-17): asked every time, unless the person marked the tool Read and granted this
-    // exact call, and never under taint, since its args could carry what was read.
+    case 'act_my_tab':
+      return act && decide(run, gardener, { tool: 'read_my_tab', args: { tab: call.args.tab } }) === 'allow' ? 'ask' : 'deny';
+    // Carries data off the device: asked every time, unless the person marked the tool Read and granted this exact
+    // call, and never under taint, since its args could carry what was read.
     case 'app_call': {
-      const a = appOf(call, known), act = actOf(call, known);
+      const a = appOf(call, known);
       if (!a || !act) return 'deny';
       return a.t.scope === 'read' && !run.tainted && granted(run, gardener, call.tool, act, known) ? 'allow' : 'ask';
     }
-    // Only a tab the person named; the read taints the run.
     case 'read_my_tab':
-      return (run.work.kind === 'ask' || run.work.kind === 'plan') && (run.work.tabs ?? []).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
+      return mentionsOf(run).some((m) => m.url === call.args.tab) ? 'allow' : 'deny';
     case 'notify':
       return run.steps.some((s) => s.tool === 'notify' && s.state === 'done') ? 'deny' : 'allow';
     // Stored off until the person turns it on, so only where it may reach matters: the gardener's sites, no new site
@@ -165,49 +166,35 @@ export function decide(run: GardenRun, gardener: Gardener, call: Call, known: Kn
     case 'propose_routine': {
       if (run.tainted) return 'deny';
       const w = parseWork(call.args.work);
-      if (!w || ((w.kind === 'ask' || w.kind === 'plan') && w.tabs?.length)) return 'deny';
+      if (!w || requestOf(w)?.tabs?.length) return 'deny';
       return personUrls(w).every((u) => onSites(hostOf(u), gardener.sites)) ? 'allow' : 'deny';
     }
-    // Stores an unconfirmed entry only: it reaches no prompt until the person keeps it.
-    case 'remember':
-      return 'allow';
-    // The run's own gardener's documents (the worker scopes them); the read taints the run (taintsAfter).
-    case 'doc_read':
-      return 'allow';
     case 'doc_write':
       return typeof call.args.text === 'string' && call.args.text.length <= MEM.doc && !docRefused(String(call.args.path ?? '')) ? 'allow' : 'deny';
     default:
-      return 'deny'; // evaluate, and any tool policy doesn't know
+      return 'deny';
   }
 }
 
 /**
  * Approve all may answer this request of `run`: a non-sensitive reach in an untainted run (under taint a reach is
- * asked because its URL or query could carry what was read), or a non-sensitive act in the gardener's own tabs
- * (decision 5). Never a sensitive request, a question, a plan or anything else. The worker checks it again.
+ * asked because its URL or query could carry what was read), or a non-sensitive act a blanket yes covers. Never a
+ * sensitive request, a question, a plan or anything else. The worker checks it again.
  */
 export const approveAllOk = (q: Request, run: GardenRun): boolean =>
-  !q.answer && !q.sensitive && ((q.kind === 'reach' && !run.tainted) || (q.kind === 'approve' && (q.tool === 'act' || q.tool === 'collect')));
+  !q.answer && !q.sensitive && ((q.kind === 'reach' && !run.tainted) || (q.kind === 'approve' && !!ruleOf(q.tool).blanket));
 
 /**
- * A call that threw may still have shown signed-in page data (its error says where it ended, a DevTools log): the
- * person's own tab and an app's reply always, an `act` when it or its final page is on the gardener's sites.
+ * Whether a call taints the run, after it ran or threw (a throw may still have shown signed-in data): its result says
+ * so, or its tool's rule does (`url`: where it ended).
  */
-export function failTaints(tool: string, args: Record<string, unknown>, error: string, sites: string[]): boolean {
-  if (tool === 'act_my_tab' || tool === 'app_call') return true;
-  if (tool !== 'act') return false;
-  const final = /Now at (\S+?)\.?(\s|$)/.exec(error)?.[1];
-  return [String(args.url ?? ''), final ?? ''].some((u) => onSites(hostOf(u), sites));
+export function taintsAfter(tool: string, r: { taint?: boolean | undefined; url?: string | undefined }, args: Record<string, unknown> = {}, sites: string[] = []): boolean {
+  const { taints } = ruleOf(tool);
+  return !!r.taint || taints === 'always' || (taints === 'sites' && [String(args.url ?? ''), r.url ?? ''].some((u) => onSites(hostOf(u), sites)));
 }
 
-/** Whether a finished call taints the run: its result says so, or it read the person's private documents or an app. */
-export const taintsAfter = (tool: string, r: { taint?: boolean | undefined }): boolean => !!r.taint || tool === 'doc_read' || tool === 'app_call';
-
-/** "Always" may answer this request: a non-sensitive approve, never in the person's own tab (decision 6), nor an app tool not marked Read. */
-export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && q.tool !== 'act_my_tab' && !q.noAlways;
-
-/** The tools a plan's yes may pre-approve (decision 2): acts in the gardener's own tabs, never the person's or an app's. */
-export const planCovers = (tool: string): boolean => tool === 'act' || tool === 'collect';
+/** "Always" may answer this request: a non-sensitive approve whose tool may be granted (an app tool only when marked Read). */
+export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && !ruleOf(q.tool).noAlways && !q.noAlways;
 
 /** `seen` plus new URLs (deduplicated, fragments removed), capped at 300. */
 export function addSeen(seen: Seen[], urls: string[], from: Seen['from'], step?: number): Seen[] {

@@ -1,7 +1,5 @@
-// Chat in the side panel (plan T6): saved chats (IndexedDB `hg-chat`, out of content scripts' reach), recover a cut-off
-// answer, duplicate, search, feedback, Report on an error, the long-chat warning, reasoning, question blocks and modes.
-// Also image attachments, Prompt Lab templates, settings changed by asking, and right-click actions queued by the worker.
-// Model text reaches the page only through markdown() (escaped first) or textContent.
+// The side panel's Chat tab: renders saved chats and dispatches what is typed (domain/chat.ts `route`). Model text
+// reaches the page only through markdown() (escaped first) or textContent.
 import { $, button, busyButton } from './shell.ts';
 import { h } from '../ui/dom.ts';
 import { flower, type FlowerState } from '../ui/flower.ts';
@@ -11,17 +9,16 @@ import { markdown } from '../domain/markdown.ts';
 import { can, MODELS, modelById } from '../domain/model.ts';
 import { PROMPT_LAB } from '../shared/actions.ts';
 import type { TaskKind } from '../domain/tasks.ts';
-import { changeFor, chatSettings, checkChoice, parseSettings } from '../domain/settings.ts';
+import { changeFor, chatSettings, checkChoice, parseSettings, settingPrompt } from '../domain/settings.ts';
 import { parseJsonObject } from '../domain/text.ts';
-import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, planFirst, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, searchChats, splitThinking, titleOf,
-  type Chat, type ChatTurn, type Mode } from '../domain/chat.ts';
-import * as idb from '../background/idb.ts';
+import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, excerpt, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, route, searchChats,
+  splitThinking, titleOf, userTurn, withLead, type Chat, type ChatTurn, type Mode } from '../domain/chat.ts';
+import * as idb from '../shared/idb.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
 import { anchorsIn, reference, type Entity } from '../domain/memory.ts';
-import { NEEDS, skillParts, slashOf, unmet, type Skill } from '../domain/garden/skills.ts';
+import type { Skill } from '../domain/garden/skills.ts';
 import { fuzzy } from '../domain/reading.ts';
-import { MEETINGS_ASK } from '../domain/meeting.ts';
-import { appNamed } from '../domain/apps.ts';
+import { meetingsAsk } from '../domain/meeting.ts';
 import { openConnect, rememberOffer } from './garden.ts';
 
 interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
@@ -39,14 +36,10 @@ let liveId = ''; // the generation streaming now
 const streams = new Map<string, (t: string) => void>(); // generate id → token callback
 
 const sync = async () => parseSettings(await chrome.storage.sync.get(null));
-const excerpt = (t: string, n = 140) => (t.length > n ? `${t.slice(0, n)}…` : t);
-const PLAN_FIRST = 'First write a short plan for this request as numbered steps, then stop and wait for me to say Go. Do not do the steps yet.';
 
 // ---- storage ----
 
-const db = idb.open('hg-chat', 1, (d, old) => {
-  if (old < 1) d.createObjectStore('chats', { keyPath: 'id' });
-});
+const db = idb.openChats();
 const channel = new BroadcastChannel('hg-chat'); // other side panels (one per window) reload what changed
 
 /** Read, edit and write in one transaction, so another panel's newer turns stay; `c` takes the stored result. */
@@ -183,7 +176,7 @@ function turnEl(c: Chat, t: ChatTurn, i: number): Message {
   return li;
 }
 
-/** Plan mode: the request becomes a gardener's plan run (T1 `plan` work), approved in the Garden. */
+/** Plan mode: the request becomes a gardener's plan run, approved in the Garden. */
 function runAsPlan(request: string): HTMLElement {
   const sel = h('select', { attrs: { 'aria-label': 'Gardener' } });
   void bg<{ id: string; name: string }[]>('gardenerList').then((list) => sel.replaceChildren(...list.map((g) => new Option(g.name, g.id))), () => {});
@@ -203,9 +196,11 @@ function render(): void {
 
 // ---- sending ----
 
+const chatModel = async () => (await sync()).taskModels.chat || modeModel(nextMode, sizes());
+
 async function newChat(first: string): Promise<Chat> {
   const now = Date.now();
-  const model = (await sync()).taskModels.chat || modeModel(nextMode, sizes());
+  const model = await chatModel();
   return { v: 1, id: crypto.randomUUID(), title: titleOf(first), mode: nextMode, model, turns: [], createdAt: now, updatedAt: now };
 }
 
@@ -226,9 +221,7 @@ async function send(turn: ChatTurn, config: Record<string, number> = {}, image?:
   if (!chat) open(await newChat(turn.label ?? turn.text));
   const c = chat!;
   const correction = chatCorrection(c, turn.label ?? turn.text);
-  // The companion's instructions lead the chat's first message, as the plan prefix does.
-  if (persona) turn = { ...turn, label: turn.label ?? turn.text, text: `${persona.instructions}\n\n${turn.text}` };
-  if (planFirst(c)) turn = { ...turn, label: turn.label ?? turn.text, text: `${PLAN_FIRST}\n\n${turn.text}` };
+  turn = withLead(c, turn, persona?.instructions ?? null);
   await save(c, (s) => upsertTurns(s, [turn]));
   $('#messages').append(turnEl(c, turn, c.turns.length - 1));
   if (correction) $('#messages').append(rememberOffer(correction));
@@ -289,7 +282,9 @@ async function fork(c: Chat, i: number): Promise<void> {
 
 function report(c: Chat): void {
   const json = JSON.stringify(chatReport(c, chrome.runtime.getManifest().version), null, 2);
-  h('a', { href: URL.createObjectURL(new Blob([json], { type: 'application/json' })), download: `homegrown-chat-report-${c.id}.json` }).click();
+  const href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  h('a', { href, download: `homegrown-chat-report-${c.id}.json` }).click();
+  setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 
 // ---- long chats ----
@@ -323,7 +318,7 @@ function renderModes(): void {
 }
 for (const b of document.querySelectorAll<HTMLButtonElement>('#chat-modes button')) b.onclick = async () => {
   const mode = b.dataset.mode as Mode;
-  const model = (await sync()).taskModels.chat || modeModel(mode, sizes()); // the model the chat will use
+  const model = (await sync()).taskModels.chat || modeModel(mode, sizes()); // the model the chat would use in that mode
   const note = $('#mode-note');
   note.hidden = true;
   if (mode === 'plan' && !can(model, 'plan')) return void ((note.textContent = 'This needs a model measured for plans.'), (note.hidden = false));
@@ -361,19 +356,11 @@ function attach(text: string | null): void {
 }
 $('#attached-clear').onclick = () => attach(null);
 
-// Changing a setting by asking: the model reads the message against the list of settings; code accepts only a real
-// setting and an allowed value (domain/settings.ts); nothing changes until Apply.
+/** Asks the model whether `text` changes a setting; code accepts only a real one and an allowed value, applied on Apply. */
 async function proposeSetting(text: string): Promise<boolean> {
-  const s = await sync();
-  const choices = chatSettings(s, deps.downloaded());
-  const list = choices.map((c) => `- ${c.id}: ${c.label} (${c.values ? c.values.join(', ') : 'any language'}; now ${c.current || 'not set'})`).join('\n');
-  const models = MODELS.map((m) => `${m.id}: ${m.note}`).join(' ');
-  let picked: ReturnType<typeof checkChoice> = null;
-  try {
-    const r = await engineCall<{ text: string }>('generate', { id: crypto.randomUUID(), config: { temperature: 0 }, turns: [{ role: 'user',
-      text: `You route messages for the Homegrown browser extension. If the message asks to change one of these settings, reply {"setting": "<id>", "value": "<one allowed value>"}. If it is anything else (a question, a request, chat), reply {"setting": null}. JSON only.\nSettings:\n${list}\nModels: ${models}\nMessage: "${text}"` }] });
-    picked = checkChoice(choices, parseJsonObject(r.text));
-  } catch {}
+  const choices = chatSettings(await sync(), deps.downloaded());
+  const r = await engineCall<{ text: string }>('generate', { id: crypto.randomUUID(), config: { temperature: 0 }, turns: [{ role: 'user', text: settingPrompt(choices, text) }] }).catch(() => null);
+  const picked = r && checkChoice(choices, parseJsonObject(r.text));
   if (!picked) return false;
   const { choice, value } = picked;
   addMessage('user', text);
@@ -386,11 +373,18 @@ async function proposeSetting(text: string): Promise<boolean> {
   return true;
 }
 
-// A Prompt Lab template (chosen in the composer) wraps the typed text; an attached image or selection rides along.
+/** `/meetings question`: the closest transcript parts ride in the data, cited by meeting and time. */
+async function askMeetings(typed: string, question: string): Promise<void> {
+  const p = await bg<{ data: string; note: string }>('meetAsk', { question }).catch((e: Error) => e);
+  if (p instanceof Error) return void ((input.value = typed), addMessage('error', p.message));
+  await send({ role: 'user', text: meetingsAsk(question), label: [typed, p.note].filter(Boolean).join('\n'), at: Date.now(), selection: p.data });
+}
+
 const input = $<HTMLTextAreaElement>('#chat-input');
 const labTemplate = $<HTMLSelectElement>('#lab-template');
 const labOption = $<HTMLSelectElement>('#lab-option');
 const template = () => PROMPT_LAB.find((t) => t.id === labTemplate.value);
+const skillList = () => bg<Skill[]>('skillList').catch(() => []);
 $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   e.preventDefault();
   const typed = input.value.trim();
@@ -398,37 +392,15 @@ $<HTMLFormElement>('#chat-form').onsubmit = async (e) => {
   if (!typed && !imageData) return;
   input.value = '';
   slashList.hidden = true;
-  // "connect <name>" naming a known app: the Connect form in Garden, filled in, for the person to confirm. No model.
-  const app = !tpl && !imageData ? appNamed(/^connect\s+(.{1,60})$/i.exec(typed)?.[1] ?? '') : null;
-  if (app) {
-    document.querySelector<HTMLElement>('.tabs [data-tab=garden]')?.click();
-    return openConnect(app);
-  }
-  // `/name rest`: the skill's method is the instruction, its files ride in the data. Off, or needing what the chat's
-  // model lacks, it is refused.
-  const hit = !tpl && typed.startsWith('/') ? slashOf(typed, (skills = await bg<Skill[]>('skillList').catch(() => []))) : null;
-  // `/meetings question` (no skill of that name): the closest transcript parts ride in the data, cited by meeting and time.
-  const meetQ = typeof hit === 'string' ? /^\/meetings\s+([\s\S]+)$/.exec(typed)?.[1] : undefined;
-  if (meetQ) {
-    const p = await bg<{ data: string; empty?: string; left?: number }>('meetPassages', { question: meetQ }).catch((e: Error) => ({ data: '', empty: e.message, left: 0 }));
-    if (!p.data) return void ((input.value = typed), addMessage('error', p.empty ?? ''));
-    const label = p.left ? `${typed}\n(Only the newest meetings were searched; ${p.left} older left out.)` : typed;
-    return void send({ role: 'user', text: `${MEETINGS_ASK}\nQuestion: ${meetQ}`, label, at: Date.now(), selection: p.data });
-  }
-  if (hit) {
-    const model = chat?.model || (await sync()).taskModels.chat || modeModel(nextMode, sizes());
-    const why = typeof hit === 'string' ? hit : unmet(hit.skill, (a) => can(model, a)).length ? NEEDS : '';
-    if (why) return void ((input.value = typed), addMessage('error', why));
-  }
-  const skill = hit && typeof hit === 'object' ? { ...skillParts(hit.skill), id: hit.skill.id, rest: hit.rest || hit.skill.title } : null;
-  // A short plain message may be a settings request ("use E4B for missions"): the model decides, you confirm.
-  if (!skill && !tpl && !imageData && attached === null && typed.length < 240 && (await proposeSetting(typed))) return;
-  const text = skill ? [skill.instruction, skill.rest].filter(Boolean).join('\n\n') : tpl ? tpl.build(typed, labOption.value) : typed || 'Describe this image.';
-  const label = [tpl ? `${tpl.title}: ${typed}` : typed || 'Describe this image.', attached !== null ? `“${excerpt(attached)}”` : '', imageData ? '(image)' : ''].filter(Boolean).join('\n');
+  const model = chat?.model || (await chatModel());
+  const r = route(typed, { template: !!tpl, image: !!imageData, attached: attached !== null, skills: typed.startsWith('/') ? await skillList() : [], can: (a) => can(model, a) });
+  if (r.kind === 'connect') return (document.querySelector<HTMLElement>('.tabs [data-tab=garden]')?.click(), openConnect(r.app));
+  if (r.kind === 'error') return void ((input.value = typed), addMessage('error', r.why));
+  if (r.kind === 'meetings') return askMeetings(typed, r.question);
+  if (r.kind === 'setting' && (await proposeSetting(typed))) return;
   // `@Name` memory files ride in the data part (the selection), never in the typed instruction.
   const refs = typed.includes('@') ? anchorsIn(typed, await bg<Entity[]>('entityList').catch(() => [])).map(reference).join('\n\n') : '';
-  const data = [attached ?? '', refs, skill?.data ?? ''].filter(Boolean).join('\n\n');
-  const turn: ChatTurn = { role: 'user', text, label, at: Date.now(), ...((attached !== null || data) && { selection: data }), ...(skill && { skillId: skill.id }) };
+  const turn = userTurn(typed, { at: Date.now(), ...(tpl && { template: tpl }), option: labOption.value, attached, image: !!imageData, refs, ...(r.kind === 'send' && r.skill && { skill: r.skill }) });
   const image = imageData ?? undefined;
   attach(null);
   setImage(null);
@@ -439,7 +411,7 @@ let skills: Skill[] = [];
 const slashList = $('#slash');
 input.oninput = async () => {
   const m = /^\/([a-z0-9-]*)$/.exec(input.value);
-  if (m && input.value === '/') skills = await bg<Skill[]>('skillList').catch(() => []);
+  if (m && input.value === '/') skills = await skillList();
   const found = m ? skills.filter((x) => x.on).map((x) => ({ x, f: fuzzy(x.name, m[1]!) })).filter((y) => y.f).sort((a, b) => b.f!.score - a.f!.score).slice(0, 6) : [];
   slashList.hidden = !found.length;
   slashList.replaceChildren(...found.map(({ x }) => h('li', {}, h('button', { type: 'button', className: 'ghost grow', textContent: `/${x.name}`, title: x.title,

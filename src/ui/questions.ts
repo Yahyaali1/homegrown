@@ -1,8 +1,7 @@
 // A question block: asked one at a time, each with its options as ghost buttons or a short answer. Shared by the
 // request tray and chat.
 import { h } from './dom.ts';
-
-export interface Question { q: string; options?: string[]; placeholder?: string }
+import type { Question } from '../domain/chat.ts';
 
 /** Asks `list` in order; `done` gets one object of answers, keyed by question. `skip`: a Skip button leaves a question out. */
 export function questions(list: Question[], done: (answers: Record<string, string>) => void, skip = false): HTMLElement {

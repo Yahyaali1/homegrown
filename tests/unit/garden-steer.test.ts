@@ -2,8 +2,8 @@
 // message reaches one think, and a routine the model proposes stays off.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answeredBy, approveRequest, argsKey, next, parseEdit, recover, stopRequest, type Ctx } from '../../src/domain/garden/loop.ts';
-import { approveAllOk, decide } from '../../src/domain/garden/policy.ts';
+import { approveRequest, next, parseEdit, recover, verdictFor, type Ctx } from '../../src/domain/garden/loop.ts';
+import { approveAllOk, argsKey, decide } from '../../src/domain/garden/policy.ts';
 import { claim, proposedRoutine } from '../../src/domain/garden/schedule.ts';
 import { TOOLS, parseArgs, toolsFor } from '../../src/domain/garden/tools.ts';
 import { newRun, parseRoutine, type Gardener, type GardenRun, type Request, type Step, type Work } from '../../src/domain/garden/records.ts';
@@ -31,6 +31,8 @@ function editedYes(r: GardenRun, args: Record<string, unknown>, at = 2000): Requ
   return q;
 }
 
+const answeredBy = (r: GardenRun, id: string) => verdictFor(r, ctx, 0, { tool: 'act', args: {}, answered: id }).q;
+
 test('an edited fill value runs, not the model’s original, and the call names its answer', () => {
   const r = planned(fill('tea'));
   const q = editedYes(r, fill('green tea'));
@@ -48,7 +50,7 @@ test('an edit is parsed again; always or no with args is refused (a grant is the
   assert.match(parseEdit(q, 'always', fill('green tea')) as string, /only with yes/);
   assert.match(parseEdit(q, 'no', fill('green tea')) as string, /only with yes/);
   assert.match(parseEdit(q, 'yes', { url: 'https://shop.com/', steps: { instructions: [{ evaluate: 'x' }] } }) as string, /aren’t valid/);
-  assert.match(parseEdit({ ...q, noEdit: true }, 'yes', fill('x')) as string, /can’t be edited/);
+  assert.match(parseEdit({ ...q, origin: { edit: 'q0' } }, 'yes', fill('x')) as string, /can’t be edited/);
   assert.match(parseEdit({ ...q, kind: 'reach', tool: 'read_page' }, 'yes', { url: 'https://far.com/' }) as string, /can’t be edited/);
   assert.deepEqual(parseEdit(q, 'yes', fill('tea')), {}, 'unchanged: a plain yes');
   assert.deepEqual(parseEdit(q, 'always', undefined), {});
@@ -61,22 +63,21 @@ test('an edit that adds a Pay click is asked once more as sensitive, can’t be 
   const first = next(r, ctx);
   assert.deepEqual(first, { call: { i: 0, tool: 'act', args: pay, answered: 'q1' } }, 'not sensitive before the page is seen');
   // In the page, classify stops the Pay click before any act ran (NeedsYou): the worker asks in place.
-  const stopped = stopRequest(r, ctx, 0, 'act', pay, { index: 1, why: '“Pay now”' }, answeredBy(r, 'q1'))!;
+  const stopped = approveRequest(r, ctx, 0, 'act', pay, { index: 1, why: '“Pay now”' }, verdictFor(r, ctx, 0, { tool: 'act', args: pay, answered: 'q1' }).q)!;
   assert.equal(stopped.sensitive, true);
-  assert.equal(stopped.editedFrom, 'q1');
-  assert.equal(stopped.noEdit, true);
+  assert.deepEqual(stopped.origin, { edit: 'q1' });
   r.requests.push({ ...stopped, id: 'q2', shownAt: 10_000, answer: { value: 'yes', at: 13_000 } });
   const early = next(r, ctx);
-  assert.ok('request' in early && early.request.sensitive && early.request.noEdit, 'a yes before 8 s does not count');
+  assert.ok('request' in early && early.request.sensitive && typeof early.request.origin === 'object', 'a yes before 8 s does not count');
   assert.equal(early.request.index, 1);
   r.requests.at(-1)!.answer = { value: 'yes', at: 18_000 };
   assert.deepEqual(next(r, ctx), { call: { i: 0, tool: 'act', args: pay, answered: 'q2' } });
-  assert.equal(answeredBy(r, 'q2')?.why, '“Pay now”', 'the yes covers that step once');
+  assert.equal(verdictFor(r, ctx, 0, { tool: 'act', args: pay, answered: 'q2' }).q?.why, '“Pay now”', 'the yes covers that step once');
   r.steps.push(step(0, 'act', pay));
   const after = next(r, ctx);
   assert.ok('think' in after && after.think.purpose === 'sum', 'no loop: it doesn’t ask again');
-  assert.equal(r.requests.filter((x) => x.editedFrom).length, 1);
-  assert.equal(answeredBy({ ...r, requests: [{ ...r.requests.at(-1)!, answer: { value: 'yes', at: 13_000 } }] }, 'q2'), undefined, 'too early by id too');
+  assert.equal(r.requests.filter((x) => typeof x.origin === 'object').length, 1);
+  assert.equal(verdictFor({ ...r, requests: [{ ...r.requests.at(-1)!, answer: { value: 'yes', at: 13_000 } }] }, ctx, 0, { tool: 'act', args: pay, answered: 'q2' }).v, 'deny', 'too early by id too');
 });
 
 test('an edit decide denies fails the step; a no to the asked-again edit is refused by you', () => {
@@ -92,7 +93,7 @@ test('an edit decide denies fails the step; a no to the asked-again edit is refu
   t.requests.push({ ...q.request, id: 'q1', shownAt: 0 });
   t.requests[0]!.answer = { value: 'yes', at: 9000, ...(parseEdit(t.requests[0]!, 'yes', fill('x')) as object) };
   const again = next(t, ctx);
-  assert.ok('request' in again && again.request.noEdit && again.request.editedFrom === 'q1');
+  assert.ok('request' in again && (again.request.origin as { edit?: string })?.edit === 'q1');
   t.requests.push({ ...again.request, id: 'q2', shownAt: 10_000, answer: { value: 'no', at: 11_000 } });
   const no = next(t, ctx);
   assert.ok('record' in no && no.record.error === 'Refused by you');

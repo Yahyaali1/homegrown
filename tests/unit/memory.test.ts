@@ -1,4 +1,4 @@
-// Typed memory and Documents (plan T7): anchors, templates, corrections, the doc tools' policy, the v4 upgrade.
+// Typed memory and Documents: anchors, templates, corrections, the doc tools' policy, the v4 upgrade.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { next, type Ctx } from '../../src/domain/garden/loop.ts';

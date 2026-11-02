@@ -1,9 +1,9 @@
 // Plan first: a weak model proposes a list of calls, the person approves it, and code still checks every call.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerFor, answerPlan, approveRequest, argsKey, BAD_REPLY, next, PLAN_REFUSED, refusal, type Ctx } from '../../src/domain/garden/loop.ts';
+import { answerFor, answerPlan, approveRequest, BAD_REPLY, next, PLAN_REFUSED, refusal, type Ctx } from '../../src/domain/garden/loop.ts';
 import { classify } from '../../src/domain/garden/classify.ts';
-import { decide, type RecipeFacts } from '../../src/domain/garden/policy.ts';
+import { argsKey, decide, type RecipeFacts } from '../../src/domain/garden/policy.ts';
 import { claim } from '../../src/domain/garden/schedule.ts';
 import { TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { newRun, personUrls, type Gardener, type GardenRun, type PlannedCall, type Request, type Step, type Turn, type Work } from '../../src/domain/garden/records.ts';
@@ -93,7 +93,7 @@ test('an edited arg changes the key: the original call is not approved', () => {
   assert.equal(answerPlan(r, ctx, q, 'yes', [edited], 2000), null);
   const parsedEdited = r.plan![0]!.args, parsedOriginal = q.calls![0]!.args;
   assert.notEqual(argsKey(parsedEdited), argsKey(parsedOriginal));
-  assert.ok(answerFor(r, 0, 'act', argsKey(parsedEdited))?.fromPlan);
+  assert.ok(answerFor(r, 0, 'act', argsKey(parsedEdited))?.origin === 'plan');
   assert.equal(answerFor(r, 0, 'act', argsKey(parsedOriginal)), undefined);
   assert.deepEqual(next(r, ctx), { call: { i: 0, tool: 'act', args: parsedEdited } });
   // An edit is parsed again: code steps or an unknown tool are refused.
@@ -119,7 +119,7 @@ test('a planned search after taint still raises reach', () => {
 test('a planned fill approved before taint is asked again as sensitive (8 s) after a signed-in read', () => {
   const calls = [{ tool: 'read_page', args: { url: 'https://shop.com/account' } }, { tool: 'act', args: fill }];
   const r = approved(calls);
-  assert.ok(answerFor(r, 1, 'act', argsKey(fill))?.fromPlan, 'pre-approved while untainted');
+  assert.ok(answerFor(r, 1, 'act', argsKey(fill))?.origin === 'plan', 'pre-approved while untainted');
   r.steps.push(step(0, 'read_page', calls[0]!.args));
   r.tainted = true;
   const a = next(r, ctx);
@@ -148,7 +148,7 @@ test('a fromPlan answer whose call policy now denies fails the step', () => {
   const recipe: RecipeFacts = { id: 'rc', name: 'Buy', urls: ['https://shop.com/'], scenario: { strict: true, instructions: [{ click: '#buy' }] }, key: 'k1' };
   const withRecipe = { ...ctx, recipes: [recipe] };
   const r = approved([{ tool: 'collect', args: { recipe: 'rc' } }], {}, withRecipe);
-  assert.ok(answerFor(r, 0, 'collect', 'k1')?.fromPlan);
+  assert.ok(answerFor(r, 0, 'collect', 'k1')?.origin === 'plan');
   // The recipe now holds code steps: policy denies it, whatever the plan said.
   const changed = { ...ctx, recipes: [{ ...recipe, scenario: { strict: true, instructions: [{ evaluate: 'x' }] } }] };
   const a = next(r, changed);
@@ -167,7 +167,7 @@ test('no fromPlan answer is made for act_my_tab or app_call', () => {
   assert.equal(approveRequest(r, c, 0, 'act_my_tab', mine)?.sensitive, false);
   assert.equal(approveRequest(r, c, 1, 'app_call', call)?.sensitive, false);
   const p = approved([{ tool: 'act_my_tab', args: mine }, { tool: 'app_call', args: call }, { tool: 'act', args: pay }], { work: r.work }, c);
-  assert.deepEqual(p.requests.filter((q) => q.fromPlan).map((q) => q.tool), ['act']);
+  assert.deepEqual(p.requests.filter((q) => q.origin === 'plan').map((q) => q.tool), ['act']);
   // T8's automatic plan yes (a skill test) pre-approves nothing at all.
   const auto = run({ turns: [turn('plan', JSON.stringify([{ tool: 'app_call', args: call }]))], work: r.work });
   const a = next(auto, c);
@@ -175,7 +175,7 @@ test('no fromPlan answer is made for act_my_tab or app_call', () => {
   const q: Request = { ...a.request, id: 'p' };
   auto.requests.push(q);
   assert.equal(answerPlan(auto, c, q, 'yes', undefined, 2000, true), null);
-  assert.equal(auto.requests.filter((x) => x.fromPlan).length, 0);
+  assert.equal(auto.requests.filter((x) => x.origin === 'plan').length, 0);
   assert.ok('request' in next(auto, c), 'its call is asked');
 });
 

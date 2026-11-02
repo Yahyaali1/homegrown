@@ -28,13 +28,5 @@ label.toggle { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0;
 label.toggle input { width: auto; margin-top: 4px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-/* theme switch (ui/theme.js) */
-.theme-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-sm); box-shadow: 0 0 0 1px var(--btn-edge); width: max-content; }
-.theme-switch button { height: 26px; width: 30px; padding: 0; border: 0; box-shadow: none; background: transparent; color: var(--muted); }
-.theme-switch button[aria-pressed=true] { background: var(--chip-hover); color: var(--fg); }
 
 h1 .flower, .brand .flower { vertical-align: -3px; margin-right: 4px; --seed-ring: var(--bg); }
-/* Memory (plan T7): folders and files; a file opens in place. */
-#memory-tree details > summary { cursor: pointer; padding: 4px 0; }
-#memory-tree details details { margin-left: 12px; }
-#memory-tree .file .stack { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }

@@ -1,5 +1,5 @@
-// Meetings (plan T10): a recorded call's lines, merged by time as "You" (the mic) and "Them" (the tab), saved as a
-// T7 doc under Meetings/ with an `event` entity. Notes (summary, decisions, action items) come from a model measured
+// Meetings: a recorded call's lines, merged by time as "You" (the mic) and "Them" (the tab), saved as a doc
+// under Meetings/ with an `event` entity. Notes (summary, decisions, action items) come from a model measured
 // for `notes` only; owners are kept only when the transcript names them.
 import { clock } from './captions.ts';
 import { MEM } from './memory.ts';
@@ -50,6 +50,15 @@ export function meetingName(start: Date, title: string): string {
 }
 export const meetingPath = (name: string, part = 1) => `Meetings/${name}${part > 1 ? ` (part ${part})` : ''}.md`;
 export const isMeetingPath = (path: string) => /^Meetings\//.test(path);
+/** "Meetings/2026-10-30 14:05 Sync (part 2).md" → "2026-10-30 14:05 Sync". */
+export const meetingOf = (path: string) => path.replace(/^Meetings\//, '').replace(/( \(part \d+\))?\.md$/, '');
+const partOf = (path: string) => Number(/ \(part (\d+)\)\.md$/.exec(path)?.[1] ?? 1);
+/** The person's transcript docs of the meeting `name`, in part order. */
+export const docsOfMeeting = <D extends { path: string; gardenerId?: string }>(docs: D[], name: string): D[] =>
+  docs.filter((d) => !d.gardenerId && isMeetingPath(d.path) && meetingOf(d.path) === name).sort((a, b) => partOf(a.path) - partOf(b.path));
+
+/** The call being recorded (chrome.storage.session `meeting`); `lines` are those heard so far, kept should the recorder die. */
+export interface Recording { tabId: number; host: string; title: string; started: number; mic: boolean; lines?: Line[]; failed?: number }
 
 /** The transcript's parts of about 20 minutes each, for the notes' map step. */
 export function timeParts(lines: Line[], span = 20 * 60_000): Line[][] {
@@ -100,6 +109,8 @@ export const notesBody = (n: Notes): string => [
 
 const ITEM = /^- \[( |x)\] (.*)$/;
 export const itemsOf = (body: string) => body.split('\n').map((l) => ITEM.exec(l)).filter((m) => !!m).map((m) => ({ done: m[1] === 'x', text: m[2]! }));
+/** The body without its checklist: the summary and decisions. */
+export const notesOf = (body: string) => body.split('\n').filter((l) => !ITEM.test(l)).join('\n').trim();
 /** The body with the n-th checklist item ticked or not. */
 export function checkItem(body: string, n: number, done: boolean): string {
   let i = -1;
@@ -109,7 +120,9 @@ export function checkItem(body: string, n: number, done: boolean): string {
 export const NO_NOTES = 'Transcript only: this needs a model measured for meeting notes.';
 
 /** Ask across meetings (Library and chat's `/meetings`): the question is the person's; the transcript parts are data. */
-export const MEETINGS_ASK = 'Answer the question using only the meeting transcript parts in the data. Cite them like [1], and name the meeting and time. If they don\'t answer it, say so.';
+export const meetingsAsk = (question: string) =>
+  `Answer the question using only the meeting transcript parts in the data. Cite them like [1], and name the meeting and time. If they don't answer it, say so.\nQuestion: ${question}`;
+export const leftOut = (n: number) => (n ? `(Only the newest meetings were searched; ${n} older ${n === 1 ? 'one was' : 'ones were'} left out.)` : '');
 
 /** The saved transcript: its lines, after a line saying how many windows the speech model failed on. */
 export const meetingText = (lines: Line[], failed = 0): string =>
@@ -133,14 +146,32 @@ export function newestChunks<D extends { id: string; path: string; at: number },
     const room = cap - items.length;
     if (room <= 0) break;
     items.push(...chunk(d).slice(0, room));
-    kept.add(d.path.replace(/( \(part \d+\))?\.md$/, ''));
+    kept.add(meetingOf(d.path));
   }
-  const all = new Set(docs.map((d) => d.path.replace(/( \(part \d+\))?\.md$/, '')));
+  const all = new Set(docs.map((d) => meetingOf(d.path)));
   return { items, left: [...all].filter((m) => !kept.has(m)).length };
 }
 
 /**
- * Transcribe a file: decoded whole in the page at 16 kHz, so its size and length are capped (2 hours of stereo is
+ * Runs jobs one at a time. With `max` jobs already in it, `add` refuses (false): a recorder that falls behind drops
+ * windows instead of growing a backlog that Stop would wait on.
+ */
+export function serial(max: number): { add(job: () => Promise<void>): boolean; idle(): Promise<void> } {
+  let tail = Promise.resolve();
+  let size = 0;
+  return {
+    add(job) {
+      if (size >= max) return false;
+      size++;
+      tail = tail.then(job).catch(() => {}).finally(() => void size--);
+      return true;
+    },
+    idle: () => tail,
+  };
+}
+
+/**
+ * Transcribe a file: decoded whole by the recorder at 16 kHz, so its size and length are capped (2 hours of stereo is
  * about 900 MB of samples).
  */
 export const FILE_MAX_BYTES = 100 << 20;

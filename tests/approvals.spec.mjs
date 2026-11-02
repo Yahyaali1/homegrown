@@ -1,14 +1,14 @@
-// Approvals end to end, no model: runs are planted already pinned (plan T1 "Planned runs") with a plan the person
-// approved and a model no engine has, so each stops at its first think. Everything checked happens before that.
+// Approvals end to end, no model: runs are planted already pinned with a plan the person approved and a model no
+// engine has, so each stops at its first think. Everything checked happens before that.
 // The shop is faked at its edge (ADR-14) and records each page it serves, with its query.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, launch, plannedRun, plant as plantOn, ROOT } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const FAR = 'https://far.garden.test';
 const FORM = '<!doctype html><title>Search the shop</title><form action="/found"><input id="q" name="q"><button id="go">Search</button></form>';
-let ctx, sw, id, panel, g;
+let ctx, sw, id, panel, bg, g;
 const loads = []; // path and query of each page served
 
 test.describe.configure({ mode: 'serial' });
@@ -24,11 +24,8 @@ test.beforeAll(async () => {
   }
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   g = await bg('gardenerSave', { gardener: { name: 'Clerk', instructions: 'Search the shop.', sites: ['shop.garden.test'], minutes: 10 } });
 });
 
@@ -36,29 +33,8 @@ test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
-
-/** Puts queued, pinned plan runs straight into the worker's store, then wakes the queue. */
-async function plant(...runs) {
-  await panel.evaluate(async (runs) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    for (const run of runs) t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, runs);
-  await sw.evaluate(() => self.gardenFire('none'));
-}
-
-const planned = (runId, plan, over = {}) => ({
-  v: 1, id: runId, gardenerId: g.id, work: { kind: 'plan', request: 'Search the shop for tea.' }, status: 'queued', queuedAt: Date.now(), usedMs: 0,
-  model: 'no-model-here', maxTokens: 4096, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'], plan,
-  turns: [], steps: [], requests: [], seen: [], tainted: false, ...over,
-});
+const plant = (...runs) => plantOn(panel, sw, ...runs);
+const planned = (id, plan, over = {}) => plannedRun({ id, gardenerId: g.id, work: { kind: 'plan', request: 'Search the shop for tea.' }, plan, ...over });
 const search = (value) => ({ tool: 'act', args: { url: `${SHOP}/form`, steps: { strict: true, instructions: [{ fill: ['#q', value] }, { click: '#go' }] } } });
 const waiting = (runId) => expect.poll(async () => (await bg('runGet', { id: runId })).status, { timeout: 60_000 }).toBe('waiting');
 
@@ -66,7 +42,7 @@ test('the approve card: the person edits the fill value, says yes, and the form 
   await plant(planned('edit-1', [search('tea')]));
   await waiting('edit-1');
   const asked = (await bg('runGet', { id: 'edit-1' })).requests;
-  expect(asked.map((q) => [q.kind, q.sensitive, !!q.fromPlan])).toEqual([['approve', false, false]]);
+  expect(asked.map((q) => [q.kind, q.sensitive, q.origin === 'plan'])).toEqual([['approve', false, false]]);
 
   await panel.reload();
   await panel.click('[data-tab=garden]');

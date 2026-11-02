@@ -1,4 +1,4 @@
-// Outputs (plan T9): one artifact by ?id (a table or chart, a brief, a deck, a one-pager, a brand kit) with its
+// Outputs: one artifact by ?id (a table or chart, a brief, a deck, a one-pager, a brand kit) with its
 // exports, or every artifact (Library → Outputs). Data lives in the worker's `hg-outputs` store.
 import { $, busyButton, button, emptyPot } from './shell.ts';
 import { h } from '../ui/dom.ts';

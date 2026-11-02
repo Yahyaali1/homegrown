@@ -2,14 +2,14 @@
 // yes, and the run works through exactly what is left. The shop is faked at its edge (ADR-14) and counts page loads.
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, engine, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, engine, launch, plannedRun, plant, ROOT } from './harness.mjs';
 
 const SHOP = 'https://shop.garden.test';
 const PAGES = {
   '/fern': '<!doctype html><title>Ferns</title><h1>Ferns</h1><p>Boston fern: £12.</p>',
   '/moss': '<!doctype html><title>Moss</title><h1>Moss</h1><p>Cushion moss: £4.</p>',
 };
-let ctx, sw, id, panel;
+let ctx, sw, id, panel, bg;
 const loads = [];
 
 test.beforeAll(async () => {
@@ -21,40 +21,21 @@ test.beforeAll(async () => {
   });
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const g of await bg('gardenerList')) await bg('gardenerDelete', { id: g.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
 });
 
 test.afterAll(async () => {
   await ctx?.close();
 });
 
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
 
 test('plan first @slow: a plan card over two pages; one call deleted, yes, and only the kept page is read, in bloom', async () => {
   const g = await bg('gardenerSave', { gardener: { name: 'Planner', instructions: 'Answer briefly.', sites: ['shop.garden.test'], minutes: 10 } });
   // No model is measured for plans yet: the run is planted already pinned with the ability, as garden-eval does.
   const m = await engine(sw, 'resolve', {});
   const runId = `plan-${Date.now()}`;
-  await panel.evaluate(async (run) => {
-    const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-    const t = d.transaction('runs', 'readwrite');
-    t.objectStore('runs').put(run);
-    await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-    d.close();
-  }, {
-    v: 1, id: runId, gardenerId: g.id, work: { kind: 'plan', request: `Read ${SHOP}/fern and ${SHOP}/moss and give the price on each page.` },
-    status: 'queued', queuedAt: Date.now(), usedMs: 0, model: m.name, maxTokens: m.maxTokens, agent: { loop: false, maxSteps: 8 }, abilities: ['plan'],
-    turns: [], steps: [], requests: [], seen: [], tainted: false,
-  });
-  await sw.evaluate(() => self.gardenFire('none'));
+  await plant(panel, sw, plannedRun({ id: runId, gardenerId: g.id, work: { kind: 'plan', request: `Read ${SHOP}/fern and ${SHOP}/moss and give the price on each page.` }, model: m.name, maxTokens: m.maxTokens }));
 
   let run;
   await expect.poll(async () => (run = await bg('runGet', { id: runId })).status, { timeout: 5 * 60_000 }).toMatch(/^(waiting|done|failed|stopped)$/);

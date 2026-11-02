@@ -2,28 +2,28 @@
 // day). Both run on chrome.alarms; results surface as notifications.
 // chrome.storage.local: monitors, schedules, scheduledResults (newest first, 50 kept).
 import { ask } from './engine.ts';
-import { decode } from '../domain/html.ts';
 import { diffText } from '../domain/compare.ts';
+import { htmlText } from '../domain/text.ts';
 import { getTasks } from '../shared/actions.ts';
 
 type Interval = 'hourly' | 'daily';
 const MINUTES: Record<Interval, number> = { hourly: 60, daily: 1440 };
-const KEEP_TEXT = 20000; // chars of page text kept per monitor for the next diff
 
 interface Monitor { id: string; url: string; title: string; interval: Interval; hash: string; text: string; lastSummary: string; checkedAt: number; changedAt?: number }
 interface Schedule { id: string; taskId: string; url: string; interval: Interval }
 interface ScheduledResult { id: string; taskTitle: string; url: string; text: string; at: number }
 interface Stored { monitors: Monitor[]; schedules: Schedule[]; scheduledResults: ScheduledResult[] }
 
-// `omit`: read signed out.
-export const pageText = async (url: string, credentials: RequestCredentials = 'include'): Promise<string> =>
-  htmlText(await (await fetch(url, { credentials, cache: 'no-store' })).text());
+const pageText = async (url: string): Promise<string> => htmlText(await (await fetch(url, { credentials: 'include', cache: 'no-store' })).text());
 
-// ponytail: regex tag strip, no DOM in the worker; good enough to diff text.
-export function htmlText(html: string): string {
-  return decode(html.replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, '\n'))
-    .split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')
-    .slice(0, KEEP_TEXT);
+/**
+ * A gardener's event check fetch: at most 30 s. An error status fails the check (a 503 or a login wall must not become
+ * the snapshot), and so does any redirect of a signed-in fetch, so cookies never follow it off the page's host.
+ */
+export async function checkFetch(url: string, credentials: RequestCredentials, get: typeof fetch = fetch): Promise<string> {
+  const res = await get(url, { credentials, cache: 'no-store', redirect: credentials === 'include' ? 'manual' : 'follow', signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(res.type === 'opaqueredirect' ? 'The page redirected.' : `The page answered ${res.status}.`);
+  return htmlText(await res.text());
 }
 
 async function hash(s: string): Promise<string> {

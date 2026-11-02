@@ -16,12 +16,22 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const AD_HOSTS = ['doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'adservice.google.com', 'amazon-adsystem.com', 'adnxs.com',
   'criteo.com', 'criteo.net', 'taboola.com', 'outbrain.com', 'pubmatic.com', 'rubiconproject.com', 'openx.net', 'moatads.com', 'scorecardresearch.com'];
 
-/**
- * Steps that act may come only from Homegrown's own extension pages (Mission control, the side panel): never from a
- * content script, which a hostile page's renderer could control. Every command that takes a scenario checks this.
- */
 /** An extension page (Mission control, the side panel), not a content script in a web page. */
 export const isExtensionPage = (sender: chrome.runtime.MessageSender | null | undefined) => fromExtensionPage(sender, chrome.runtime.getURL(''));
+
+type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
+/** `handlers` only Homegrown's own pages may call: a content script, or a call without a sender, is refused. */
+export function pagesOnly<T extends Record<string, Handler>>(handlers: T): T {
+  return Object.fromEntries(Object.entries(handlers).map(([cmd, f]) => [cmd, async (msg: never, sender?: chrome.runtime.MessageSender) => {
+    if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
+    return f(msg, sender);
+  }])) as T;
+}
+
+/**
+ * Steps that act may come only from Homegrown's own pages: never from a content script, which a hostile page's
+ * renderer could control. Every command that takes a scenario checks this.
+ */
 
 export function refuseActs(sender: chrome.runtime.MessageSender | null | undefined, ...scenarios: (Scenario | null | undefined)[]): void {
   if (sender === undefined || !scenarios.some((s) => riskOf(s) === 'act')) return; // undefined: a call inside the worker

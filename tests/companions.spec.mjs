@@ -1,13 +1,13 @@
-// Companions end to end (plan T12), no model: hire Rosa in Garden, answer 2 interview questions and skip the rest; her
+// Companions end to end, no model: hire Rosa in Garden, answer 2 interview questions and skip the rest; her
 // answers join her instructions; her 2 routines are paused and her 3 skills off; Regulation watch (a direct read) ships
 // with no page, turns on once the person sets one, and Market map says it needs a measured model (the worker refuses it
 // too, even with its needs dropped; an unpaused one planted in the store fails its run at pin).
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
-import { launch, ROOT } from './harness.mjs';
+import { bgOn, emptyGarden, launch, put, ROOT } from './harness.mjs';
 
 const NEEDS = 'Needs a model measured for this workflow.';
-let ctx, sw, panel;
+let ctx, sw, panel, bg;
 
 test.beforeAll(async () => {
   let id;
@@ -16,31 +16,14 @@ test.beforeAll(async () => {
   await ctx.route('https://eur-lex.europa.eu/**', (r) => r.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>EUR-Lex</title><p>Official Journal</p>' }));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel.html`);
-  for (const r of await bg('runList', { limit: 1000 })) {
-    if (['queued', 'running', 'waiting'].includes(r.status)) await bg('runStop', { id: r.id });
-    await bg('runDelete', { id: r.id });
-  }
-  for (const x of await bg('gardenerList')) await bg('gardenerDelete', { id: x.id });
+  bg = bgOn(panel);
+  await emptyGarden(bg);
   for (const s of await bg('skillList')) await bg('skillDelete', { id: s.id });
 });
 
 test.afterAll(async () => {
   await ctx?.close();
 });
-
-const putRoutine = (value) => panel.evaluate(async (value) => {
-  const d = await new Promise((ok, no) => Object.assign(indexedDB.open('hg-garden'), { onsuccess: (e) => ok(e.target.result), onerror: no }));
-  const t = d.transaction('routines', 'readwrite');
-  t.objectStore('routines').put(value);
-  await new Promise((ok, no) => Object.assign(t, { oncomplete: ok, onerror: no }));
-  d.close();
-}, value);
-
-async function bg(cmd, args = {}) {
-  const r = await panel.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
-  if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
-  return r.result;
-}
 
 test('hire Rosa: interview, paused routines, off skills; reg-watch turns on, market-map needs a measured model', async () => {
   await panel.click('.tabs [data-tab=garden]');
@@ -96,7 +79,7 @@ test('hire Rosa: interview, paused routines, off skills; reg-watch turns on, mar
   expect((await bg('routineList', { gardenerId: rosa.id })).find((r) => r.name === 'Regulation watch')).toMatchObject({ when: { kind: 'event', url: 'https://eur-lex.europa.eu/oj/direct-access.html' }, work: { kind: 'read', urls: ['https://eur-lex.europa.eu/oj/direct-access.html'] } });
 
   // On in the store anyway (as an older build or a model change could leave it): its run fails at pin.
-  await putRoutine({ ...m, paused: false, nextDue: Date.now() - 1000 });
+  await put(panel, 'routines', { ...m, paused: false, nextDue: Date.now() - 1000 });
   await sw.evaluate((id) => self.gardenFire(id), m.id);
   let run;
   await expect.poll(async () => (run = (await bg('runList')).find((r) => r.routineId === m.id))?.status, { timeout: 30_000 }).toBe('failed');

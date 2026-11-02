@@ -7,8 +7,8 @@ DOM helpers for the in-page UI and the extension pages:
 - `dom.ts`: a typed element builder.
 - `questions.ts`: a question block, asked one at a time.
 - `flower.ts`: the Homegrown SVG mark and its animation states.
-- `chart.ts`: SVG charts and KPI cards from a table (plan T9).
-- `linkcard.ts`: links in answers and their hover card (plan T6).
+- `chart.ts`: SVG charts and KPI cards from a table.
+- `linkcard.ts`: links in answers and their hover card.
 - `theme.ts`: applies the light, dark or system theme.
 - `theme-early.ts`: applies the theme before the first paint.
 
@@ -24,7 +24,7 @@ DOM helpers for the in-page UI and the extension pages:
   - `Child`: a node, string or number. `null`, `undefined` and `false` are skipped.
 - `questions.ts`: `questions(list, done, skip?)`. Each `{ q, options?, placeholder? }` shows with its options as ghost buttons and a short
   answer field (and with `skip`, a Skip button that leaves it out); `done` gets one object of answers keyed by question. Used by
-  the companion interview (plan T12), the request tray (and chat, plan T6).
+  the companion interview, the request tray (and chat).
 - `flower.ts`
   - `FlowerState`: `''`, `sprout`, `thinking`, `bloom`, `wilt` or `stage-0` to `stage-3`.
   - `flowerHtml(size, state)`: the mark as an SVG string. The defaults are size 20 and state `''`.
