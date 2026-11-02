@@ -24,3 +24,21 @@ export function lazily<T>(load: (onProgress?: Progress) => Promise<T>): ((onProg
     },
   });
 }
+
+/** `work`, unless ONNX Runtime's WebGPU device is lost first (the GPU process died, say from low memory): then an error
+ * instead of a wait forever, and `drop` forgets models held on the dead device. */
+export function unlessGpuLost<T>(work: Promise<T>, drop: () => void, gpu = (): { lost?: Promise<unknown> } | undefined => (env.backends.onnx.webgpu as { device?: { lost?: Promise<unknown> } } | undefined)?.device): Promise<T> {
+  let poll: ReturnType<typeof setInterval> | undefined;
+  const lost = new Promise<never>((_, no) => {
+    poll = setInterval(() => {
+      const device = gpu();
+      if (!device?.lost) return; // not made until the first WebGPU session
+      clearInterval(poll);
+      void device.lost.then(() => {
+        drop();
+        no(new Error('The GPU stopped (Chrome may be short of memory). Try again.'));
+      });
+    }, 1000);
+  });
+  return Promise.race([work, lost]).finally(() => clearInterval(poll));
+}

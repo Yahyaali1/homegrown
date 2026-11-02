@@ -2,7 +2,7 @@
 // grayscale PNG data URL (near = white), small enough to send to the page.
 import { pipeline, RawImage } from '@huggingface/transformers';
 import { downloadStatus } from '../broadcast.ts';
-import { lazily } from './hf.ts';
+import { lazily, unlessGpuLost } from './hf.ts';
 import { dataUrl } from './imagegen.ts';
 import type { DepthModel } from '../../domain/imagegen.ts';
 
@@ -15,8 +15,8 @@ const loaders = Object.fromEntries(Object.entries(REPOS).map(([k, [id, revision]
   pipeline('depth-estimation', id, { revision, device: 'webgpu', dtype: 'fp16', ...(progress_callback && { progress_callback }) }) as unknown as Promise<Estimator>)])) as Record<DepthModel, ReturnType<typeof lazily<Estimator>>>;
 
 async function depthMap({ id, src, model = 'small' }: { id: string; src: string; model?: DepthModel }): Promise<string> {
-  const estimate = await (loaders[model] ?? loaders.small)(downloadStatus(id, 'the depth model'));
-  const { depth } = await estimate(await RawImage.fromURL(src));
+  const load = loaders[model] ?? loaders.small;
+  const { depth } = await unlessGpuLost((async () => (await load(downloadStatus(id, 'the depth model')))(await RawImage.fromURL(src)))(), () => void load.release().catch(() => {}));
   return dataUrl(await depth.toBlob('image/png'));
 }
 

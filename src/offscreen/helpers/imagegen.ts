@@ -3,7 +3,7 @@
 // WebGPU) or FLUX.2 klein 4B (flux.ts, 5.6 GB, better pictures).
 import { AutoProcessor, MultiModalityCausalLM } from '@huggingface/transformers';
 import { broadcast, downloadStatus } from '../broadcast.ts';
-import { lazily } from './hf.ts';
+import { lazily, unlessGpuLost } from './hf.ts';
 import { flux } from './flux.ts';
 import { IMAGE_MODELS, type ImageModel } from '../../domain/imagegen.ts';
 
@@ -47,7 +47,8 @@ async function janus(prompt: string, id: string): Promise<Blob> {
 async function generateImage({ id, prompt, model = 'janus' }: { id: string; prompt: string; model?: ImageModel }): Promise<{ url: string; model: string }> {
   const pick = model in IMAGE_MODELS ? model : 'janus';
   if (pick === 'flux') await load.release(); // FLUX needs the memory Janus holds
-  const url = await dataUrl(await (pick === 'flux' ? flux(prompt, id) : janus(prompt, id)));
+  const blob = await unlessGpuLost(pick === 'flux' ? flux(prompt, id) : janus(prompt, id), () => void load.release().catch(() => {}));
+  const url = await dataUrl(blob);
   broadcast({ type: 'status', id, text: '' });
   return { url, model: IMAGE_MODELS[pick].label };
 }
