@@ -194,7 +194,7 @@ export function taintsAfter(tool: string, r: { taint?: boolean | undefined; url?
 }
 
 /** "Always" may answer this request: a non-sensitive approve whose tool may be granted (an app tool only when marked Read). */
-export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && !ruleOf(q.tool).noAlways && !q.noAlways;
+export const alwaysOk = (q: Request): boolean => q.kind === 'approve' && !q.sensitive && !ruleOf(q.tool).noAlways && !q.appWrite;
 
 /** `seen` plus new URLs (deduplicated, fragments removed), capped at 300. */
 export function addSeen(seen: Seen[], urls: string[], from: Seen['from'], step?: number): Seen[] {

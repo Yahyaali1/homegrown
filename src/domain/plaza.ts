@@ -2,7 +2,7 @@
 // the person's history titles join only with the `plazaHistory` setting on. Data-only prompt; the reply is shown as text.
 import { defang } from './text.ts';
 
-export const PLAZA_PROMPT = 'Write one short, calm line (at most 20 words) that this companion could say to the person today, based only on the data. Plain text, no quotes, no greeting, no exclamation marks.';
+const PLAZA_PROMPT = 'Write one short, calm line (at most 20 words) that this companion could say to the person today, based only on the data. Plain text, no quotes, no greeting, no exclamation marks.';
 
 export function plazaThink(name: string, o: { notes: string[]; answers: string[]; history: string[] | null }): { prompt: string; data: string } {
   const part = (title: string, xs: string[], cap: number) => (xs.length ? [`${title}:`, ...xs.slice(0, cap).map((x) => `- ${defang(x).replace(/\s+/g, ' ').slice(0, 300)}`)] : []);

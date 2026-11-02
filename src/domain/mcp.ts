@@ -1,10 +1,11 @@
 // Remote MCP connectors (ADR-17): the connector record, JSON-RPC and sign-in shapes, and checks on all server text.
 import { site } from './garden/records.ts';
+import { isObj, str } from './text.ts';
 
 export type Scope = 'off' | 'ask' | 'read';
 
 /** The JSON Schema subset a call is checked against: types, required, enums, string lengths, items and properties. */
-export interface Schema { type?: string | string[]; properties?: Record<string, Schema>; required?: string[]; enum?: unknown[]; minLength?: number; maxLength?: number; items?: Schema }
+interface Schema { type?: string | string[]; properties?: Record<string, Schema>; required?: string[]; enum?: unknown[]; minLength?: number; maxLength?: number; items?: Schema }
 
 /** A tool as the person confirmed it: `describe` is theirs (pre-filled from the server), the only text a prompt gets. */
 export interface AppTool { name: string; describe: string; schema: Schema; scope: Scope }
@@ -31,10 +32,9 @@ export type ConnectorFacts = Omit<Connector, 'token' | 'oauth'>;
 export const factsOf = ({ token: _, oauth: __, ...c }: Connector): ConnectorFacts => c;
 
 export const MCP = { name: 60, describe: 200, guidelines: 2000, tools: 100, hosts: 10, token: 4000, server: 1000 } as const;
-export const NAME = /^[A-Za-z_][A-Za-z0-9_]{0,40}$/;
+const NAME = /^[A-Za-z_][A-Za-z0-9_]{0,40}$/;
 export const STDIO = 'Local servers (stdio) can’t run from a browser extension.';
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 
 /** Why a tool can't be used (shown as Off with this reason), or null: its name and every property name must be plain. */
 export function unusable(name: unknown, schema: unknown): string | null {
@@ -43,7 +43,7 @@ export function unusable(name: unknown, schema: unknown): string | null {
   return bad(schema) ? 'an argument’s name isn’t a plain name' : null;
 }
 
-export const isLocal = (url: string) => ['localhost', '127.0.0.1'].includes(new URL(url).hostname);
+const isLocal = (url: string) => ['localhost', '127.0.0.1'].includes(new URL(url).hostname);
 export const sameOrigin = (a: string, b: string) => new URL(a).origin === new URL(b).origin;
 
 /** A server URL: https, or http on this machine (a local test server). */
@@ -81,7 +81,6 @@ export const toolFrom = (s: ServerTool, chosen: Partial<Pick<AppTool, 'describe'
 });
 
 const SCOPES: Scope[] = ['off', 'ask', 'read'];
-const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
 
 export function parseConnector(raw: unknown): Connector | null {
   if (!isObj(raw) || raw.v !== 1 || !str(raw.id, 200) || !str(raw.name, MCP.name) || !serverUrl(raw.url) || !str(raw.guidelines, MCP.guidelines, 0)) return null;

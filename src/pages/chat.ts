@@ -9,20 +9,19 @@ import { markdown } from '../domain/markdown.ts';
 import { can, MODELS, modelById } from '../domain/model.ts';
 import { PROMPT_LAB } from '../shared/actions.ts';
 import type { TaskKind } from '../domain/tasks.ts';
-import { changeFor, chatSettings, checkChoice, parseSettings, settingPrompt } from '../domain/settings.ts';
+import { changeFor, chatSettings, checkChoice, settingPrompt } from '../domain/settings.ts';
 import { parseJsonObject } from '../domain/text.ts';
-import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, excerpt, upsertTurns, highlightParts, interrupted, isLong, modeModel, parseChat, questionBlock, route, searchChats,
+import { chatCorrection, chatReport, dropFrom, duplicate, engineTurns, excerpt, upsertTurns, highlightParts, interrupted, isLong, modeModel, questionBlock, route, searchChats,
   splitThinking, titleOf, userTurn, withLead, type Chat, type ChatTurn, type Mode } from '../domain/chat.ts';
-import * as idb from '../shared/idb.ts';
+import { allChats, deleteChat, generate, getChat, lastChat, onChange, remember, save, saveAll, streaming, sync, type EngineTurn, type Stats } from './chat-store.ts';
 import { bg, engineCall } from '../shared/protocol.ts';
 import { anchorsIn, reference, type Entity } from '../domain/memory.ts';
 import type { Skill } from '../domain/garden/skills.ts';
 import { fuzzy } from '../domain/reading.ts';
 import { meetingsAsk } from '../domain/meeting.ts';
-import { openConnect, rememberOffer } from './garden.ts';
+import { openConnect } from './garden-connectors.ts';
+import { rememberOffer } from './garden-runs.ts';
 
-interface Stats { ttftMs: number; prefillTps: number; decodeTps: number; latencyMs: number; prefillTokens: number; outputTokens: number; truncated: boolean }
-interface EngineTurn { role: 'user' | 'model'; text: string; selection?: string; image?: string }
 export interface ChatDeps { ensureModel(): Promise<unknown>; downloaded(): string[]; showTab(name: string): void }
 
 let deps: ChatDeps;
@@ -32,58 +31,15 @@ let query = ''; // the search, marked in the open chat
 let attached: string | null = null; // a selection waiting for an instruction
 let imageData: string | null = null;
 let asking: { name: string; instructions: string } | null = null; // a companion picked in Plaza, for the next new chat
-let liveId = ''; // the generation streaming now
-const streams = new Map<string, (t: string) => void>(); // generate id → token callback
 
-const sync = async () => parseSettings(await chrome.storage.sync.get(null));
+// ---- other panels ----
 
-// ---- storage ----
-
-const db = idb.openChats();
-const channel = new BroadcastChannel('hg-chat'); // other side panels (one per window) reload what changed
-
-/** Read, edit and write in one transaction, so another panel's newer turns stay; `c` takes the stored result. */
-async function save(c: Chat, edit: (stored: Chat) => void, list = true): Promise<void> {
-  const out = await idb.tx(await db, 'chats', 'readwrite', async (t) => {
-    const s = t.objectStore('chats');
-    const stored = parseChat(await idb.req(s.get(c.id))) ?? { ...c, turns: [] };
-    edit(stored);
-    stored.updatedAt = Date.now();
-    await idb.req(s.put(stored));
-    return stored;
-  });
-  Object.assign(c, out);
-  if (!list) return; // the timed save while streaming
-  channel.postMessage(c.id);
+onChange(async (id, here) => {
   void renderList();
-}
-const saveAll = (c: Chat) => save(c, (s) => upsertTurns(s, c.turns));
-channel.onmessage = async (e: MessageEvent<string>) => {
-  void renderList();
-  if (chat?.id !== e.data || liveId) return;
-  const fresh = parseChat(await idb.get(await db, 'chats', e.data));
-  if (fresh && chat?.id === fresh.id && !liveId) (chat = fresh), render();
-};
-const allChats = async () => (await idb.all<unknown>(await db, 'chats')).map(parseChat).filter((c): c is Chat => !!c);
-
-// ---- engine ----
-
-chrome.runtime.onMessage.addListener((msg) => msg.source === 'engine' && msg.type === 'token' && streams.get(msg.id)?.(msg.text));
-// A closed or reloaded panel stops its answer; the saved part shows "Interrupted" with Retry next time.
-addEventListener('pagehide', () => liveId && void chrome.runtime.sendMessage({ target: 'engine', cmd: 'cancel', id: liveId }).catch(() => {}));
-
-async function generate(turns: EngineTurn[], config: Record<string, number>, model: string, onToken: (t: string) => void) {
-  const id = (liveId = crypto.randomUUID());
-  streams.set(id, onToken);
-  try {
-    const r = await engineCall<{ text: string; stats: Stats }>('generate', { id, turns, config, model });
-    showStats(r.stats);
-    return r;
-  } finally {
-    streams.delete(id);
-    liveId = '';
-  }
-}
+  if (here || chat?.id !== id || streaming()) return;
+  const fresh = await getChat(id);
+  if (fresh && chat?.id === fresh.id && !streaming()) (chat = fresh), render();
+});
 
 function showStats(s: Stats): void {
   $('#stats').hidden = false;
@@ -207,10 +163,7 @@ async function newChat(first: string): Promise<Chat> {
 function open(c: Chat | null): void {
   chat = c;
   if (asking) (asking = null), (input.placeholder = 'Message the model…');
-  try {
-    if (c) localStorage.chat = c.id;
-    else delete localStorage.chat;
-  } catch {}
+  remember(c);
   render();
 }
 
@@ -247,6 +200,7 @@ async function answer(c: Chat, config: Record<string, number> = {}, image?: stri
       fillAnswer(li.body, t.text, false);
       li.scrollIntoView({ block: 'end' });
     });
+    showStats(r.stats);
     t.text = r.text;
     truncated = r.stats.truncated;
   } catch (e) {
@@ -336,7 +290,7 @@ async function renderList(): Promise<void> {
     h('button', { type: 'button', className: 'ghost grow', textContent: c.title, title: new Date(c.updatedAt).toLocaleString(), onclick: () => open(c) }),
     h('span', { className: 'muted small', textContent: interrupted(c) ? 'Interrupted' : c.mode }),
     small('×', `Delete ${c.title}`, async () => {
-      await idb.del(await db, 'chats', c.id);
+      await deleteChat(c.id);
       if (chat?.id === c.id) open(null);
       void renderList();
     }))));
@@ -523,9 +477,7 @@ for (const id of ['lab-temp', 'lab-topk']) {
 export async function startChat(d: ChatDeps): Promise<void> {
   deps = d;
   renderModes();
-  let last: string | undefined;
-  try { last = localStorage.chat; } catch {}
-  const found = last ? parseChat(await idb.get(await db, 'chats', last)) : null;
+  const found = await lastChat();
   if (found && !chat) open(found);
   await renderList();
 }

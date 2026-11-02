@@ -1,22 +1,13 @@
 // The gardens' records in IndexedDB 'hg-garden'. A record a newer build wrote (or a broken one) parses to null: ignored,
 // never deleted. Every run saved is broadcast to the extension pages.
-import { engine, modelFor } from './engine.ts';
-import { factsOf } from './gardentools.ts';
 import * as idb from '../shared/idb.ts';
-import { isExtensionPage } from './pagerequest.ts';
-import { recipesList } from './scrape.ts';
-import * as trust from './trust.ts';
-import { queuedFollowUp, type Ctx } from '../domain/garden/loop.ts';
-import { onSites, type Known } from '../domain/garden/policy.ts';
-import { presetById } from '../domain/garden/presets.ts';
+import { queuedFollowUp } from '../domain/garden/loop.ts';
+import { onSites } from '../domain/garden/policy.ts';
 import { parseGardener, parseRoutine, parseRun, parseWork, pruneIds, type Gardener, type GardenRun, type Status, type Work } from '../domain/garden/records.ts';
 import { trimmed } from '../domain/garden/report.ts';
 import { parseSkill, upgradeGarden, type Skill } from '../domain/garden/skills.ts';
-import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
-import { factsOf as connectorFacts } from '../domain/mcp.ts';
 import { hostOf } from '../domain/text.ts';
 
-export type Sender = chrome.runtime.MessageSender | null | undefined;
 export const DAY = 24 * 3_600_000;
 export const KEEP_RUNS = 30;
 export const NEEDED_YOU = 'Needed you for too long.';
@@ -36,11 +27,6 @@ export let started: Promise<void> = Promise.resolve();
 export const setStarted = (p: Promise<void>) => void (started = p);
 export const ready = () => started;
 
-/** Extension pages only: garden records and answers never come from a content script. Inside the worker: allowed. */
-export function page(sender: Sender): void {
-  if (sender !== undefined && !isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
-}
-
 export async function mustGardener(id: string): Promise<Gardener> {
   const g = parseGardener(await idb.get(await db, 'gardeners', id));
   if (!g) throw new Error('That gardener no longer exists.');
@@ -54,21 +40,6 @@ export function checkWork(work: unknown, g: Gardener): Work {
   const off = w.kind === 'read' ? w.urls.filter((u) => !onSites(hostOf(u), g.sites)) : [];
   if (off.length) throw new Error(`Not on ${g.name}’s sites: ${off.join(', ')}`);
   return w;
-}
-
-/** A hired gardener's pack tools (an unknown pack allows none); undefined for the person's own. */
-const allowedFor = (g: Gardener): string[] | undefined => (g.preset ? presetById(g.preset)?.tools ?? [] : undefined);
-/** The model gardeners use now: the chosen one, else the one loaded. */
-export const gardensModel = async () => (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
-
-/** What policy needs from storage, read fresh: a grant revoked or a recipe edited counts at once. */
-const knownFor = async (gardenerId: string): Promise<Known> =>
-  ({ grants: (await trust.grants()).filter((x) => x.gardenerId === gardenerId), recipes: (await recipesList()).map(factsOf), connectors: (await trust.connectors()).map(connectorFacts) });
-
-/** The loop's view of `run` now: its gardener, the tools offered to it, and what policy knows. */
-export async function ctxFor(run: GardenRun, gardener: Gardener, extra: Partial<Ctx> = {}): Promise<Ctx> {
-  const known = await knownFor(gardener.id);
-  return { gardener, ...extra, tools: toolsFor(run, TOOLS, known.connectors, allowedFor(gardener)), now: Date.now(), ...known };
 }
 
 export const broadcast = (run: GardenRun) => void chrome.runtime.sendMessage({ type: 'garden-run', run: trimmed(run) }).catch(() => {});

@@ -1,7 +1,7 @@
 // AI rules: ScrapingBee's ai_extract_rules, answered by the local model. One call per page: the page (or each item
 // the rules matched) goes in as numbered data blocks, never inside the instruction, and a value the model gives
 // must be found in the block it came from, or it is dropped.
-import { defang, num, parseJsonObject } from '../text.ts';
+import { defang, isObj, num, parseJsonObject } from '../text.ts';
 import type { Ask } from '../mission/ports.ts';
 
 export type AiType = 'string' | 'number' | 'boolean' | 'list' | 'item';
@@ -28,7 +28,7 @@ export function parseAiRules(raw: unknown, depth = 0): AiRules | null {
   const rules: AiRules = {};
   for (const [k, f] of entries) {
     const name = k.trim();
-    const o = typeof f === 'string' ? { description: f } : f && typeof f === 'object' && !Array.isArray(f) ? (f as Record<string, unknown>) : null;
+    const o = typeof f === 'string' ? { description: f } : isObj(f) ? f : null;
     const description = String(o?.description ?? '').trim();
     const type = (o?.type ?? 'string') as AiType;
     if (!name || name.startsWith('_') || !description || description.length > AI_LIMITS.description || !TYPES.includes(type)) return null;

@@ -1,7 +1,8 @@
 // Plan first: a weak model proposes a list of calls, the person approves it, and code still checks every call.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerFor, answerPlan, approveRequest, BAD_REPLY, next, PLAN_REFUSED, refusal, type Ctx } from '../../src/domain/garden/loop.ts';
+import { answerFor, answerPlan, approveRequest, autoApprovePlan, next, PLAN_REFUSED, refusal, type Ctx } from '../../src/domain/garden/loop.ts';
+import { BAD_REPLY } from '../../src/domain/garden/prompt.ts';
 import { classify } from '../../src/domain/garden/classify.ts';
 import { argsKey, decide, type RecipeFacts } from '../../src/domain/garden/policy.ts';
 import { claim } from '../../src/domain/garden/schedule.ts';
@@ -174,7 +175,7 @@ test('no fromPlan answer is made for act_my_tab or app_call', () => {
   assert.ok('request' in a);
   const q: Request = { ...a.request, id: 'p' };
   auto.requests.push(q);
-  assert.equal(answerPlan(auto, c, q, 'yes', undefined, 2000, true), null);
+  assert.equal(autoApprovePlan(auto, c, q, 2000), null);
   assert.equal(auto.requests.filter((x) => x.origin === 'plan').length, 0);
   assert.ok('request' in next(auto, c), 'its call is asked');
 });

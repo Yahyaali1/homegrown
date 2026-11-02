@@ -1,7 +1,7 @@
 // Typed memory and Documents, kept in eg-memory's `entities` and `docs` stores by background/memory.ts.
 // A model's entity is off (`confirmed: false`) until the person keeps it; only confirmed ones reach a prompt, and only
 // in the data part, except a template the person wrote. Docs are private: reading one taints a run, as notes do.
-import { defang } from './text.ts';
+import { defang, isObj, str } from './text.ts';
 
 export const ENTITY_TYPES = ['person', 'project', 'event', 'research', 'preference'] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -32,8 +32,6 @@ export interface HistoryEntry { id?: number; url: string; title: string; ask: st
 
 export const MEM = { name: 80, aliases: 10, fields: 20, field: 500, body: 8000, template: 8000, path: 120, doc: 20_000, docs: 50, anchors: 3 } as const;
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
-const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
 const BY = (x: unknown): x is 'person' | 'model' => x === 'person' || x === 'model';
 
 export function parseEntity(raw: unknown): Entity | null {
@@ -116,6 +114,6 @@ export const addedLines = (before: string, after: string): string => {
   return after.split('\n').filter((l) => l.trim() && !was.has(l.trim())).join('\n').trim();
 };
 
-/** A correction kept as a preference, in the person's own words. */
-export const correctionEntity = (text: string, id: string, at: number): Entity =>
-  ({ v: 1, id, type: 'preference', name: text.replace(/\s+/g, ' ').slice(0, MEM.name).trim(), aliases: [], fields: {}, body: text, by: 'person', confirmed: true, correction: true, at });
+/** A correction kept as a preference, in the person's own words: what `entitySave` takes. */
+export const correctionEntity = (text: string): Partial<Entity> =>
+  ({ type: 'preference', name: text.replace(/\s+/g, ' ').slice(0, MEM.name).trim(), body: text, correction: true });

@@ -6,11 +6,12 @@ import { closeLiveGroups } from './missions.ts';
 import { addNote, deleteDocs, deleteNote, deleteNotes, listNotes } from './memory.ts';
 import * as idb from '../shared/idb.ts';
 import * as trust from './trust.ts';
-import { allRuns, broadcast, checkWork, ctxFor, db, end, followQueued, gardeners, gardensModel, getRun, KEEP_RUNS, mustGardener, page, parsed, ready, routines, saveRun, setStarted, skills, updateRun, type Sender } from './garden-store.ts';
-import { drain, WAKE } from './garden-queue.ts';
+import { isExtensionPage, pagesOnly } from './pagerequest.ts';
+import { allRuns, broadcast, checkWork, db, end, followQueued, gardeners, getRun, KEEP_RUNS, mustGardener, parsed, ready, routines, saveRun, setStarted, skills, updateRun } from './garden-store.ts';
+import { ctxFor, drain, gardensModel, WAKE } from './garden-queue.ts';
 import { ALARM, deleteRoutine, fire, routineHandlers } from './garden-routines.ts';
 import { initTabs, live, owned, release, tabHandlers } from './garden-tabs.ts';
-import { refusedWork, skillHandlers } from './garden-skills.ts';
+import { deleteSkill, refusedWork, skillHandlers } from './garden-skills.ts';
 import { hireHandlers } from './garden-hire.ts';
 import { plazaHandlers } from './garden-plaza.ts';
 import { can } from '../domain/model.ts';
@@ -20,6 +21,7 @@ import { expired } from '../domain/garden/schedule.ts';
 import { NEEDS, needsRefusal, skillWork, slashOf } from '../domain/garden/skills.ts';
 import { trimmed } from '../domain/garden/report.ts';
 import { helping, isEnded, isWorking, newRun, noPage, NO_PAGE, parseGardener, parseLook, parseRoutine, parseRun, randomLook, requestOf, routineWork, sitesOf, type Gardener, type GardenRun, type Request } from '../domain/garden/records.ts';
+import { isObj } from '../domain/text.ts';
 
 /** The person's answer, stored; a yes to opening a page makes that exact URL reachable from now on. */
 function settle(r: GardenRun, q: Request, value: string, now: number, edit: { args?: Record<string, unknown> } = {}): void {
@@ -33,7 +35,7 @@ function settle(r: GardenRun, q: Request, value: string, now: number, edit: { ar
 function answersOk(questions: { q: string }[], value: string): boolean {
   try {
     const a = JSON.parse(value) as unknown;
-    return !!a && typeof a === 'object' && !Array.isArray(a) && Object.entries(a).every(([k, v]) => typeof v === 'string' && questions.some((x) => x.q === k));
+    return isObj(a) && Object.entries(a).every(([k, v]) => typeof v === 'string' && questions.some((x) => x.q === k));
   } catch {
     return false;
   }
@@ -42,10 +44,36 @@ function answersOk(questions: { q: string }[], value: string): boolean {
 const open = (r: GardenRun, q: Request | undefined, now: number): q is Request =>
   r.status === 'waiting' && !!q && !q.answer && !expired(r, now) && (q.expiresAt === undefined || q.expiresAt > now);
 
-const gardenHandlers = {
-  gardenerList: async (_: unknown, sender?: Sender) => (page(sender), await ready(), gardeners()),
-  gardenerSave: async ({ gardener }: { gardener: Partial<Gardener> }, sender?: Sender) => {
-    page(sender);
+/** Stop on a parent stops its helpers; on a helper, only it. */
+async function stopRun(id: string): Promise<void> {
+  // The parent is stopped first, so a split that commits after it refuses, and the helpers listed next are all there are.
+  const stopOne = async (x: string) => {
+    const e = live.get(x);
+    if (e) {
+      // Halted first: a step already running in a tab can't click after Stop.
+      const g = e.tab.group;
+      if (g !== undefined) for (const t of await chrome.tabs.query({ groupId: g }).catch(() => [])) if (t.id !== undefined) await release(t.id);
+      for (const t of e.borrowed) await release(t);
+      e.tab.stop.abort();
+    }
+    await updateRun(x, (r) => void (isWorking(r) && end(r, 'stopped')));
+  };
+  await stopOne(id);
+  for (const r of await allRuns()) if (r.parentId === id && isWorking(r)) await stopOne(r.id);
+  drain(); // a stopped helper may be the last its parent waited on
+}
+
+/** Stop: from an extension page, or from a tab in the run's own group (the lock bar). */
+async function runStop({ id }: { id: string }, sender?: chrome.runtime.MessageSender): Promise<true> {
+  if (!owned(id, sender?.tab) && !isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
+  await ready();
+  await stopRun(id);
+  return true;
+}
+
+const gardenHandlers = pagesOnly({
+  gardenerList: async () => (await ready(), gardeners()),
+  gardenerSave: async ({ gardener }: { gardener: Partial<Gardener> }) => {
     await ready();
     const { refused } = sitesOf(Array.isArray(gardener.sites) ? gardener.sites : []);
     if (refused.length) throw new Error(`These can’t be sites: ${refused.join(', ')}`);
@@ -59,22 +87,20 @@ const gardenHandlers = {
     await idb.put(await db, 'gardeners', g);
     return g;
   },
-  gardenerDelete: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
+  gardenerDelete: async ({ id }: { id: string }) => {
     await ready();
     for (const r of (await routines()).filter((x) => x.gardenerId === id)) await deleteRoutine(r.id);
     // Its runs stop first, so none takes a note after its notes are gone.
-    for (const r of (await allRuns()).filter((x) => x.gardenerId === id && isWorking(x))) await gardenHandlers.runStop({ id: r.id }, sender);
+    for (const r of (await allRuns()).filter((x) => x.gardenerId === id && isWorking(x))) await stopRun(r.id);
     await deleteNotes(id);
     await deleteDocs(id);
-    for (const s of (await skills()).filter((x) => x.gardenerId === id)) await skillHandlers.skillDelete({ id: s.id }, sender);
+    for (const s of (await skills()).filter((x) => x.gardenerId === id)) await deleteSkill(s.id);
     await idb.del(await db, 'gardeners', id);
     return true;
   },
   // Run now ({ routineId }): the routine's work and snapshots; its nextDue stays. Ask a follow-up ({ followUp, work }):
   // ask or plan work for the earlier run's gardener, whose answer starts its data.
-  gardenRun: async ({ gardenerId, work, routineId, followUp }: { gardenerId?: string; work?: unknown; routineId?: string; followUp?: string }, sender?: Sender) => {
-    page(sender);
+  gardenRun: async ({ gardenerId, work, routineId, followUp }: { gardenerId?: string; work?: unknown; routineId?: string; followUp?: string }) => {
     await ready();
     const d = await db;
     const routine = routineId ? parseRoutine(await idb.get(d, 'routines', routineId)) : null;
@@ -109,14 +135,12 @@ const gardenHandlers = {
     drain();
     return { id: run.id };
   },
-  runList: async ({ gardenerId, limit = KEEP_RUNS }: { gardenerId?: string; limit?: number }, sender?: Sender) => {
-    page(sender);
+  runList: async ({ gardenerId, limit = KEEP_RUNS }: { gardenerId?: string; limit?: number }) => {
     await ready();
     return (await allRuns()).filter((r) => !gardenerId || r.gardenerId === gardenerId).sort((a, b) => b.queuedAt - a.queuedAt).slice(0, limit).map(trimmed);
   },
-  runGet: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await ready(), getRun(id)),
-  runDelete: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
+  runGet: async ({ id }: { id: string }) => (await ready(), getRun(id)),
+  runDelete: async ({ id }: { id: string }) => {
     await ready();
     await idb.tx(await db, 'runs', 'readwrite', async (t) => {
       const r = parseRun(await idb.req(t.objectStore('runs').get(id)));
@@ -128,30 +152,8 @@ const gardenHandlers = {
     });
     return true;
   },
-  // Also from a tab in the run's own group (the lock bar). Stop on a parent stops its helpers; on a helper, only it.
-  runStop: async ({ id }: { id: string }, sender?: Sender) => {
-    if (!owned(id, sender?.tab)) page(sender);
-    await ready();
-    // The parent is stopped first, so a split that commits after it refuses, and the helpers listed next are all there are.
-    const stopOne = async (x: string) => {
-      const e = live.get(x);
-      if (e) {
-        // Halted first: a step already running in a tab can't click after Stop.
-        const g = e.tab.group;
-        if (g !== undefined) for (const t of await chrome.tabs.query({ groupId: g }).catch(() => [])) if (t.id !== undefined) await release(t.id);
-        for (const t of e.borrowed) await release(t);
-        e.tab.stop.abort();
-      }
-      await updateRun(x, (r) => void (isWorking(r) && end(r, 'stopped')));
-    };
-    await stopOne(id);
-    for (const r of await allRuns()) if (r.parentId === id && isWorking(r)) await stopOne(r.id);
-    drain(); // a stopped helper may be the last its parent waited on
-    return true;
-  },
   /** Resume all: a parent's failed and stopped helpers run again, and the parent waits on them. */
-  runResumeAll: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
+  runResumeAll: async ({ id }: { id: string }) => {
     await ready();
     const changed = await idb.tx(await db, 'runs', 'readwrite', async (t) => {
       const s = t.objectStore('runs');
@@ -167,8 +169,7 @@ const gardenHandlers = {
     drain();
     return true;
   },
-  requestShown: async ({ runId, requestId }: { runId: string; requestId: string }, sender?: Sender) => {
-    page(sender);
+  requestShown: async ({ runId, requestId }: { runId: string; requestId: string }) => {
     await ready();
     await updateRun(runId, (r) => {
       const q = r.requests.find((x) => x.id === requestId);
@@ -180,8 +181,7 @@ const gardenHandlers = {
    * `{ runId, requestId, value, calls?, args? }`: a plan's yes may carry the calls as the person edited them; an
    * approve's yes may carry the call's args as edited (only yes: a grant would be the original call).
    */
-  requestAnswer: async ({ runId, requestId, value, calls, args }: { runId: string; requestId: string; value: string; calls?: unknown; args?: unknown }, sender?: Sender) => {
-    page(sender);
+  requestAnswer: async ({ runId, requestId, value, calls, args }: { runId: string; requestId: string; value: string; calls?: unknown; args?: unknown }) => {
     await ready();
     if (typeof value !== 'string' || !value.trim() || value.length > 2000) throw new Error('The answer is empty or too long.');
     let grant: Grant | null = null;
@@ -221,8 +221,7 @@ const gardenHandlers = {
     return true;
   },
   /** Approve all: yes to each named request that `approveAllOk` allows, checked here again; the rest are left. */
-  requestAnswerAll: async ({ requests }: { requests: { runId: string; requestId: string }[] }, sender?: Sender) => {
-    page(sender);
+  requestAnswerAll: async ({ requests }: { requests: { runId: string; requestId: string }[] }) => {
     await ready();
     let n = 0;
     for (const { runId, requestId } of Array.isArray(requests) ? requests : []) {
@@ -239,8 +238,7 @@ const gardenHandlers = {
    * `{ id, text, steer }`. Steer (true): the person's words for the run's next think. Queued (false): asked as a
    * follow-up when the run ends, oldest first; in no think before that.
    */
-  runMessage: async ({ id, text, steer }: { id: string; text: string; steer: boolean }, sender?: Sender) => {
-    page(sender);
+  runMessage: async ({ id, text, steer }: { id: string; text: string; steer: boolean }) => {
     await ready();
     if (typeof steer !== 'boolean') throw new Error('A message is Steer or queued.');
     if (typeof text !== 'string' || !text.trim() || text.length > 1000) throw new Error('A message is 1 to 1000 characters.');
@@ -261,15 +259,13 @@ const gardenHandlers = {
     return m.id;
   },
   /** Opening a run in the Garden tab: it is no longer Unread. */
-  runSeen: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
+  runSeen: async ({ id }: { id: string }) => {
     await ready();
     await updateRun(String(id), (r) => void (r.seenAt = Date.now()));
     return true;
   },
   /** Retry step: `{ id, step }`, an ended run of direct work runs that failed step again, then what followed it. */
-  runRetry: async ({ id, step }: { id: string; step: number }, sender?: Sender) => {
-    page(sender);
+  runRetry: async ({ id, step }: { id: string; step: number }) => {
     await ready();
     await updateRun(String(id), (r) => {
       const why = retryStep(r, Number(step));
@@ -279,20 +275,19 @@ const gardenHandlers = {
     return true;
   },
   // The notebook: private, so extension pages only. A note belongs to a gardener that exists, or to every gardener.
-  noteList: async ({ gardenerId }: { gardenerId?: string } = {}, sender?: Sender) => (page(sender), listNotes(gardenerId)),
-  noteSave: async ({ note }: { note: { gardenerId?: string; text: string } }, sender?: Sender) => {
-    page(sender);
+  noteList: async ({ gardenerId }: { gardenerId?: string } = {}) => listNotes(gardenerId),
+  noteSave: async ({ note }: { note: { gardenerId?: string; text: string } }) => {
     await ready();
     if (note.gardenerId) await mustGardener(note.gardenerId);
     const { vec: _, ...n } = await addNote({ ...(note.gardenerId && { gardenerId: note.gardenerId }), text: String(note.text ?? ''), by: 'person' });
     return n;
   },
-  noteDelete: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await deleteNote(String(id)), true),
-  grantList: async ({ gardenerId }: { gardenerId?: string } = {}, sender?: Sender) => (page(sender), (await trust.grants()).filter((g) => !gardenerId || g.gardenerId === gardenerId)),
-  grantRevoke: async ({ gardenerId, tool, host, argsKey }: Omit<Grant, 'at'>, sender?: Sender) => (page(sender), await trust.revoke({ gardenerId, tool, host, argsKey }), true),
-};
+  noteDelete: async ({ id }: { id: string }) => (await deleteNote(String(id)), true),
+  grantList: async ({ gardenerId }: { gardenerId?: string } = {}) => (await trust.grants()).filter((g) => !gardenerId || g.gardenerId === gardenerId),
+  grantRevoke: async ({ gardenerId, tool, host, argsKey }: Omit<Grant, 'at'>) => (await trust.revoke({ gardenerId, tool, host, argsKey }), true),
+});
 
-export const handlers = { ...gardenHandlers, ...routineHandlers, ...tabHandlers, ...skillHandlers, ...hireHandlers, ...plazaHandlers };
+export const handlers = { ...gardenHandlers, runStop, ...routineHandlers, ...tabHandlers, ...skillHandlers, ...hireHandlers, ...plazaHandlers };
 
 /** Test hook (on self): the routine's claim, as if its alarm fired. */
 export async function gardenFire(routineId: string): Promise<void> {

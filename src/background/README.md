@@ -12,8 +12,8 @@ It also owns these parts:
 - task seeding,
 - background features: missions, page monitors and schedules, web research, tab tidying, IndexedDB memory
   and live captions,
-- gardeners (`garden.ts`, the module `main.ts` loads, with `garden-store.ts` (records, `ctxFor`), `garden-queue.ts`
-  (the queue, `turn`, `call`), `garden-routines.ts` (alarms, claims, event checks), `garden-tabs.ts` (live runs, lock bar,
+- gardeners (`garden.ts`, the module `main.ts` loads, with `garden-store.ts` (records, the start latch, broadcast),
+  `garden-queue.ts` (the queue, `turn`, `call`, `ctxFor`, `gardensModel`), `garden-routines.ts` (alarms, claims, event checks), `garden-tabs.ts` (live runs, lock bar,
   borrow, Take over, Watch, downloads), `garden-skills.ts`, `garden-hire.ts` and `garden-plaza.ts`): routines on
   alarms and a one-run queue.
 - outputs (`outputs.ts`): the artifacts store, decks, cited answers across files, brand kits and page PNGs.

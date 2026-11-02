@@ -4,6 +4,7 @@ import { parseScenario, type Scenario } from '../scrape/scenario.ts';
 import { ENTITY_TYPES, MEM } from '../memory.ts';
 import { LIMITS, bare, parseWhen, parseWork, requestOf, type GardenRun, type Mention } from './records.ts';
 import { argsText, unusable, type ConnectorFacts } from '../mcp.ts';
+import { isObj } from '../text.ts';
 
 type Arg =
   | { type: 'string'; max: number }
@@ -75,7 +76,7 @@ export const TOOLS: ToolSpec[] = [
   { name: 'doc_read', describe: 'read one of your documents by its path, e.g. plan.md', args: { path: { type: 'string', max: MEM.path } }, effect: 'read' },
   { name: 'doc_write', describe: 'write (or replace) one of your documents, e.g. a plan file for a long task', args: { path: { type: 'string', max: MEM.path }, text: { type: 'string', max: MEM.doc } }, effect: 'read' },
   // A connected app's tool; offered only when one is usable, with its lines in place of this describe (toolsFor).
-  { name: 'app_call', describe: 'call a tool of an app the person connected, after they approve', args: { connector: { type: 'string', max: 200 }, tool: { type: 'string', max: 41 }, args: { type: 'record', parse: (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null) } }, effect: 'act' },
+  { name: 'app_call', describe: 'call a tool of an app the person connected, after they approve', args: { connector: { type: 'string', max: 200 }, tool: { type: 'string', max: 41 }, args: { type: 'record', parse: (v) => (isObj(v) ? v : null) } }, effect: 'act' },
 ];
 
 /**

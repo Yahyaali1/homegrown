@@ -8,7 +8,7 @@ export type Who = 'You' | 'Them';
 /** One recognised window: `at` and `end` in ms from the start of the recording. A file has no speaker. */
 export interface Line { who?: Who; at: number; end: number; text: string }
 
-export const MEETING_HOSTS = ['meet.google.com', 'zoom.us', 'teams.microsoft.com', 'teams.live.com'] as const;
+const MEETING_HOSTS = ['meet.google.com', 'zoom.us', 'teams.microsoft.com', 'teams.live.com'] as const;
 /** A call page: one of the hosts, or a subdomain of zoom.us (us02web.zoom.us). */
 export const isMeetingHost = (host: string): boolean => {
   const h = host.toLowerCase();
@@ -174,8 +174,8 @@ export function serial(max: number): { add(job: () => Promise<void>): boolean; i
  * Transcribe a file: decoded whole by the recorder at 16 kHz, so its size and length are capped (2 hours of stereo is
  * about 900 MB of samples).
  */
-export const FILE_MAX_BYTES = 100 << 20;
-export const FILE_MAX_MS = 2 * 3600_000;
+const FILE_MAX_BYTES = 100 << 20;
+const FILE_MAX_MS = 2 * 3600_000;
 export const fileRefused = (bytes: number, ms?: number): string | null =>
   bytes > FILE_MAX_BYTES ? 'That file is over 100 MB. Cut it into shorter parts first.'
     : ms !== undefined && ms > FILE_MAX_MS ? 'That recording is over 2 hours. Cut it into shorter parts first.' : null;

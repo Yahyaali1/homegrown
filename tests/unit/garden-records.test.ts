@@ -49,3 +49,9 @@ test('a stored request from before `origin` keeps its meaning: a plan yes, or an
   assert.deepEqual(parseRun(old)?.requests.map((r) => [r.id, r.origin, 'fromPlan' in r || 'editedFrom' in r || 'noEdit' in r]),
     [['a', 'plan', false], ['b', { edit: 'a' }, false], ['c', undefined, false]]);
 });
+
+test('a stored request from before `appWrite` keeps Always off', () => {
+  const run = newRun({ id: 'x', gardenerId: 'g1', work: { kind: 'mission', goal: 'g' }, now: 1 });
+  const r = parseRun({ ...run, requests: [{ id: 'a', kind: 'approve', text: '', sensitive: false, noAlways: true }] })!.requests[0]!;
+  assert.deepEqual([r.appWrite, 'noAlways' in r], [true, false]);
+});

@@ -97,7 +97,7 @@ function requestRow(run: GardenRun, q: Request, d: TrayDeps): Row {
     reply = h('div', { className: 'stack' }, ...(edit ? [edit.el] : []), bar, wait, el);
   } else if (q.kind === 'approve' && !alwaysOk(q)) {
     // In the person's own tab, or an app tool not marked Read: asked every time, so no Always.
-    lead.push(h('span', { className: 'p', textContent: q.noAlways ? `Sends data to an app at ${q.host}: you are asked every time.` : `In your own tab on ${q.host}: you are asked every time.` }));
+    lead.push(h('span', { className: 'p', textContent: q.appWrite ? `Sends data to an app at ${q.host}: you are asked every time.` : `In your own tab on ${q.host}: you are asked every time.` }));
     reply = h('div', { className: 'stack' }, ...(edit ? [edit.el] : []), yesNo().el);
   } else if (q.kind === 'approve') {
     const hint = h('span', { className: 'muted small', id: `${textId}-always`, textContent: `Always: allow this exact action on ${q.host} without asking again. Revoke it under the gardener.` });

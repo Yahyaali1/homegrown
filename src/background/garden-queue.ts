@@ -4,22 +4,44 @@
 import { askAs, engine, modelFor } from './engine.ts';
 import { closeIfEmpty, endRun, joinGroup, markKept, TabClosed, type Run } from './missions.ts';
 import { cookieRule } from './pagerequest.ts';
-import { GARDEN_TOOLS, MODEL_CHANGED, NeedsHelp, NeedsYou, type ToolCtx } from './gardentools.ts';
+import { factsOf, GARDEN_TOOLS, MODEL_CHANGED, NeedsHelp, NeedsYou, type ToolCtx } from './gardentools.ts';
+import { recipesList } from './scrape.ts';
+import * as trust from './trust.ts';
 import { confirmedEntities, notesFor } from './memory.ts';
 import * as idb from '../shared/idb.ts';
-import { allRuns, broadcast, ctxFor, DAY, db, end, followQueued, getRun, getSkill, NEEDED_YOU, prune, ready, saveRun, updateRun } from './garden-store.ts';
+import { allRuns, broadcast, DAY, db, end, followQueued, getRun, getSkill, NEEDED_YOU, prune, ready, saveRun, updateRun } from './garden-store.ts';
 import { borrow, live, release, spareWindow } from './garden-tabs.ts';
 import { anchorsIn } from '../domain/memory.ts';
 import { DEFAULT_AGENT, modelById } from '../domain/model.ts';
-import { answerPlan, AUTO_RETRY_MS, autoRetry, approveRequest, digest, earlierOf, effectOf, failedStep, helpersOf, mergeHelpers, next, refusal, verdictFor, type Action, type Ctx } from '../domain/garden/loop.ts';
-import { actOf, addSeen, callKey, decide, recipeHosts, recipeOf, taintsAfter } from '../domain/garden/policy.ts';
+import { AUTO_RETRY_MS, autoApprovePlan, autoRetry, approveRequest, digest, earlierOf, effectOf, failedStep, helpersOf, mergeHelpers, next, refusal, verdictFor, type Action, type Ctx } from '../domain/garden/loop.ts';
+import { actOf, addSeen, callKey, decide, recipeHosts, recipeOf, taintsAfter, type Effect, type Known } from '../domain/garden/policy.ts';
+import { presetById } from '../domain/garden/presets.ts';
+import { TOOLS, toolsFor } from '../domain/garden/tools.ts';
+import { factsOf as connectorFacts } from '../domain/mcp.ts';
 import { DEADLINE, expired, nextBatch, overdue } from '../domain/garden/schedule.ts';
 import { needsRefusal, skillRefusal } from '../domain/garden/skills.ts';
 import { helping, isEnded, mayStart, parseGardener, parseRoutine, parseRun, requestOf, type Gardener, type GardenRun, type Request, type Routine, type Status, type Step } from '../domain/garden/records.ts';
 import { hostOf } from '../domain/text.ts';
 
+type CallAction = Extract<Action, { call: unknown }>['call'];
+
 /** The alarm that only wakes the queue (a read's auto-retry, a one-off's deadline); never a routine's. */
 export const WAKE = 'garden:wake';
+
+/** A hired gardener's pack tools (an unknown pack allows none); undefined for the person's own. */
+const allowedFor = (g: Gardener): string[] | undefined => (g.preset ? presetById(g.preset)?.tools ?? [] : undefined);
+/** The model gardeners use now: the chosen one, else the one loaded. */
+export const gardensModel = async () => (await modelFor('gardens')) || (await engine<{ loaded: { name: string } | null }>('status')).loaded?.name || '';
+
+/** What policy needs from storage, read fresh: a grant revoked or a recipe edited counts at once. */
+const knownFor = async (gardenerId: string): Promise<Known> =>
+  ({ grants: (await trust.grants()).filter((x) => x.gardenerId === gardenerId), recipes: (await recipesList()).map(factsOf), connectors: (await trust.connectors()).map(connectorFacts) });
+
+/** The loop's view of `run` now: its gardener, the tools offered to it, and what policy knows. */
+export async function ctxFor(run: GardenRun, gardener: Gardener, extra: Partial<Ctx> = {}): Promise<Ctx> {
+  const known = await knownFor(gardener.id);
+  return { gardener, ...extra, tools: toolsFor(run, TOOLS, known.connectors, allowedFor(gardener)), now: Date.now(), ...known };
+}
 
 let draining: Promise<void> | null = null;
 let dirty = false;
@@ -181,35 +203,12 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
     for (;;) {
       if (stop.signal.aborted) return;
       const ctx = await ctxFor(run, gardener, extra);
-      const a = next(run, ctx);
-      if ('think' in a) {
-        const failed = await think(run, a.think, stop.signal, budget, save);
-        if (failed) return await finish('failed', failed);
-      } else if ('call' in a) {
-        const c = await call(run, ctx, tab, a.call, save);
-        if (c === 'wait' || c === 'later') {
-          run.status = c === 'wait' ? 'waiting' : 'queued';
-          return await save();
-        }
-      } else if ('record' in a) {
-        setStep(run, a.record);
-      } else if ('request' in a) {
-        if (a.request.kind === 'helpers') return void (stop.signal.aborted || (await split(run, a.request)));
-        const q: Request = { id: crypto.randomUUID().slice(0, 8), ...a.request };
-        run.requests.push(q);
-        // A skill test the person ticked "Approve plans" for: the plan's yes, which pre-approves nothing (no one read it).
-        if (q.kind !== 'plan' || !run.approvePlans) {
-          run.status = 'waiting';
-          return await save();
-        }
-        const no = answerPlan(run, ctx, q, 'yes', undefined, Date.now(), true);
-        if (no) return await finish('failed', no);
-        run.status = 'running';
-      } else if ('done' in a) {
-        Object.assign(run, { answer: a.done.answer }, a.done.best ? { best: true } : {});
-        return await finish('done');
-      } else {
-        return await finish('failed', a.fail);
+      const r = await step(run, ctx, next(run, ctx), tab, budget, save);
+      if (r === 'split') return;
+      if (typeof r === 'object') return await finish(r.end, r.why);
+      if (r) {
+        run.status = r;
+        return await save();
       }
       await save();
     }
@@ -219,6 +218,35 @@ async function turn(run: GardenRun, win?: number): Promise<void> {
     if (made !== undefined) await closeIfEmpty(made);
     await prune(run.gardenerId);
   }
+}
+
+/** Does action `a`. Nothing: the turn goes on. A status: the run waits or is queued again. `end`: the run ends. */
+async function step(run: GardenRun, ctx: Ctx, a: Action, tab: Run, budget: number, save: () => Promise<void>): Promise<'waiting' | 'queued' | 'split' | { end: Status; why?: string } | void> {
+  if ('think' in a) {
+    const failed = await think(run, a.think, tab.stop.signal, budget, save);
+    return failed ? { end: 'failed', why: failed } : undefined;
+  }
+  if ('call' in a) {
+    const c = await call(run, ctx, tab, a.call, save);
+    return c === 'wait' ? 'waiting' : c === 'later' ? 'queued' : undefined;
+  }
+  if ('record' in a) return setStep(run, a.record);
+  if ('done' in a) {
+    Object.assign(run, { answer: a.done.answer }, a.done.best ? { best: true } : {});
+    return { end: 'done' };
+  }
+  if ('fail' in a) return { end: 'failed', why: a.fail };
+  if (a.request.kind === 'helpers') {
+    if (!tab.stop.signal.aborted) await split(run, a.request);
+    return 'split';
+  }
+  const q: Request = { id: crypto.randomUUID().slice(0, 8), ...a.request };
+  run.requests.push(q);
+  // A skill test the person ticked "Approve plans" for: the plan's yes, which pre-approves nothing (no one read it).
+  if (q.kind !== 'plan' || !run.approvePlans) return 'waiting';
+  const no = autoApprovePlan(run, ctx, q, Date.now());
+  if (no) return { end: 'failed', why: no };
+  run.status = 'running';
 }
 
 /** A think on the run's pinned model, its reply stored as a turn; why the run fails, if it does. Out of time: next() ends it. */
@@ -272,7 +300,7 @@ function setStep(run: GardenRun, step: Step): void {
  * One tool call: its verdict checked again now, stored as started, then run. 'wait': the person was asked (the page
  * showed an acting step to be sensitive, or asked for a check for humans); 'later': a read waits out its auto-retry.
  */
-async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: string; args: Record<string, unknown>; answered?: string }, save: () => Promise<void>): Promise<'wait' | 'later' | void> {
+async function call(run: GardenRun, ctx: Ctx, tab: Run, c: CallAction, save: () => Promise<void>): Promise<'wait' | 'later' | void> {
   const { i, tool, args } = c;
   const { gardener } = ctx;
   const effect = effectOf(c, ctx);
@@ -320,32 +348,38 @@ async function call(run: GardenRun, ctx: Ctx, tab: Run, c: { i: number; tool: st
     if (taintsAfter(tool, r, args, gardener.sites)) run.tainted = true;
   } catch (e) {
     if (tab.stop.signal.aborted) return; // the turn ends at the top of its loop
-    if (taintsAfter(tool, { url: (e as { url?: string }).url }, args, gardener.sites)) run.tainted = true;
-    // The person closed the tab mid-act: it may have happened, so the step stays started and next() asks.
-    if (e instanceof TabClosed && effect === 'act') return;
-    if (e instanceof NeedsHelp) {
-      // A check for humans: the tab stays open for the person, out of the group; their answer reads it again.
-      run.steps = run.steps.filter((s) => s.i !== i);
-      await markKept(run.id, e.tabId);
-      await chrome.tabs.ungroup(e.tabId).catch(() => {});
-      await release(e.tabId);
-      run.requests.push({ id: crypto.randomUUID().slice(0, 8), kind: 'help', step: i, tool, tabId: e.tabId, sensitive: false, expiresAt: Date.now() + DAY,
-        text: `Help with this site: ${hostOf(String(args.url ?? ''))} asks for a check for humans. Show me opens its tab; answer Done when you’re through.` });
-      return 'wait';
-    }
-    if (e instanceof NeedsYou) {
-      // Stopped on a sensitive step before any act ran: ask about that step, in place.
-      run.steps = run.steps.filter((s) => s.i !== i);
-      const request = approveRequest(run, ctx, i, tool, args, e.stop, q);
-      if (request) {
-        run.requests.push({ id: crypto.randomUUID().slice(0, 8), ...request });
-        return 'wait';
-      }
-    }
-    setStep(run, failedStep(i, c, effect, e instanceof Error ? e.message : String(e), Date.now(), tries));
+    return await onCallError(run, ctx, c, e, effect, q, tries);
   } finally {
     if (keep) tab.prepare = keep;
     else delete tab.prepare;
     run.usedMs += Date.now() - t0;
   }
+}
+
+/** A call that threw: the run tainted if the error left the sites; 'wait' when the person is asked; else its step as it ended. */
+async function onCallError(run: GardenRun, ctx: Ctx, c: CallAction, e: unknown, effect: Effect, q: Request | undefined, tries: number | undefined): Promise<'wait' | void> {
+  const { i, tool, args } = c;
+  if (taintsAfter(tool, { url: (e as { url?: string }).url }, args, ctx.gardener.sites)) run.tainted = true;
+  // The person closed the tab mid-act: it may have happened, so the step stays started and next() asks.
+  if (e instanceof TabClosed && effect === 'act') return;
+  if (e instanceof NeedsHelp) {
+    // A check for humans: the tab stays open for the person, out of the group; their answer reads it again.
+    run.steps = run.steps.filter((s) => s.i !== i);
+    await markKept(run.id, e.tabId);
+    await chrome.tabs.ungroup(e.tabId).catch(() => {});
+    await release(e.tabId);
+    run.requests.push({ id: crypto.randomUUID().slice(0, 8), kind: 'help', step: i, tool, tabId: e.tabId, sensitive: false, expiresAt: Date.now() + DAY,
+      text: `Help with this site: ${hostOf(String(args.url ?? ''))} asks for a check for humans. Show me opens its tab; answer Done when you’re through.` });
+    return 'wait';
+  }
+  if (e instanceof NeedsYou) {
+    // Stopped on a sensitive step before any act ran: ask about that step, in place.
+    run.steps = run.steps.filter((s) => s.i !== i);
+    const request = approveRequest(run, ctx, i, tool, args, e.stop, q);
+    if (request) {
+      run.requests.push({ id: crypto.randomUUID().slice(0, 8), ...request });
+      return 'wait';
+    }
+  }
+  setStep(run, failedStep(i, c, effect, e instanceof Error ? e.message : String(e), Date.now(), tries));
 }

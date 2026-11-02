@@ -8,7 +8,7 @@ import { linkify } from '../ui/linkcard.ts';
 import { retryStep } from '../domain/garden/loop.ts';
 import { reportOf } from '../domain/garden/report.ts';
 import { helping, historyGroup, isWorking, type Created, type GardenRun, type Look, type Request, type Status } from '../domain/garden/records.ts';
-import { addedLines, correctionOf, type Entity } from '../domain/memory.ts';
+import { addedLines, correctionEntity, correctionOf, type Entity } from '../domain/memory.ts';
 import { bg } from '../shared/protocol.ts';
 import { openMemory } from './library.ts';
 import { at, count, fresh, lookFor, runs, S, type Row } from './garden-state.ts';
@@ -234,7 +234,7 @@ export function rememberOffer(text: string): HTMLElement {
   const err = errLine();
   const box: HTMLElement = h('div', { className: 'remember' }, h('span', { className: 'small', textContent: 'Remember this? ' }), h('span', { className: 'muted small result', textContent: text }),
     labelled(busyButton('Remember', tryIt(err, async () => {
-      await bg('entitySave', { entity: { type: 'preference', name: text.replace(/\s+/g, ' ').slice(0, 80).trim(), body: text, correction: true } });
+      await bg('entitySave', { entity: correctionEntity(text) });
       box.replaceChildren(h('span', { className: 'muted small', textContent: 'Kept in Library → Memory → Preferences.' }));
     }), 'secondary'), 'Remember this'),
     labelled(button('Not now', () => box.remove(), 'ghost'), 'Don’t remember this'), err);

@@ -3,7 +3,9 @@
 import { gardenNotice } from './gardentools.ts';
 import * as idb from '../shared/idb.ts';
 import { checkFetch } from './monitors.ts';
-import { broadcast, checkWork, db, end, followQueued, gardeners, gardensModel, getSkill, mustGardener, NEEDED_YOU, page, parsed, ready, routines, type Sender } from './garden-store.ts';
+import { pagesOnly } from './pagerequest.ts';
+import { broadcast, checkWork, db, end, followQueued, gardeners, getSkill, mustGardener, NEEDED_YOU, parsed, ready, routines } from './garden-store.ts';
+import { gardensModel } from './garden-queue.ts';
 import { can } from '../domain/model.ts';
 import { onSites } from '../domain/garden/policy.ts';
 import { busy, claim, eventTrigger, nextAfter } from '../domain/garden/schedule.ts';
@@ -71,15 +73,13 @@ export async function deleteRoutine(id: string): Promise<void> {
   await chrome.alarms.clear(ALARM + id);
 }
 
-export const routineHandlers = {
-  routineList: async ({ gardenerId }: { gardenerId?: string }, sender?: Sender) => {
-    page(sender);
+export const routineHandlers = pagesOnly({
+  routineList: async ({ gardenerId }: { gardenerId?: string }) => {
     await ready();
     return (await routines()).filter((r) => !gardenerId || r.gardenerId === gardenerId).map((r) => ({ ...r, next: r.nextDue }));
   },
   // Saving (and unpausing) counts the next time from now: no catch-up.
-  routineSave: async ({ routine }: { routine: Partial<Routine> }, sender?: Sender) => {
-    page(sender);
+  routineSave: async ({ routine }: { routine: Partial<Routine> }) => {
     await ready();
     const g = await mustGardener(String(routine.gardenerId ?? ''));
     // A pack's routine with no page yet may stay paused; it turns on only once the person sets one.
@@ -113,5 +113,5 @@ export const routineHandlers = {
     await arm(r);
     return r;
   },
-  routineDelete: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await ready(), await deleteRoutine(id), true),
-};
+  routineDelete: async ({ id }: { id: string }) => (await ready(), await deleteRoutine(id), true),
+});

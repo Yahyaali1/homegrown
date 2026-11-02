@@ -25,8 +25,8 @@ runtime adapters and storage live outside `domain/`.
   (`connect` | `error` | `meetings` | `setting` | `send`: where a typed message goes), `userTurn` (text, label and
   data part of the person's turn), `withLead` (plan mode's ask and a companion's instructions before a chat's first
   message). The saved-chat record and its pure rules.
-- `meeting.ts`: `Line` (`who?: 'You' | 'Them'`, `at`, `end`, `text`), `MEETING_HOSTS`, `isMeetingHost`
-  (a host or a `zoom.us` subdomain), `mergeLines` (time order; one speaker's lines within 2 s joined), `transcriptOf`
+- `meeting.ts`: `Line` (`who?: 'You' | 'Them'`, `at`, `end`, `text`), `isMeetingHost`
+  (a known meeting host or a `zoom.us` subdomain), `mergeLines` (time order; one speaker's lines within 2 s joined), `transcriptOf`
   (`[m:ss] You: …`), `pieces` (≤ 20 000 chars at line ends), `meetingName`, `meetingPath`, `isMeetingPath`, `meetingOf(path)` (a doc path's meeting name), `docsOfMeeting(docs, name)` (the
   person's parts, in order), `Recording` (the call being recorded, with the lines heard so far), `timeParts`
   (20 minutes), `NOTES_PROMPT`, `parseNotes` (drops an owner the transcript doesn't name; "You" is the mic; "Them"
@@ -50,7 +50,7 @@ runtime adapters and storage live outside `domain/`.
 - `reading.ts`: `OutlineNode`, `QuizQuestion`, `parseOutline`, `parseQuiz`, `parseFlashcards`, `parseDialogue`,
   `parseNumbered`, `chunks`, `sentences`, `bestPassages`, `fuzzy`, and for many files `DocFile`, `Passage`,
   `READER_FILES` (10), `citeLabel` ("file p.N"), `filePassages` (each file's best passages by keyword overlap),
-  `CITE_NOTE`, `CITE_ANSWER`, `keepCited` (drops a citation whose page doesn't hold the sentence's words, by
+  `keepCited` (drops a citation whose page doesn't hold the sentence's words, by
   `grounded`), `citeFiles(ask, question, files, budget)` (map per file, reduce, `keepCited`). Parsers for fixed-format model output,
   paragraph chunking and passage selection for retrieval, sentence splitting for read-aloud, and the
   palette's fuzzy match. Defaults: `chunks` uses `size = 800`; `bestPassages` uses `max = 6, within = 0.6`.
@@ -60,7 +60,8 @@ runtime adapters and storage live outside `domain/`.
   type-checked merge of stored values, the list of settings that chat may change, and the patch to store.
 - `tasks.ts`: `TaskKind`, `Task`, `KINDS`, `parseTasks`, `importTasks`, `moveTask`. The task schema,
   validation of stored tasks, JSON import merged by id, and reordering.
-- `text.ts`: `contextChars(maxTokens)` (the character budget), `num`, `slug`, `parseJsonObject`, `defang`, `grounded`, `mentions`, `requiredTerms`, `hostOf`,
+- `text.ts`: `contextChars(maxTokens)` (the character budget), `num`, `slug`, `isObj`, `str(x, max, min = 1)` and `time` (the record
+  checks every parser uses), `parseJsonObject`, `defang`, `grounded`, `mentions`, `requiredTerms`, `hostOf`,
   `cleanContinuation`. Number parsing for several locales, field slugs, the first JSON object in a reply,
   removal of prompt-injection sentences, a check that a value appears on the page, required terms, the host
   name, and cleanup of ghost-text continuations. `requiredTerms` returns at most 5 terms. `cleanContinuation`
@@ -83,10 +84,10 @@ runtime adapters and storage live outside `domain/`.
   reply's first line without quotes or a "Query:" label, at most 100 characters. A query that doesn't name
   the term, or a failed call, falls back to the term plus up to 3 longer title words.
 - `mcp.ts` (plan T11, ADR-17): `Connector` (`v: 1`, `token?`), `ConnectorFacts` (without the token, what policy and
-  pages see), `factsOf`, `AppTool` (`describe` the person confirmed, `scope` `off` / `ask` / `read`), `Schema`,
+  pages see), `factsOf`, `AppTool` (`describe` the person confirmed, `scope` `off` / `ask` / `read`),
   `serverTools` (`tools/list` → `ServerTool` with `unusable`), `toolFrom` (the form's first choice: an empty line), `tokenFor`
   (a kept token only to its origin), `parseConnector`,
-  `unusable` (names must match `NAME`), `checkArgs`, `argsText`, `serverUrl`, `isLocal`, `sameOrigin`, `rpcBody`, `sseSplit`, `replyOf`,
+  `unusable` (plain names only), `checkArgs` (a JSON Schema subset), `argsText`, `serverUrl` (https, or http on localhost), `sameOrigin`, `rpcBody`, `sseSplit`, `replyOf`,
   `callText`, `STDIO`. Sign-in (MCP authorization): `Connector.oauth?` (`OAuth`: token endpoint, client id and
   secret from registration, refresh token, resource; never in `factsOf`), `resourceMetaUrls` (the 401's
   `resource_metadata`, else RFC 9728 well-known paths), `parseResourceMeta` (same origin as the server, an https
@@ -94,15 +95,15 @@ runtime adapters and storage live outside `domain/`.
   `signInRefusal` (no registration endpoint: paste a token), `registerBody`, `parseClient`, `challengeOf`,
   `randomCode`, `authorizeUrl` (with `resource`), `codeOf` (state checked), `parseTokens` (bearer only), `found` (a
   discovered address: https, and on this machine only when the connector is).
-- `apps.ts` (plan T11): `APPS` (known remote MCP servers: name, URL, docs, hosts), `appNamed` ("connect <name>",
+- `apps.ts` (plan T11): known remote MCP servers (name, URL, docs, hosts); `appNamed` ("connect <name>",
   `fuzzy`), `appOpen(url, meta, connectors)` (a connected app, a known one, else the page's own name).
 - `zip.ts`: `Zip`, `unzip`, `zipWrite`, `crc32`. Reads the zip central directory and returns a lazy reader for each
   entry; `zipWrite(entries)` packs stored entries (CRC-32, UTF-8 names), which every unzip reads.
 - `outputs.ts`: `Artifact` (`table`, `chart`, `deck`, `brief`, `onepager`, `brand`; `v: 1`), `Table`,
   `Cell`, `Slide`, `Deck`, `Doc`, `Brand`, `parseArtifact` (per kind; null for a bad record or a newer `v`),
-  `parseTable`, `parseDeckData`, `parseBrand` (colours must be `rgb()`/hex, fonts plain, a logo only as an image
+  `parseTable`, `parseBrand` (colours must be `rgb()`/hex, fonts plain, a logo only as an image
   data URL), `DECK_MAX` (15), `deckFromBrief` (a title slide, then one per `##` heading with its lines as bullets),
-  `deckFromTable` (a title slide and a chart slide), `tableText`, `DECK_PROMPT`, `parseDeck` (a model's charts are
+  `deckFromTable` (a title slide and a chart slide), `tableText`, `parseDeck` (a model's charts are
   dropped), `writeDeck(ask, source, budget)` (one repair, then null).
 - `pptx.ts`: `pptx(deck, pictures, style)`: a .pptx of one master, one layout, one theme and one slide part per
   slide (title, bullets, a chart PNG); `xml` (escapes text), `hex` (a CSS colour as `RRGGBB`).
@@ -149,7 +150,7 @@ runtime adapters and storage live outside `domain/`.
     connector's tool that isn't Off, args passing `checkArgs`); `actOf` makes an `app_call` an act on the server's
     host, sensitive (`Act.why`) when the tool name or args hold a `sensitiveWord` (a tool named for reading, `get_`,
     `list_`, `read_`, `search_`, `fetch_`, `find_`, doesn't count `pay…` in its name); `decide` asks every `app_call`
-    unless the tool is Read, the run untainted and the exact call granted; `alwaysOk` is false for `noAlways`.
+    unless the tool is Read, the run untainted and the exact call granted; `alwaysOk` is false for a rule's `noAlways` and a request's `appWrite`.
   - `classify.ts`: `classify(target)`, `verdict(target, check)`. Is an acting step sensitive on its live element,
     and has the page left the call's hosts (its words match as prefixes: "Complete payment" is sensitive). `isChallenge({ frames, title, text })`: a page that
     stands between the run and its content: a title that says so, or a short page (< 600 characters) whose text says
@@ -159,7 +160,7 @@ runtime adapters and storage live outside `domain/`.
     `refusal`, `answerPlan`, `verdictFor` (one call's verdict, when picked and again when run), `editOk`, `parseEdit`,
     `effectOf`, `failedStep`, `retryStep`, `autoRetry`,
     `AUTO_RETRY_MS`, `helpersOf`, `mergeHelpers`, `resumeAll`, `answerRefused`, `earlierOf`, `followUpRun`, `queuedFollowUp`, `OPEN_REFUSED`, `PLAN_REFUSED`,
-    `BAD_REPLY`, `TOO_LONG`, `HELP_REFUSED`. An answer with edited `args` makes the edited call a new call: a request with origin
+    `HELP_REFUSED`, and `attempt`/`expiresAt` for `prompt.ts`. An answer with edited `args` makes the edited call a new call: a request with origin
     `{ edit }` settles it if it was asked again, else `decide` and `approveRequest` run on it, and its yes counts
     unless it is sensitive now. A read of more than 5 pages (up to 25) asks for `helpers`: helper runs of 5 pages each
     (`parentId`) read without a think and end; their steps, failed where unfinished, and their taint merge into the
@@ -175,13 +176,16 @@ runtime adapters and storage live outside `domain/`.
     timeout or network error, not yet retried. A follow-up's data starts with `ctx.earlier` (`earlierOf`: the
     earlier answer and step digests, no page text); a follow-up of a tainted run starts tainted. Queued messages
     (`steer: false`) are in no think; `queuedFollowUp` turns the oldest into a follow-up run when the run ends.
+  - `prompt.ts`: the model's side of `next`: `word`, `open` and `planned` (each think's prompt and data, cut to the
+    pinned model's room by `think`, and its reply read back), `soFar`, `parsePlan` (for `answerPlan`), `siteNotesFor`,
+    `BAD_REPLY`, `TOO_LONG`. It and `loop.ts` import each other's functions; neither runs code at load.
   - `skills.ts`: `Skill` (`work: 'plan' | 'ask'`, `on`, `needs?`, `cases`, `history` of the last 10
     versions, `proposed?`), `SKILL` (limits), `parseSkill`, `slashOf`, `skillWork`, `unmet`, `skillRefusal` (pin:
     deleted, off, another gardener's, or needs missing from `run.abilities`), `skillParts` (the method is the
     instruction unless a model wrote it; files are data), `revise`, `accept`, `casePassed` (case-insensitive
     contains), `verdict`, `tested`, `evidenceOf` (chat answers marked down, a correction after one by
     `correctionOf`, failed cases), `improveThink`, `proposalOf`, `unlinked`, `upgradeGarden`, `needsRefusal` (`NEEDS`
-    while the model lacks a need of a skill or routine). `loop.ts` `think` puts a
+    while the model lacks a need of a skill or routine). `prompt.ts` `think` puts a
     skill's files ahead of the data, at most a third of what memory left. `Work` `plan`/`ask` and `Routine` have
     `skillId?` (`routineWork`); `GardenRun.approvePlans?`; `ChatTurn.skillId?`.
   - `presets.ts`: companion packs as data, `PRESETS` (Rosa, Dana; T13: Martin, Olivia, Cora, Sally, Theo, Sofia, and Ellis built from Sally, Theo and Olivia seeds by `reuse`, re-gated on `workflow:ellis/<id>`), `presetById`,

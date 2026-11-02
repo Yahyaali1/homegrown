@@ -1,8 +1,9 @@
 // Skills: extension pages only; a model never writes a method, it only proposes one.
 import { askAs, engine } from './engine.ts';
 import * as idb from '../shared/idb.ts';
-import { allRuns, db, getSkill, gardensModel, mustGardener, page, ready, routines, saveRun, skills, updateSkill, type Sender } from './garden-store.ts';
-import { drain } from './garden-queue.ts';
+import { pagesOnly } from './pagerequest.ts';
+import { allRuns, db, getSkill, mustGardener, ready, routines, saveRun, skills, updateSkill } from './garden-store.ts';
+import { drain, gardensModel } from './garden-queue.ts';
 import { arm } from './garden-routines.ts';
 import { parseChat, type Chat } from '../domain/chat.ts';
 import { can, DEFAULT_AGENT, modelById } from '../domain/model.ts';
@@ -35,10 +36,18 @@ const mustSkill = async (id: string): Promise<Skill> => {
   return s;
 };
 
-export const skillHandlers = {
+/** Deleting a skill pauses the routines that link it. */
+export async function deleteSkill(id: string): Promise<void> {
+  for (const r of unlinked(await routines(), id)) {
+    await idb.put(await db, 'routines', r);
+    await arm(r);
+  }
+  await idb.del(await db, 'skills', id);
+}
+
+export const skillHandlers = pagesOnly({
   /** Every skill; a test case whose run ended gets code's verdict here. */
-  skillList: async (_: unknown, sender?: Sender) => {
-    page(sender);
+  skillList: async () => {
     await ready();
     const runs = new Map((await allRuns()).map((r) => [r.id, r]));
     const out: Skill[] = [];
@@ -55,8 +64,7 @@ export const skillHandlers = {
    * The person's skill: new ones are theirs and on. A changed method is a new version. Who wrote it, its needs, history
    * and proposal stay the worker's; a case keeps its result while its input and expect are unchanged.
    */
-  skillSave: async ({ skill }: { skill: Partial<Skill> }, sender?: Sender) => {
-    page(sender);
+  skillSave: async ({ skill }: { skill: Partial<Skill> }) => {
     await ready();
     if (skill.gardenerId) await mustGardener(String(skill.gardenerId));
     const all = await skills();
@@ -85,25 +93,13 @@ export const skillHandlers = {
     await idb.put(await db, 'skills', s);
     return s;
   },
-  /** Deleting a skill pauses the routines that link it. */
-  skillDelete: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
-    await ready();
-    for (const r of unlinked(await routines(), String(id))) {
-      await idb.put(await db, 'routines', r);
-      await arm(r);
-    }
-    await idb.del(await db, 'skills', String(id));
-    return true;
-  },
-  skillEvidence: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
+  skillDelete: async ({ id }: { id: string }) => (await ready(), await deleteSkill(String(id)), true),
+  skillEvidence: async ({ id }: { id: string }) => {
     await ready();
     return evidenceOf(await mustSkill(id), await allChats().catch(() => []), await allRuns());
   },
   /** Suggest an edit: one `improve` think, only with a model measured for skill edits. The reply is a proposal, off until accepted. */
-  skillPropose: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
+  skillPropose: async ({ id }: { id: string }) => {
     await ready();
     const s = await mustSkill(id);
     const model = await gardensModel();
@@ -117,8 +113,7 @@ export const skillHandlers = {
     return updateSkill(s.id, (x) => void (x.proposed = { method, why: `From ${ev.length} case${ev.length === 1 ? '' : 's'} that went wrong`, at: Date.now() }));
   },
   /** `{ id, accept }`: yes moves the proposal into the method (a new version); no drops it. */
-  skillAccept: async ({ id, accept: yes }: { id: string; accept: boolean }, sender?: Sender) => {
-    page(sender);
+  skillAccept: async ({ id, accept: yes }: { id: string; accept: boolean }) => {
     await ready();
     return updateSkill(String(id), (s) => {
       if (!s.proposed) throw new Error('There is no proposed edit.');
@@ -130,8 +125,7 @@ export const skillHandlers = {
    * Test on cases: one hand run per case, queued in order (the queue runs one at a time). `approvePlans`: each plan
    * gets a yes, which covers only non-sensitive calls. Refused for a skill that is off or whose needs the model lacks.
    */
-  skillTest: async ({ id, gardenerId, approvePlans }: { id: string; gardenerId?: string; approvePlans?: boolean }, sender?: Sender) => {
-    page(sender);
+  skillTest: async ({ id, gardenerId, approvePlans }: { id: string; gardenerId?: string; approvePlans?: boolean }) => {
     await ready();
     const s = await mustSkill(id);
     if (!s.cases.length) throw new Error('Add a case to test first.');
@@ -149,8 +143,7 @@ export const skillHandlers = {
     return made.map((r) => r.id);
   },
   /** The person's pass or fail on a tested case without `expect`. */
-  skillMark: async ({ id, k, pass }: { id: string; k: number; pass: boolean }, sender?: Sender) => {
-    page(sender);
+  skillMark: async ({ id, k, pass }: { id: string; k: number; pass: boolean }) => {
     await ready();
     return updateSkill(String(id), (s) => {
       const c = s.cases[Number(k)];
@@ -158,4 +151,4 @@ export const skillHandlers = {
       c.pass = !!pass;
     });
   },
-};
+});

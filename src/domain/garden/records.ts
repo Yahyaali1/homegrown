@@ -1,6 +1,7 @@
 // Gardener records. Each is versioned; a parser returns null for an invalid record or a
 // newer `v`, and callers ignore such records (never delete them), so an older build leaves newer data alone.
 import type { Ability } from '../model.ts';
+import { isObj, str, time } from '../text.ts';
 
 export interface Gardener {
   v: 1;
@@ -266,8 +267,8 @@ export interface Request {
    * whose edited yes it follows, which can't be edited again.
    */
   origin?: 'plan' | { edit: string };
-  /** An approve Always can't answer: an app tool the person didn't mark Read. */
-  noAlways?: true;
+  /** An approve of an app tool the person didn't mark Read: Always can't answer it. */
+  appWrite?: true;
 }
 
 // `urls`: a recipe's, and each helper's share of a read; `readUrls`: a read, split into helpers above `urls`.
@@ -312,10 +313,7 @@ export function bare(url: string): string | null {
   }
 }
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
-const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
 const int = (x: unknown, min: number, max: number): x is number => Number.isInteger(x) && (x as number) >= min && (x as number) <= max;
-const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const AT = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -444,9 +442,9 @@ const ORIGINS: Seen['from'][] = ['person', 'approved', 'search', 'link'];
 
 /** A stored request; one from before `origin` keeps its meaning (`fromPlan`, `editedFrom`/`noEdit`). */
 function requestFrom(raw: Record<string, unknown>): Request {
-  const { fromPlan, editedFrom, noEdit: _, ...q } = raw;
+  const { fromPlan, editedFrom, noEdit: _, noAlways, ...q } = raw;
   const origin = fromPlan === true ? 'plan' : typeof editedFrom === 'string' ? { edit: editedFrom } : undefined;
-  return { ...(q as unknown as Request), ...(origin && { origin }) };
+  return { ...(q as unknown as Request), ...(origin && { origin }), ...(noAlways === true && { appWrite: true as const }) };
 }
 
 // ponytail: turns, steps and requests are checked for shape only (objects with their key fields); runs are only ever

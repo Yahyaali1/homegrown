@@ -7,7 +7,7 @@ import { forms } from '../domain/mission/brief.ts';
 import { stepsForBrief } from '../domain/mission/plan.ts';
 import { parseWorkflow } from '../domain/mission/workflow.ts';
 import { columns, type Brief, type Row, type Step, type Workflow } from '../domain/mission/types.ts';
-import { hostOf } from '../domain/text.ts';
+import { hostOf, isObj } from '../domain/text.ts';
 import { toCsv } from '../domain/csv.ts';
 import { chart } from '../ui/chart.ts';
 import type { Artifact, Cell, Table } from '../domain/outputs.ts';
@@ -511,7 +511,7 @@ const moreParams = (): Record<string, unknown> | null => {
   if (!t) return {};
   try {
     const v = JSON.parse(t);
-    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+    return isObj(v) ? v : null;
   } catch {
     return null;
   }

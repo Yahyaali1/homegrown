@@ -19,13 +19,15 @@ const AD_HOSTS = ['doubleclick.net', 'googlesyndication.com', 'googleadservices.
 /** An extension page (Mission control, the side panel), not a content script in a web page. */
 export const isExtensionPage = (sender: chrome.runtime.MessageSender | null | undefined) => fromExtensionPage(sender, chrome.runtime.getURL(''));
 
-type Handler = (msg: never, sender?: chrome.runtime.MessageSender) => unknown;
+type Sender = chrome.runtime.MessageSender;
+type Handler = (msg: never, sender?: Sender) => unknown;
+type Guarded<T extends Record<string, Handler>> = { [K in keyof T]: (msg: Parameters<T[K]>[0], sender?: Sender) => Promise<Awaited<ReturnType<T[K]>>> };
 /** `handlers` only Homegrown's own pages may call: a content script, or a call without a sender, is refused. */
-export function pagesOnly<T extends Record<string, Handler>>(handlers: T): T {
-  return Object.fromEntries(Object.entries(handlers).map(([cmd, f]) => [cmd, async (msg: never, sender?: chrome.runtime.MessageSender) => {
+export function pagesOnly<T extends Record<string, Handler>>(handlers: T): Guarded<T> {
+  return Object.fromEntries(Object.entries(handlers).map(([cmd, f]) => [cmd, async (msg: never, sender?: Sender) => {
     if (!isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
     return f(msg, sender);
-  }])) as T;
+  }])) as Guarded<T>;
 }
 
 /**
@@ -244,7 +246,7 @@ export async function play(tabId: number, scenario: Scenario, run: Run, guard?: 
   return { report, results, failed: null };
 }
 
-export type RequestRecipe = Pick<Recipe, 'rules' | 'waitFor' | 'wait' | 'ai' | 'aiSelector' | 'page'>;
+type RequestRecipe = Pick<Recipe, 'rules' | 'waitFor' | 'wait' | 'ai' | 'aiSelector' | 'page'>;
 
 /** One page, ScrapingBee style. Steps that fail in strict mode make the page an error, with the report kept. */
 export function pageRequest(url: string, recipe: RequestRecipe, run: Run, guard?: Guard): Promise<PageResult> {

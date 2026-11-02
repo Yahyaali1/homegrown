@@ -26,13 +26,20 @@ export function num(v: unknown): number | null {
 /** "Product Name" → "product_name": a field name. */
 export const slug = (f: unknown): string => String(f).toLowerCase().trim().replace(/\W+/g, '_').replace(/^_|_$/g, '');
 
+/** A plain object (not an array or null). */
+export const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+/** A string of `min` (trimmed) to `max` characters. */
+export const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
+/** A finite number, as a stored timestamp. */
+export const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+
 /** The first {...} object in a model reply, or null: models wrap JSON in prose and code fences. */
 export function parseJsonObject(text: unknown): Record<string, unknown> | null {
   const m = /\{[\s\S]*\}/.exec(String(text ?? ''));
   if (!m) return null;
   try {
     const v: unknown = JSON.parse(m[0]);
-    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+    return isObj(v) ? v : null;
   } catch {
     return null;
   }

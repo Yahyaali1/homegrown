@@ -1,5 +1,5 @@
 // The remote MCP client (ADR-17): Streamable HTTP sessions, sign-in, and the connector handlers for extension pages.
-import { isExtensionPage } from './pagerequest.ts';
+import { pagesOnly } from './pagerequest.ts';
 import * as trust from './trust.ts';
 import { sitesOf } from '../domain/garden/records.ts';
 import { asMetaUrls, authorizeUrl, callText, challengeOf, codeOf, factsOf, parseAsMeta, parseClient, parseConnector, parseResourceMeta, parseTokens, randomCode, registerBody, replyOf, resourceMetaUrls, rpcBody, sameOrigin, signInRefusal, sseSplit, tokenFor, serverTools, serverUrl, type Connector, type OAuth, type Reply, type ServerTool } from '../domain/mcp.ts';
@@ -8,7 +8,6 @@ const TIMEOUT = 30_000;
 const VERSION = '2025-06-18';
 const MAX_REPLY = 1_000_000;
 const init = () => ({ protocolVersion: VERSION, capabilities: {}, clientInfo: { name: 'Homegrown', version: chrome.runtime.getManifest().version } });
-type Sender = chrome.runtime.MessageSender | undefined;
 
 interface Session { url: string; token?: string | undefined; id: number; session?: string | undefined; version?: string }
 
@@ -184,10 +183,6 @@ function signedIn(auth: unknown, url: string): { token: string; oauth: OAuth } {
   return p;
 }
 
-function page(sender: Sender): void {
-  if (sender !== undefined && !isExtensionPage(sender)) throw new Error('Only Homegrown’s own pages can do that.');
-}
-
 const tokenOf = (t: unknown) => (typeof t === 'string' && t.trim() ? t.trim() : undefined);
 function mustUrl(raw: unknown): string {
   const u = serverUrl(raw);
@@ -196,11 +191,10 @@ function mustUrl(raw: unknown): string {
 }
 
 // Connectors: extension pages only. A page never gets a token back, only whether one is kept.
-export const handlers = {
-  connectorList: async (_: unknown, sender?: Sender) => (page(sender), (await trust.connectors()).map((c) => ({ ...factsOf(c), hasToken: !!c.token, signedIn: !!c.oauth }))),
+export const handlers = pagesOnly({
+  connectorList: async () => (await trust.connectors()).map((c) => ({ ...factsOf(c), hasToken: !!c.token, signedIn: !!c.oauth })),
   /** `{ url, replaces? }`: signs in to the server (the person's click asked for `identity`); `auth` names the sign-in for Probe and Save. */
-  connectorSignIn: async ({ url, replaces }: { url: string; replaces?: string }, sender?: Sender) => {
-    page(sender);
+  connectorSignIn: async ({ url, replaces }: { url: string; replaces?: string }) => {
     const u = mustUrl(url);
     const s = await signIn(u);
     const auth = crypto.randomUUID();
@@ -210,8 +204,7 @@ export const handlers = {
     return { auth };
   },
   /** `{ url, token?, id?, auth? }`: the server's tools now; with `id` and no token, that connector's kept token is used. */
-  connectorProbe: async ({ url, token, id, auth }: { url: string; token?: string; id?: string; auth?: string }, sender?: Sender) => {
-    page(sender);
+  connectorProbe: async ({ url, token, id, auth }: { url: string; token?: string; id?: string; auth?: string }) => {
     const u = mustUrl(url);
     const typed = tokenOf(token);
     if (auth && !typed) return probe(u, signedIn(auth, u).token);
@@ -220,8 +213,7 @@ export const handlers = {
     return probe(u, tokenFor(kept, u, typed));
   },
   /** Saves what the person confirmed. With no token sent, a kept one (or sign-in) stays; `auth` stores a new sign-in. */
-  connectorSave: async ({ connector, auth }: { connector: Partial<Connector>; auth?: string }, sender?: Sender) => {
-    page(sender);
+  connectorSave: async ({ connector, auth }: { connector: Partial<Connector>; auth?: string }) => {
     const old = connector.id ? (await trust.connectors()).find((c) => c.id === connector.id) : undefined;
     const url = mustUrl(connector.url);
     const typed = tokenOf(connector.token);
@@ -237,5 +229,5 @@ export const handlers = {
     if (auth) pending.delete(auth);
     return { ...factsOf(c), hasToken: !!c.token, signedIn: !!c.oauth };
   },
-  connectorDelete: async ({ id }: { id: string }, sender?: Sender) => (page(sender), await trust.connectorDelete(String(id)), true),
-};
+  connectorDelete: async ({ id }: { id: string }) => (await trust.connectorDelete(String(id)), true),
+});

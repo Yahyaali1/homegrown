@@ -16,9 +16,6 @@ import { renderSkills } from './garden-skills.ts';
 import { renderConnectors } from './garden-connectors.ts';
 import { renderRuns } from './garden-runs.ts';
 
-export { openConnect } from './garden-connectors.ts';
-export { rememberOffer, showRequests } from './garden-runs.ts';
-
 const loadError = errLine(); // a failed load
 $('#garden').prepend(loadError);
 

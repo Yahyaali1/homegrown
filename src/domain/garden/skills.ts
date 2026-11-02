@@ -1,7 +1,7 @@
 // Skills: a method the person wrote or accepted, with files, run by slash command, by a routine or as a batch
 // test. A model never changes a method: it only proposes one, which stays off until the person accepts it. Files are data.
 import type { Ability } from '../model.ts';
-import { defang } from '../text.ts';
+import { defang, isObj, str, time } from '../text.ts';
 import { correctionOf } from '../memory.ts';
 import type { Chat } from '../chat.ts';
 import { requestOf, type GardenRun, type Mention, type Routine, type Work } from './records.ts';
@@ -38,9 +38,6 @@ export const SKILL_NAME = /^[a-z0-9-]{2,30}$/;
 export const NEEDS = 'Needs a model measured for this workflow.';
 export const EDIT_OFF = 'This needs a model measured for skill edits.';
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
-const str = (x: unknown, max: number, min = 1): x is string => typeof x === 'string' && x.trim().length >= min && x.length <= max;
-const time = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 
 function parseCase(raw: unknown): SkillCase | null {
   if (!isObj(raw) || !str(raw.input, SKILL.input) || (raw.expect !== undefined && !str(raw.expect, SKILL.expect))) return null;
@@ -142,8 +139,8 @@ export const tested = (s: Skill): boolean => s.cases.some((c) => c.pass === true
 export interface Evidence { kind: 'down' | 'correction' | 'case'; input: string; answer: string; note?: string }
 
 /**
- * What went wrong with a skill: chat answers marked "Not helpful", a correction written right after one (T7's rule),
- * and failed test cases. Newest last, at most 10.
+ * What went wrong with a skill: chat answers marked "Not helpful", the person's next message when it reads as a
+ * correction (starts with no, don't, never or always: `correctionOf`), and failed test cases. Newest last, at most 10.
  */
 export function evidenceOf(s: Skill, chats: Chat[], runs: GardenRun[]): Evidence[] {
   const out: Evidence[] = [];

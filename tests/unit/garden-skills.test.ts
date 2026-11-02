@@ -2,7 +2,7 @@
 // evidence, the pin check and the hg-garden v2 upgrade.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerPlan, next, type Ctx } from '../../src/domain/garden/loop.ts';
+import { answerPlan, autoApprovePlan, next, type Ctx } from '../../src/domain/garden/loop.ts';
 import { decide } from '../../src/domain/garden/policy.ts';
 import { TOOLS } from '../../src/domain/garden/tools.ts';
 import { claim } from '../../src/domain/garden/schedule.ts';
@@ -133,7 +133,7 @@ test('an automatic plan yes (Approve plans for this test) pre-approves nothing: 
     const r = run({ kind: 'plan', request: 'x', skillId: 's1' }, { status: 'waiting', tainted: true });
     const q = { id: 'p', kind: 'plan' as const, calls, text: 'plan', sensitive: false };
     r.requests.push(q);
-    assert.equal(answerPlan(r, ctx, q, 'yes', undefined, 5, auto), null);
+    assert.equal(auto ? autoApprovePlan(r, ctx, q, 5) : answerPlan(r, ctx, q, 'yes', undefined, 5), null);
     assert.equal(r.status, 'queued');
     const seen = r.seen.some((x) => x.url.startsWith('https://evil.example/'));
     assert.equal(seen, !auto);

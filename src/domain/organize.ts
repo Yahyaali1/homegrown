@@ -1,7 +1,7 @@
 // Organize a captured page: the local model puts each section's content into a table it designs (a name, up to 6
 // columns, up to 15 rows). A cell is kept only when the section's own text says it, so the tables can't add facts;
 // a section that is only prose gets no table.
-import { defang, parseJsonObject, slug } from './text.ts';
+import { defang, isObj, parseJsonObject, slug } from './text.ts';
 import { onText } from './scrape/ai.ts';
 import type { Cell } from './scroll.ts';
 
@@ -31,7 +31,7 @@ export function parseTable(reply: string, text: string): Organized | null {
   let dropped = 0;
   const rows = raw.flatMap((r) => {
     // Rows as arrays, or as objects keyed by the column names as the model wrote them ("Start Time").
-    const byName = r && typeof r === 'object' && !Array.isArray(r) ? Object.fromEntries(Object.entries(r).map(([k, v]) => [slug(k).slice(0, 40), v])) : null;
+    const byName = isObj(r) ? Object.fromEntries(Object.entries(r).map(([k, v]) => [slug(k).slice(0, 40), v])) : null;
     const cells = Array.isArray(r) ? r : byName ? columns.map((c) => byName[c]) : [];
     const row: Record<string, Cell> = {};
     columns.forEach((c, i) => {

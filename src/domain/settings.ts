@@ -3,6 +3,7 @@
 // instead of breaking a feature. Tasks have their own module (shared/actions.ts).
 import { MODELS, TASKS, type TaskId } from './model.ts';
 import { DEPTH_MODELS, IMAGE_MODELS, type DepthModel, type ImageModel } from './imagegen.ts';
+import { isObj } from './text.ts';
 
 export type Theme = 'system' | 'light' | 'dark';
 
@@ -70,7 +71,7 @@ export const DEFAULTS: Settings = {
 };
 
 const stringMap = (v: unknown): Record<string, string> =>
-  v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
+  isObj(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
 
 /** Stored values over the defaults, each checked against its default's type. */
 export function parseSettings(raw: Record<string, unknown>): Settings {

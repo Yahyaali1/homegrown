@@ -2,8 +2,8 @@
 // view ("Watch") and downloads a run's tab started.
 import { screencast } from './devtools.ts';
 import { markKept, markWindow, type Run } from './missions.ts';
-import { isExtensionPage } from './pagerequest.ts';
-import { DAY, page, ready, updateRun, type Sender } from './garden-store.ts';
+import { isExtensionPage, pagesOnly } from './pagerequest.ts';
+import { DAY, ready, updateRun } from './garden-store.ts';
 import { downloadRun, ownsTab } from '../domain/garden/tools.ts';
 import type { GardenRun } from '../domain/garden/records.ts';
 
@@ -169,8 +169,8 @@ export const tabHandlers = {
    * call aborted, the tab leaves the run (out of its group, kept from every cleanup) and comes to the front, and the
    * run waits for the person to hand back.
    */
-  runTakeover: async ({ id, tabId }: { id: string; tabId?: number }, sender?: Sender) => {
-    const ext = sender === undefined || isExtensionPage(sender);
+  runTakeover: async ({ id, tabId }: { id: string; tabId?: number }, sender?: chrome.runtime.MessageSender) => {
+    const ext = isExtensionPage(sender);
     let target = ext ? tabId : sender?.tab?.id;
     const e = live.get(id);
     if (ext && target === undefined) target = (await workTab(id))?.id;
@@ -199,11 +199,12 @@ export const tabHandlers = {
     });
     return true;
   },
-  /** The tab a run works in now (its newest web tab), for "Show the tab". */
-  runTab: async ({ id }: { id: string }, sender?: Sender) => {
-    page(sender);
-    await ready();
-    const t = await workTab(String(id));
-    return t ? { tabId: t.id, windowId: t.windowId } : null;
-  },
+  ...pagesOnly({
+    /** The tab a run works in now (its newest web tab), for "Show the tab". */
+    runTab: async ({ id }: { id: string }) => {
+      await ready();
+      const t = await workTab(String(id));
+      return t ? { tabId: t.id, windowId: t.windowId } : null;
+    },
+  }),
 };

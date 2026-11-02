@@ -2,16 +2,16 @@
 // the result (a turn, a step, a request), persists, and calls `next` again, so waiting, restarts and resume are one
 // path. Model calls are actions too; their replies are stored on the run as turns.
 import type { Sampling } from '../model.ts';
-import { contextChars, defang, hostOf, parseJsonObject } from '../text.ts';
-import { jsonArray } from '../html.ts';
-import { actOf, addSeen, appOf, argsKey, callKey, decide, onSites, sensitiveSteps, SENSITIVE_WAIT, type Call, type Effect, type Known, type Verdict } from './policy.ts';
+import { defang } from '../text.ts';
+import { actOf, addSeen, appOf, argsKey, callKey, decide, sensitiveSteps, SENSITIVE_WAIT, type Call, type Effect, type Known, type Verdict } from './policy.ts';
 import { DEADLINE, expired } from './schedule.ts';
-import { helping, isEnded, LIMITS, newRun, personUrls, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
+import { helping, isEnded, LIMITS, newRun, type Gardener, type GardenRun, type PlannedCall, type Request, type Routine, type Step, type Turn, type Work } from './records.ts';
 import { describe } from '../scrape/scenario.ts';
-import { mentionsOf, parseArgs, ruleOf, TOOLS, type ToolSpec } from './tools.ts';
-import { notesBlock, type Note } from './notes.ts';
-import { memoryParts, type Entity } from '../memory.ts';
-import { skillParts, type Skill } from './skills.ts';
+import { parseArgs, ruleOf, TOOLS, type ToolSpec } from './tools.ts';
+import type { Note } from './notes.ts';
+import type { Entity } from '../memory.ts';
+import type { Skill } from './skills.ts';
+import { open, parsePlan, planned, soFar, word } from './prompt.ts';
 
 /**
  * `notes`: the gardener's notes the worker retrieved, best first; as many as fit go into the data, never the prompt.
@@ -41,14 +41,7 @@ export type Action =
 
 export const OPEN_REFUSED = 'This model runs routines with set steps. A model measured for open requests can take this one.';
 export const PLAN_REFUSED = 'This model can’t write plans yet.';
-export const BAD_REPLY = "The model's reply couldn't be read.";
-export const TOO_LONG = 'The instructions are too long for this model.';
 export const HELP_REFUSED = 'The site asked for a check for humans, and you said no.';
-const WORD = 'Here is what changed on each page since the last check (lines with + were added, − removed; a page under "First look:" is new, so say briefly what it holds). In two or three sentences, say what changed that matters. If nothing did, say so.';
-const REPAIR = 'Your reply was not one valid JSON object for a listed tool or an answer. Reply with only the JSON.';
-const PLAN_REPAIR = 'Your reply was not one JSON array of calls to listed tools with valid args. Reply with only the array.';
-const SUM = (request: string, followUp: boolean) => `The task: ${request}. Below are ${followUp ? 'an earlier answer and ' : ''}the results of the planned steps. Answer the task from them in a few sentences. If they don't answer it, say what is missing.`;
-const GREEDY = { temperature: 0 };
 const HOUR = 3_600_000;
 
 /** A yes: "always" is a yes that also stored a grant. */
@@ -195,7 +188,7 @@ function reopen(run: GardenRun): void {
 export const answerRefused = (q: Request): string | null => (q.kind === 'helpers' ? 'Only Homegrown answers that: it waits for the helpers to end.' : null);
 
 /** Expiry: a request lasts 24 h, by hand or in a routine run (a waiting run doesn't block the routine's next one). */
-const expiresAt = ({ now }: Ctx) => now + 24 * HOUR;
+export const expiresAt = ({ now }: Ctx) => now + 24 * HOUR;
 
 // A step the worker started but never finished. A read is safe to run again; an act may already have happened.
 function resume(run: GardenRun, ctx: Ctx, step: Step): Action {
@@ -237,7 +230,7 @@ export function verdictFor(run: GardenRun, ctx: Ctx, i: number, c: Call & { answ
   return { v: plan ? 'allow' : v, ...(q && { q }) };
 }
 
-function attempt(run: GardenRun, ctx: Ctx, i: number, tool: string, args: Record<string, unknown>): Action {
+export function attempt(run: GardenRun, ctx: Ctx, i: number, tool: string, args: Record<string, unknown>): Action {
   // The person said no to helping with a check for humans on this step's page.
   if (run.requests.some((q) => q.kind === 'help' && q.step === i && q.answer?.value === 'no')) return failed(ctx, i, tool, args, HELP_REFUSED);
   const { v, q } = verdictFor(run, ctx, i, { tool, args });
@@ -281,221 +274,38 @@ export function approveRequest(run: GardenRun, ctx: Ctx, i: number, tool: string
   stop ??= before?.index !== undefined ? { index: before.index, why: before.why! } : undefined;
   const why = stop?.why ?? sensitiveSteps(run, act.steps, tool) ?? act.why ?? before?.why;
   // An app tool not marked Read is asked every time: Always isn't offered.
-  const noAlways = tool === 'app_call' && appOf({ tool, args }, ctx)?.t.scope !== 'read';
+  const appWrite = tool === 'app_call' && appOf({ tool, args }, ctx)?.t.scope !== 'read';
   const at = stop && act.steps[stop.index];
   const text = `${ctx.gardener.name} wants to ${act.text}`.slice(0, 1400) + (why ? `\nSensitive${at ? ` (${describe(at)})` : ''}: ${why}.` : '');
   const edit = editOf(q);
-  return { kind: 'approve', step: i, tool, argsKey: key, host: act.host, text, sensitive: !!why, ...(why && { why }), ...(stop && { index: stop.index }), ...(noAlways && { noAlways: true as const }),
+  return { kind: 'approve', step: i, tool, argsKey: key, host: act.host, text, sensitive: !!why, ...(why && { why }), ...(stop && { index: stop.index }), ...(appWrite && { appWrite: true as const }),
     ...(edit && { origin: { edit } }), expiresAt: expiresAt(ctx) };
 }
 
-const budget = (run: GardenRun) => contextChars(run.maxTokens!);
-
-/**
- * A think whose fixed part fits; the data is cut to the rest, so the engine never cuts. The person's unused Steer
- * messages are their own words, so they end the instruction part. With `ctx`, memory joins: anchors (and a template
- * a gardener wrote) start the data, a template the person wrote ends the instruction; either taints the run. A skill's
- * method follows the gardener's instructions; its files are data.
- */
-function think(run: GardenRun, purpose: Turn['purpose'], prompt: string, data: string, taint = false, ctx?: Ctx): Action {
-  const mem = ctx ? memoryParts(ctx.anchors, ctx.forEntity) : { instruction: '', data: '' };
-  const skill = ctx?.skill ? skillParts(ctx.skill) : { instruction: '', data: '' };
-  if (skill.instruction) prompt += `\n\n${skill.instruction}`;
-  if (mem.instruction) prompt += `\n\n${mem.instruction}`;
-  const steer = (run.inbox ?? []).filter((m) => m.steer && !m.usedAt);
-  if (steer.length) prompt += `\n\n${steer.map((m) => `The person adds: ${m.text}`).join('\n')}`;
-  const room = budget(run) - prompt.length;
-  if (room < 0) return { fail: TOO_LONG };
-  // ponytail: memory takes up to a third of the room ahead of the rest, so the data's tail is what gets cut.
-  const memData = mem.data.slice(0, Math.floor(room / 3));
-  // ponytail: skill files get a third of what memory left, ahead of the rest; a long file is cut at its tail.
-  const files = skill.data.slice(0, Math.floor((room - memData.length) / 3));
-  data = [memData, files, data].filter(Boolean).join('\n\n');
-  taint ||= !!(mem.instruction || mem.data);
-  return { think: { purpose, prompt, data: data.slice(0, room), ...(purpose === 'word' ? {} : { sampling: GREEDY }), ...(taint && { taint: true as const }),
-    ...(steer.length && { steer: steer.map((m) => m.id) }) } };
-}
-
-// ponytail: notes get at most a third of the data room, so page results always keep the rest; tune if notes starve.
-const notesFit = (notes: Note[] | undefined, room: number) => notesBlock(notes ?? [], Math.floor(Math.max(0, room) / 3));
-
-/** An event run's data starts with the page change that started it. */
-const changed = (run: GardenRun) => (run.trigger ? `What changed on ${run.trigger.url}:\n${defang(run.trigger.diff)}\n\n` : '');
-
-// Direct reads: one `word` think over every page's change, then done.
-function word(run: GardenRun, ctx: Ctx, urls: string[]): Action {
-  const read = run.steps.filter((s) => s.state === 'done');
-  const missed = run.steps.filter((s) => s.state !== 'done').map((s) => String(s.args.url));
-  const t = run.turns.find((x) => x.purpose === 'word');
-  if (!read.length) return { fail: `None of the pages could be read: ${urls.join(', ')}` };
-  if (!t) {
-    const head = changed(run);
-    const notes = notesFit(ctx.notes, budget(run) - WORD.length - head.length);
-    // Each page gets an equal share of the rest, so none is cut away whole.
-    const per = Math.floor((budget(run) - WORD.length - head.length - (notes ? notes.length + 2 : 0)) / read.length) - 2;
-    const pages = read.map((s) => `${String(s.args.url)}\n${defang(s.output) || '(no change)'}`.slice(0, Math.max(0, per))).join('\n\n');
-    return think(run, 'word', WORD, head + (notes ? `${pages}\n\n${notes}` : pages), !!notes, ctx);
-  }
-  return { done: { answer: t.reply.trim() + (missed.length ? `\n\nCouldn't read: ${missed.join(', ')}` : '') } };
-}
-
-/** The newest answer the model gave in a choose or repair turn, or ''. */
-function lastAnswer(run: GardenRun): string {
-  for (const t of [...run.turns].reverse()) {
-    const o = t.purpose === 'choose' || t.purpose === 'repair' ? parseJsonObject(t.reply) : null;
-    if (typeof o?.answer === 'string' && o.answer.trim()) return o.answer.trim();
-  }
-  return '';
-}
-
-/** What a run has when time runs out: the last answer, else what each step did. */
-function soFar(run: GardenRun): string {
-  const t = run.turns.findLast((x) => x.purpose === 'word' || x.purpose === 'sum');
-  if (t) return t.reply.trim();
-  const answer = lastAnswer(run);
-  if (answer) return answer;
-  const lines = run.steps.map((s) => s.digest ?? `${s.tool} ${s.state}`);
-  return `Out of time.${lines.length ? `\n${lines.join('\n')}` : ''}`;
-}
-
-type Choice = { call: { tool: string; args: Record<string, unknown> } } | { answer: string } | null;
-
-function parseChoice(reply: string, tools: ToolSpec[]): Choice {
-  const o = parseJsonObject(reply);
-  if (!o) return null;
-  if (typeof o.tool === 'string') {
-    const spec = tools.find((t) => t.name === o.tool);
-    const args = spec ? parseArgs(spec, o.args ?? {}) : null;
-    return spec && args ? { call: { tool: spec.name, args } } : null;
-  }
-  return typeof o.answer === 'string' && o.answer.trim() ? { answer: o.answer.trim() } : null;
-}
-
-// Open work: choose → (repair) → call … → answer → check. The state is read back from the stored turns: every
-// choose/repair reply that named a valid tool made exactly one step (run, refused or denied).
-function open(run: GardenRun, ctx: Ctx, request: string): Action {
-  const { maxSteps } = run.agent!;
-  let calls = 0, checks = 0, answer = '', missing = '', last: { turn: Turn; choice: Choice; tools: ToolSpec[] } | null = null;
-  for (const turn of run.turns) {
-    if (turn.purpose === 'check') {
-      checks++;
-      const v = parseJsonObject(turn.reply);
-      missing = v?.met === false ? (typeof v.missing === 'string' && v.missing ? v.missing : 'something') : '';
-      last = { turn, choice: null, tools: [] };
-    } else if (turn.purpose === 'choose' || turn.purpose === 'repair') {
-      const tools = calls < maxSteps ? ctx.tools : [];
-      const choice = parseChoice(turn.reply, tools);
-      if (choice && 'call' in choice) calls++;
-      if (choice && 'answer' in choice) answer = choice.answer;
-      last = { turn, choice, tools };
-    }
-  }
-  const choose = (purpose: 'choose' | 'repair', tools: ToolSpec[]) => {
-    const prompt = choosePrompt(ctx.gardener, request, tools, purpose, run);
-    const d = chooseData(run, missing, ctx, budget(run) - prompt.length);
-    return think(run, purpose, prompt, d.data, d.taint, ctx);
-  };
-  if (!last) return choose('choose', ctx.tools);
-  const { turn, choice } = last;
-  if (turn.purpose === 'check') {
-    // Only an explicit "met": false with steps left continues, and only once.
-    if (missing && checks === 1 && run.steps.length < maxSteps) return choose('choose', ctx.tools);
-    return { done: missing ? { answer, best: true } : { answer } };
-  }
-  // A tool asked for after the steps ran out: end with what the run has, rather than fail it.
-  if (!choice && !last.tools.length && typeof parseJsonObject(turn.reply)?.tool === 'string') return { done: { answer: answer || soFar(run), best: true } };
-  if (!choice) return turn.purpose === 'repair' ? { fail: BAD_REPLY } : choose('repair', last.tools);
-  if ('answer' in choice) {
-    // The answer is the model's words: data, never the instruction.
-    return think(run, 'check', `Task: ${request}\nDoes the answer below complete the task? Reply with only {"met": true} or {"met": false, "missing": "…"}.`, `Answer: ${choice.answer}`);
-  }
-  if (run.steps.length < calls) return attempt(run, ctx, run.steps.length, choice.call.tool, choice.call.args);
-  return choose('choose', run.steps.length < maxSteps ? ctx.tools : []);
-}
-
-/** The person's site notes for the hosts this run works on: its URLs, named tabs and steps so far. */
-export function siteNotesFor(run: GardenRun, g: Gardener): string {
-  if (!g.siteNotes) return '';
-  const urls = [...personUrls(run.work), ...mentionsOf(run).map((m) => m.url),
-    ...run.steps.flatMap((s) => [s.url, typeof s.args.url === 'string' ? s.args.url : undefined])];
-  const hosts = new Set(urls.map((u) => hostOf(u)).filter(Boolean));
-  return Object.entries(g.siteNotes).filter(([h]) => [...hosts].some((x) => onSites(x, [h]))).map(([h, n]) => `Notes for ${h}: ${n}\n`).join('');
-}
-
-const headOf = (g: Gardener, request: string, run: GardenRun) => `You are ${g.name}, a gardener working in a web browser for one person.\nTheir instructions: ${g.instructions}\n${siteNotesFor(run, g)}The task: ${request}\n`;
-const toolLines = (tools: ToolSpec[]) => tools.map((t) => `${t.name}(${Object.keys(t.args).join(', ')}): ${t.describe}`).join('\n');
-
-function choosePrompt(g: Gardener, request: string, tools: ToolSpec[], purpose: 'choose' | 'repair', run: GardenRun): string {
-  const body = tools.length
-    ? `You can use these tools, one at a time:\n${toolLines(tools)}\nReply with only one JSON object, either {"tool": "<name>", "args": {…}} or {"answer": "<your answer>"}.`
-    : 'Give your answer now.\nReply with only one JSON object: {"answer": "<your answer>"}.';
-  return headOf(g, request, run) + body + (purpose === 'repair' ? `\n\n${REPAIR}` : '');
-}
-
-function planPrompt(g: Gardener, request: string, tools: ToolSpec[], max: number, purpose: 'plan' | 'repair', run: GardenRun): string {
-  return `${headOf(g, request, run)}You can use these tools:\n${toolLines(tools)}\nWrite a plan: a JSON array of at most ${max} tool calls, [{"tool": …, "args": {…}}], in order. Reply with only the array.`
-    + (purpose === 'repair' ? `\n\n${PLAN_REPAIR}` : '');
-}
-
-/** A plan: 1 to `max` calls, each to a listed tool with args `parseArgs` takes; anything else → null. */
-function parsePlan(raw: unknown, tools: ToolSpec[], max: number): PlannedCall[] | null {
-  if (!Array.isArray(raw) || !raw.length || raw.length > max) return null;
-  const calls = raw.map((c: { tool?: unknown; args?: unknown } | null) => {
-    const spec = tools.find((t) => t.name === c?.tool);
-    const args = spec ? parseArgs(spec, c?.args ?? {}) : null;
-    return spec && args ? { tool: spec.name, args } : null;
-  });
-  return calls.every((c) => c) ? (calls as PlannedCall[]) : null;
-}
-
-// Plan first: plan → (repair) → the person's yes → each planned call as direct work (call j is step j) → one sum.
-function planned(run: GardenRun, ctx: Ctx, request: string): Action {
-  const { plan } = run;
-  if (plan) {
-    const j = run.steps.length;
-    if (j < plan.length) return attempt(run, ctx, j, plan[j]!.tool, plan[j]!.args);
-    const t = run.turns.find((x) => x.purpose === 'sum');
-    if (t) return { done: { answer: t.reply.trim() } };
-    // Each step's result gets an equal share of the room, as `word` gives each page.
-    const prompt = SUM(request, !!ctx.earlier);
-    const head = changed(run) + (ctx.earlier ? `${ctx.earlier}\n\n` : '');
-    const per = Math.floor((budget(run) - prompt.length - head.length) / Math.max(1, j)) - 2;
-    const data = head + run.steps.map((s) => `[${s.i}] ${s.digest ?? s.tool}\n${defang(s.output ?? s.error ?? '')}`.slice(0, Math.max(0, per))).join('\n\n');
-    return think(run, 'sum', prompt, data, !!(ctx.earlier && ctx.earlierTainted), ctx);
-  }
-  const max = run.agent!.maxSteps;
-  const write = (purpose: 'plan' | 'repair') => {
-    const prompt = planPrompt(ctx.gardener, request, ctx.tools, max, purpose, run);
-    const d = chooseData(run, '', ctx, budget(run) - prompt.length);
-    return think(run, purpose, prompt, d.data, d.taint, ctx);
-  };
-  const last = run.turns.findLast((x) => x.purpose === 'plan' || x.purpose === 'repair');
-  if (!last) return write('plan');
-  const calls = parsePlan(jsonArray(last.reply), ctx.tools, max);
-  if (!calls) return last.purpose === 'repair' ? { fail: BAD_REPLY } : write('repair');
-  return { request: { kind: 'plan', calls, text: `${ctx.gardener.name}’s plan for: ${request}`.slice(0, 1400), sensitive: false, expiresAt: expiresAt(ctx) } };
+/** Plan request `q` answered yes with these calls (edited or as proposed), parsed again: the run is queued to do them. */
+function takePlan(run: GardenRun, ctx: Ctx, q: Request, raw: unknown, now: number): PlannedCall[] | string {
+  const max = run.agent?.maxSteps ?? 0;
+  const calls = parsePlan(raw, ctx.tools, max);
+  if (!calls) return `A plan is 1 to ${max} calls to the listed tools, each with valid arguments.`;
+  q.answer = { value: 'yes', at: now };
+  run.plan = calls;
+  run.status = 'queued';
+  return calls;
 }
 
 /**
- * The person's answer to plan request `q`. No: the run stops. Yes, with the calls as edited (or as proposed): each is
- * parsed again; planned reads join `seen` as approved; each planned act or acting collect that isn't sensitive now
- * gets a yes bound to its step, tool and key (origin `plan`). Nothing else is pre-approved. `auto`: a yes nobody read (a
- * skill test's "Approve plans"): nothing is pre-approved, so every reach and act is asked as usual. Returns why it
- * can't be taken.
+ * The person's answer to plan request `q`. No: the run stops. Yes: `takePlan`; planned reads join `seen` as approved;
+ * each planned act or acting collect that isn't sensitive now gets a yes bound to its step, tool and key (origin
+ * `plan`). Nothing else is pre-approved. Returns why it can't be taken.
  */
-export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 'no', edited: unknown, now: number, auto = false): string | null {
+export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 'no', edited: unknown, now: number): string | null {
   if (value === 'no') {
     q.answer = { value, at: now };
     Object.assign(run, { status: 'stopped', endedAt: now });
     return null;
   }
-  const max = run.agent?.maxSteps ?? 0;
-  const calls = parsePlan(edited ?? q.calls, ctx.tools, max);
-  if (!calls) return `A plan is 1 to ${max} calls to the listed tools, each with valid arguments.`;
-  q.answer = { value, at: now };
-  run.plan = calls;
-  run.status = 'queued';
-  if (auto) return null;
+  const calls = takePlan(run, ctx, q, edited ?? q.calls, now);
+  if (typeof calls === 'string') return calls;
   run.seen = addSeen(run.seen, calls.filter((c) => c.tool === 'read_page').map((c) => String(c.args.url)), 'approved');
   calls.forEach((c, j) => {
     const a = ruleOf(c.tool).blanket && approveRequest(run, ctx, j, c.tool, c.args);
@@ -504,32 +314,10 @@ export function answerPlan(run: GardenRun, ctx: Ctx, q: Request, value: 'yes' | 
   return null;
 }
 
-/**
- * A follow-up's earlier run, if any, then steps so far, the notes that fit (whole, after the head is measured), then the newest outputs first; whole older
- * outputs are left out when they don't fit. `taint`: notes went in.
- */
-function chooseData(run: GardenRun, missing: string, ctx: Ctx, room: number): { data: string; taint: boolean } {
-  // The named tabs' titles are page text: here, in the data, never in the instructions.
-  const tabs = mentionsOf(run);
-  const head = [
-    ...(ctx.earlier ? [ctx.earlier, ''] : []),
-    ...(missing ? [`Still missing: ${missing}`, ''] : []),
-    ...(tabs.length ? ['Tabs the person named (read_my_tab):', ...tabs.map((m) => `- ${m.url} (${defang(m.title).slice(0, 100)})`), ''] : []),
-    'Steps so far:',
-    ...(run.steps.length ? run.steps.map((s) => `${s.i}. ${s.tool} ${JSON.stringify(s.args).slice(0, 500)} → ${s.digest ?? s.error ?? s.state}`) : ['none']),
-  ].join('\n');
-  const block = notesBlock(ctx.notes ?? [], Math.min(Math.floor(Math.max(0, room) / 3), room - head.length - 2));
-  let data = block ? `${head}\n\n${block}` : head;
-  room -= data.length;
-  const outputs = run.steps.filter((s) => s.output).reverse();
-  if (outputs.length) data += '\n\nLatest results:';
-  for (const s of outputs) {
-    const entry = `\n\n[${s.i}] ${s.tool}:\n${defang(s.output)}`;
-    if (entry.length > room) break;
-    data += entry;
-    room -= entry.length;
-  }
-  return { data, taint: !!block || !!(ctx.earlier && ctx.earlierTainted) };
+/** A plan's yes nobody read (a skill test's "Approve plans"): nothing is pre-approved, so every reach and act is asked as usual. */
+export function autoApprovePlan(run: GardenRun, ctx: Ctx, q: Request, now: number): string | null {
+  const calls = takePlan(run, ctx, q, q.calls, now);
+  return typeof calls === 'string' ? calls : null;
 }
 
 const RETRY_OPEN = 'An open request can’t retry one step: ask a follow-up instead.';

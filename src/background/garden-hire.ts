@@ -1,18 +1,18 @@
 // Hire a companion: its gardener, its skills (off), its routines (paused) and its template files (unkept).
 import * as idb from '../shared/idb.ts';
 import { putEntity } from './memory.ts';
-import { db, page, ready, skills, type Sender } from './garden-store.ts';
+import { db, ready, skills } from './garden-store.ts';
+import { pagesOnly } from './pagerequest.ts';
 import { hireRecords, presetById } from '../domain/garden/presets.ts';
 import { parseGardener } from '../domain/garden/records.ts';
 
-export const hireHandlers = {
+export const hireHandlers = pagesOnly({
   /**
    * `hireRecords` stored, its files first and its gardener last, so a gardener means the hire is whole. Sites only
    * from the pack's suggestions the person checked. `hireId` (the card's) names the records: a retry rewrites them
    * and never makes a second gardener.
    */
-  hire: async ({ presetId, sites = [], hireId }: { presetId: string; sites?: string[]; hireId?: string }, sender?: Sender) => {
-    page(sender);
+  hire: async ({ presetId, sites = [], hireId }: { presetId: string; sites?: string[]; hireId?: string }) => {
     await ready();
     const p = presetById(String(presetId));
     if (!p) throw new Error('No companion is called that.');
@@ -30,4 +30,4 @@ export const hireHandlers = {
     await idb.put(d, 'gardeners', made.gardener);
     return made.gardener;
   },
-};
+});

@@ -3,7 +3,8 @@
 import { $, busyButton, button, emptyPot, row } from './shell.ts';
 import './settings.ts';
 import './library.ts';
-import { renderGarden, showRequests } from './garden.ts';
+import { renderGarden } from './garden.ts';
+import { showRequests } from './garden-runs.ts';
 import { addMessage, checkPending, startChat } from './chat.ts';
 import { h } from '../ui/dom.ts';
 import { flower, MISSION_STAGE } from '../ui/flower.ts';

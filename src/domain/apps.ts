@@ -7,7 +7,7 @@ import type { ConnectorFacts } from './mcp.ts';
 
 export interface App { name: string; url: string; docs: string; hosts: string[] }
 
-export const APPS: App[] = [
+const APPS: App[] = [
   { name: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', docs: 'https://github.com/github/github-mcp-server', hosts: ['github.com'] },
   { name: 'Linear', url: 'https://mcp.linear.app/mcp', docs: 'https://linear.app/docs/mcp', hosts: ['linear.app'] },
   { name: 'Notion', url: 'https://mcp.notion.com/mcp', docs: 'https://developers.notion.com/docs/mcp', hosts: ['notion.so', 'notion.com'] },

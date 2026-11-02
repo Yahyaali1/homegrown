@@ -1,7 +1,8 @@
 // A gardener run, step by step: what the loop asks the worker to do next for a stored run.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BAD_REPLY, OPEN_REFUSED, TOO_LONG, approveRequest, next, recover, type Action, type Ctx } from '../../src/domain/garden/loop.ts';
+import { OPEN_REFUSED, approveRequest, next, recover, type Action, type Ctx } from '../../src/domain/garden/loop.ts';
+import { BAD_REPLY, TOO_LONG } from '../../src/domain/garden/prompt.ts';
 import { argsKey } from '../../src/domain/garden/policy.ts';
 import { TOOLS } from '../../src/domain/garden/tools.ts';
 import { newRun, type Gardener, type GardenRun, type Step, type Turn, type Work } from '../../src/domain/garden/records.ts';

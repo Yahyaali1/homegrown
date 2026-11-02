@@ -49,8 +49,10 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
   - What is typed goes through `domain/chat.ts` `route`: Connect form, an error, `/meetings` (`meetAsk` passages in
     the data), a possible setting (only a message with a setting word reaches the model, `proposeSetting`), or a turn
     built by `userTurn` (and `withLead` for a chat's first message).
-  - Saved chats in IndexedDB `hg-chat` v1, store `chats` (`domain/chat.ts` `Chat`), opened with `shared/idb.ts`
-    `openChats()`. Each save reads, edits and writes in one transaction (`upsertTurns`, `dropFrom`, or a field patch), so
+  - `chat-store.ts` keeps the saved chats and the answer stream: `save`, `saveAll`, `allChats`, `getChat`, `deleteChat`,
+    `remember`/`lastChat` (the open chat, in `localStorage`), `onChange`, `sync` (the settings), `generate` and
+    `streaming`. Saved chats are in IndexedDB `hg-chat` v1, store `chats` (`domain/chat.ts` `Chat`), opened with
+    `shared/idb.ts` `openChats()`. Each save reads, edits and writes in one transaction (`upsertTurns`, `dropFrom`, or a field patch), so
     another panel's turns stay; a `BroadcastChannel('hg-chat')` ping reloads the list and an idle open chat. The
     timed save while streaming doesn't ping or redraw the list. The Chats list (newest first, with ×) has a search box: matches are `<mark>`s built from text nodes.
   - A model answer is saved every 1 s with `partial: true`. A reload stops it (`pagehide` cancels its id); the
@@ -69,8 +71,8 @@ before `reader.js`. The first two put the in-page UI on the reader, and mammoth 
     (Open in chat's text arrives as the attachment).
 - `garden.ts` (the side panel's Garden tab; its sections are `garden-gardeners.ts` (gardeners, hire, the gardener
   form), `garden-notes.ts` (notebook, allowed actions), `garden-routines.ts`, `garden-skills.ts`, `garden-connectors.ts`
-  and `garden-runs.ts` (requests and runs), sharing `garden-state.ts`; `garden.ts` re-exports `openConnect`,
-  `rememberOffer` and `showRequests`): gardeners, routines (a paused routine with `by` other than `person`
+  and `garden-runs.ts` (requests and runs), sharing `garden-state.ts`; chat imports `openConnect` and
+  `rememberOffer`, the side panel `showRequests`, from their own files): gardeners, routines (a paused routine with `by` other than `person`
   says "Proposed by <name>. Turn on?" and its button is Turn on), runs in groups (Needs you, Unread, each routine,
   by hand). A run's Open view reads top to bottom: the request, each step (Retry step where `retryStep` allows),
   drafts, created cards with Open, "How it worked" (turns and outputs), and Report (`homegrown-report-<id>.json`,

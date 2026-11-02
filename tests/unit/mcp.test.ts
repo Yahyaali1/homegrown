@@ -1,7 +1,8 @@
 // Connectors (ADR-17): a remote MCP server's replies and text are untrusted; every app call is asked or follows a grant.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerPlan, next, siteNotesFor, type Ctx } from '../../src/domain/garden/loop.ts';
+import { answerPlan, next, type Ctx } from '../../src/domain/garden/loop.ts';
+import { siteNotesFor } from '../../src/domain/garden/prompt.ts';
 import { actOf, alwaysOk, approveAllOk, argsKey, decide, taintsAfter, type Grant } from '../../src/domain/garden/policy.ts';
 import { TOOLS, toolsFor } from '../../src/domain/garden/tools.ts';
 import { newRun, parseGardener, type Gardener, type GardenRun, type Request, type Work } from '../../src/domain/garden/records.ts';
@@ -76,7 +77,7 @@ test('an ask tool is asked every time and can’t be granted; a read tool follow
   assert.equal(decide(run(), g, ask, { ...ctx, grants }), 'ask', 'a grant for an ask tool does nothing');
   const a = next(run({ turns: [{ purpose: 'choose', reply: JSON.stringify(ask), at: 1 }] }), ctx);
   assert.ok('request' in a && a.request.kind === 'approve');
-  assert.equal(a.request.noAlways, true);
+  assert.equal(a.request.appWrite, true);
   assert.equal(alwaysOk({ ...a.request, id: 'q' }), false);
   const read = call('find_contact');
   const r = next(run({ turns: [{ purpose: 'choose', reply: JSON.stringify(read), at: 1 }] }), ctx);
@@ -162,4 +163,14 @@ test('connect <name> finds a known app, and an open app is told by its hosts', (
   assert.deepEqual(appOpen('https://app.crm.com/deals', '', [factsOf(conn)]), { name: 'CRM', connector: 'crm' });
   assert.equal(appOpen('https://app.hubspot.com/x', '', [])?.name, 'HubSpot');
   assert.deepEqual(appOpen('https://tool.example/x', ' Acme  Desk ', []), { name: 'Acme Desk' });
+});
+
+test('connector handlers answer only Homegrown’s own pages: a content script or a call with no sender is refused', async () => {
+  const stub: unknown = new Proxy(() => stub, { get: () => stub, apply: () => stub });
+  Object.assign(globalThis, { chrome: stub });
+  const { handlers } = await import('../../src/background/mcp.ts');
+  Object.assign(globalThis, { chrome: { runtime: { getURL: () => 'chrome-extension://abc/' } } });
+  const content = { url: 'chrome-extension://abc/content.js', tab: { url: 'https://evil.example/' } } as chrome.runtime.MessageSender;
+  await assert.rejects(handlers.connectorDelete({ id: 'x' }, content), /own pages/);
+  await assert.rejects(handlers.connectorDelete({ id: 'x' }, undefined), /own pages/);
 });
