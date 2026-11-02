@@ -63,6 +63,9 @@ function withPermissions(permissions) {
   return copy;
 }
 
+/** Rejects with `what` when `p` takes longer than `ms`, so a hang fails fast and names its step. */
+const within = (p, what, ms = 30_000) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what} within ${ms / 1000} s`)), ms).unref())]);
+
 async function launchOnce({ headless = true, userDataDir = '', offline = false, channel = 'chromium', args = [], contextOptions = {}, ext = EXT } = {}) {
   // scripts/gpu.sh runs up to 3 checks at once, each with its own copy of the test profile.
   if (process.env.EG_PROFILE && userDataDir.endsWith('.profile-test')) userDataDir = process.env.EG_PROFILE;
@@ -83,15 +86,15 @@ async function launchOnce({ headless = true, userDataDir = '', offline = false, 
   if (!sw) {
     const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
     const ws = new WebSocket(webSocketDebuggerUrl);
-    await new Promise((r) => (ws.onopen = r));
+    await within(new Promise((r) => (ws.onopen = r)), 'loadUnpacked: the DevTools socket did not open');
     ws.send(JSON.stringify({ id: 1, method: 'Extensions.loadUnpacked', params: { path: ext } }));
-    const res = JSON.parse(await new Promise((r) => (ws.onmessage = (e) => r(e.data))));
+    const res = JSON.parse(await within(new Promise((r) => (ws.onmessage = (e) => r(e.data))), 'loadUnpacked: no reply'));
     ws.close();
     if (res.error) throw new Error(`loadUnpacked: ${res.error.message}`);
     sw = await ctx.waitForEvent('serviceworker', { timeout: 5000 }).catch(() => null);
     if (!sw) {
       // Already installed: the worker starts on its first event, and the side panel messages it on load.
-      const wake = ctx.waitForEvent('serviceworker');
+      const wake = ctx.waitForEvent('serviceworker', { timeout: 30_000 });
       const p = await ctx.newPage();
       await p.goto(`chrome-extension://${res.result.id}/sidepanel.html`);
       sw = await wake.catch(async (e) => {
@@ -107,7 +110,7 @@ async function launchOnce({ headless = true, userDataDir = '', offline = false, 
 
 /** A worker handler, called from an extension page as the side panel calls it. */
 export const bgOn = (page) => async (cmd, args = {}) => {
-  const r = await page.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]);
+  const r = await within(page.evaluate(([cmd, args]) => chrome.runtime.sendMessage({ target: 'bg', cmd, ...args }), [cmd, args]), `${cmd}: the worker did not answer`, 300_000);
   if (!r?.ok) throw new Error(`${cmd}: ${r?.error}`);
   return r.result;
 };
