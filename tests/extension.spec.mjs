@@ -811,7 +811,9 @@ test('image generation @slow: a prompt becomes an image on this device, with pro
   await expect.poll(async () => {
     seen.add((await card.locator('.meta').innerText()).replace(/\d+%.*$/, ''));
     return card.locator('img.eg-img').count();
-  }, { timeout: 28 * 60 * 1000, intervals: [1000] }).toBe(1);
+  }, { timeout: 28 * 60 * 1000, intervals: [1000] }).toBe(1).catch((e) => {
+    throw new Error(`${e.message}\nprogress seen: ${[...seen].filter(Boolean).join(' → ')}`);
+  });
   console.log(`  [image] progress lines: ${[...seen].filter(Boolean).join(' → ')}`);
   expect([...seen].some((s) => /Drawing|Downloading the image model/.test(s))).toBe(true); // the worker relayed the engine's progress
   const size = await card.locator('img.eg-img').evaluate((img) => [img.naturalWidth, img.naturalHeight]);
@@ -829,7 +831,7 @@ test('FLUX.2 klein and living photos @slow: pick the model in Settings, 512² im
     const card = ui(page).locator('.card').last();
     await card.getByLabel('Describe the image').fill(prompt);
     await card.getByRole('button', { name: 'Create' }).click();
-    await expect(card.locator('img.eg-img')).toHaveCount(1, { timeout: 55 * 60 * 1000 });
+    await expect(card.locator('img.eg-img'), { message: 'no FLUX image; see the card meta in the page snapshot' }).toHaveCount(1, { timeout: 55 * 60 * 1000 });
     return card;
   };
   // Settings: the picture-model picker writes the choice.
