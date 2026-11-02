@@ -826,12 +826,14 @@ test('image generation @slow: a prompt becomes an image on this device, with pro
 
 test('FLUX.2 klein and living photos @slow: pick the model in Settings, 512² image, a 4 s WebM, offline after the first run', async () => {
   test.setTimeout(60 * 60 * 1000); // the first run downloads 5.6 GB
-  const createWith = async (page, prompt) => {
+  const createWith = async (page, prompt, timeout = 55 * 60 * 1000) => {
     await palette(page, 'Create image');
     const card = ui(page).locator('.card').last();
     await card.getByLabel('Describe the image').fill(prompt);
     await card.getByRole('button', { name: 'Create' }).click();
-    await expect(card.locator('img.eg-img'), { message: 'no FLUX image; see the card meta in the page snapshot' }).toHaveCount(1, { timeout: 55 * 60 * 1000 });
+    await expect(card.locator('img.eg-img')).toHaveCount(1, { timeout }).catch(async (e) => {
+      throw new Error(`${e.message}\ncard meta: ${await card.locator('.meta').innerText().catch(() => '?')}`);
+    });
     return card;
   };
   // Settings: the picture-model picker writes the choice.
@@ -893,7 +895,7 @@ test('FLUX.2 klein and living photos @slow: pick the model in Settings, 512² im
 
   // Back to Janus in the same session: FLUX left the memory free.
   await sw.evaluate(() => chrome.storage.sync.set({ imageModel: 'janus' }));
-  const janus = await createWith(page, 'a honeybee on a sunflower, simple flat illustration');
+  const janus = await createWith(page, 'a honeybee on a sunflower, simple flat illustration', 10 * 60 * 1000); // cached by the image test
   await expect(janus.locator('.meta')).toContainText('Janus-Pro-1B');
   await page.close();
 });
