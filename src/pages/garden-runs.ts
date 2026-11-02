@@ -56,7 +56,12 @@ export function renderRuns(changed?: string): void {
     let li = runRows.get(run.id);
     if (!li) runRows.set(run.id, (li = fresh(h('li', {}, flower(26, '')))));
     setLook(li, lookFor(run.gardenerId));
-    if (!changed || changed === run.id || runs.get(changed)?.parentId === run.id || !li.stage) fillRun(li, run); // a helper's change can show Resume all
+    // A redraw would replace the textarea the person is typing in: wait until they leave it.
+    const typing = document.activeElement instanceof HTMLTextAreaElement && li.contains(document.activeElement) ? document.activeElement : null;
+    if (typing) {
+      if (!typing.dataset.redraw) typing.addEventListener('blur', () => renderRuns(run.id), { once: true });
+      typing.dataset.redraw = '1';
+    } else if (!changed || changed === run.id || runs.get(changed)?.parentId === run.id || !li.stage) fillRun(li, run); // a helper's change can show Resume all
     return li;
   })] : []));
   place($('#garden-runs'), nodes.length ? nodes : [emptyPot('No runs yet.')]);

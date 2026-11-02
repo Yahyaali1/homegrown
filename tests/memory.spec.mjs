@@ -93,4 +93,7 @@ test('a draft keeps the person’s unsaved edit when its run is broadcast again'
   await bg('runSeen', { id: 'draft-1' });
   await drawn;
   await expect(panel.getByLabel('Edit Reply')).toHaveValue('Hi Ann,\nThanks for the tea.');
+  await expect(panel.getByLabel('Edit Reply')).toBeFocused(); // still typing: the redraw waited
+  await panel.getByLabel('Edit Reply').blur();
+  await expect(panel.getByLabel('Edit Reply')).toHaveValue('Hi Ann,\nThanks for the tea.'); // redrawn after, edit kept
 });
